@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "schedence-db-core"
+version = "0.1.0"
+description = "Shared async PostgreSQL (Neon) configuration, engine, session and health-check utilities for Schedence FastAPI services."
+requires-python = ">=3.11"
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0.36,<2.2",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.4,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=1.4",
+]
+
+[project.scripts]
+schedence-db-check = "schedence_db.check_connection:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/schedence_db"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+markers = [
+    "live: talks to the real configured database (opt-in: pytest --live)",
+]
