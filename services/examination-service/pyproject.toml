@@ -13,12 +13,16 @@ dependencies = [
     "schedence-db-core",
     "sqlalchemy[asyncio]>=2.0.36,<2.2",
     "alembic>=1.13,<2",
+    # Tested with FastAPI 0.143 (Starlette 1.x) and uvicorn 0.54.
+    "fastapi>=0.143,<1",
+    "uvicorn>=0.54,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=1.4",
+    "httpx2>=2.0,<3",  # FastAPI TestClient (Starlette 1.x)
 ]
 
 [tool.hatch.build.targets.wheel]
