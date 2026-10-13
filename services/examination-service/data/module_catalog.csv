@@ -1,0 +1,182 @@
+module_code,module_name,academic_year,semester,specializations,credits,exam_type,duration_minutes,has_extra_reading_time,difficulty,resolution,admin_check,source_row
+IE1004,Computational Thinking,1,1,COMPUTER_SCIENCE,4,computer_based,90,yes,1,single_record,not_in_admin,2
+IE1010,Engineering Mathematics,1,2,CSNE,3,computer_based,60,no,1,single_record,not_in_admin,3
+IE1014,Engineering Mathematics - I,1,1,COMPUTER_SCIENCE,3,hybrid,60,no,2,single_record,not_in_admin,4
+IE1020,Network Fundamentals,1,2,CSNE,4,hybrid,60,no,2,single_record,not_in_admin,5
+IE1024,Computer Organization and Architecture,1,1,COMPUTER_SCIENCE,3,written,60,no,1,single_record,not_in_admin,6
+IE1034,Engineering Mathematics - II,1,2,COMPUTER_SCIENCE,3,computer_based,60,no,1,single_record,not_in_admin,7
+IE1044,Digital Electronics,1,1,COMPUTER_SCIENCE,3,hybrid,60,yes,2,single_record,not_in_admin,8
+IE2004,Computer Networks,2,2,COMPUTER_SCIENCE,3,written,90,no,1,code_year_rule,differs,33
+IE2010,Digital Electronics,2,1,CSNE,2,written,60,no,1,single_record,not_in_admin,34
+IE2012,Systems and Network Programming,2,2,CYBER,4,hybrid,90,no,3,team_decision,not_in_admin,35
+IE2020,Routing & Switching,2,1,CSNE,4,computer_based,120,yes,2,code_year_rule,not_in_admin,36
+IE2021,Object Oriented Programming,2,2,ISE,4,hybrid,90,no,3,code_year_rule,not_in_admin,37
+IE2022,Introduction to Cyber Security,2,1,CYBER,4,written,90,no,1,team_decision,not_in_admin,38
+IE2024,Probability and Statistics,2,2,COMPUTER_SCIENCE,3,hybrid,90,yes,3,single_record,differs,39
+IE2030,Analog Electronics,2,1,CSNE,2,hybrid,60,no,3,code_year_rule,not_in_admin,40
+IE2031,Structured Analysis and Design,2,2,ISE,4,written,90,no,1,single_record,not_in_admin,41
+IE2032,Secure Operating Systems,2,1,CYBER,4,computer_based,90,no,2,single_record,not_in_admin,42
+IE2040,Advanced Internetworking,2,2,CSNE,4,written,90,no,1,single_record,not_in_admin,43
+IE2041,Information Systems Analysis,2,1,ISE,4,computer_based,90,no,2,single_record,not_in_admin,44
+IE2042,Database Management Systems for Security,2,2,CYBER,4,hybrid,90,yes,3,single_record,not_in_admin,45
+IE2050,Operating Systems,2,1,CSNE,4,computer_based,90,no,2,single_record,not_in_admin,46
+IE2052,Advanced Networking Technologies,2,2,CYBER,4,written,120,no,1,single_record,not_in_admin,47
+IE2060,Computer Systems Administration,2,1,CSNE,4,hybrid,90,yes,3,single_record,not_in_admin,48
+IE2061,Operating Systems and Systems Administration,2,2,ISE,4,written,120,no,1,single_record,not_in_admin,49
+IE2062,Web Security,2,1,CYBER,4,computer_based,90,no,2,single_record,not_in_admin,50
+IE2070,Embedded Systems,2,2,CSNE,4,written,120,no,1,single_record,not_in_admin,51
+IE2071,Design and Management of Computing Infrastructure,2,1,ISE,4,computer_based,90,no,2,single_record,not_in_admin,52
+IE2072,Foundations of Algorithms,2,2,CYBER,4,hybrid,90,no,3,single_record,not_in_admin,53
+IE2080,Database Systems Administration,2,1,CSNE,4,computer_based,90,no,2,single_record,not_in_admin,54
+IE2081,Object Oriented Analysis and Design,2,2,ISE,4,hybrid,90,no,3,single_record,not_in_admin,55
+IE2082,Discrete Mathematics,2,1,CYBER,4,written,90,yes,1,single_record,not_in_admin,56
+IE2090,Professional Engineering Practice and Industrial Management,2,2,CSNE,2,hybrid,60,no,3,single_record,not_in_admin,57
+IE3010,Network Programming,3,1,CSNE,4,hybrid,120,no,4,code_year_rule,differs,90
+IE3011,IS Project Management,3,2,ISE,3,written,120,no,2,code_year_rule,not_in_admin,91
+IE3014,Professional Skills,3,1,COMPUTER_SCIENCE,3,written,150,no,2,single_record,match,92
+IE3020,Directory Services and Network Management,3,2,CSNE,4,written,120,no,2,code_year_rule,not_in_admin,93
+IE3021,Organizational Business Functions I,3,1,ISE,3,computer_based,120,no,3,code_year_rule,not_in_admin,94
+IE3022,Applied Information Assurance,3,2,CYBER,4,hybrid,120,yes,4,single_record,not_in_admin,95
+IE3030,Wide Area Networks,3,1,CSNE,4,computer_based,120,no,3,single_record,not_in_admin,96
+IE3031,Management Information Systems,3,2,ISE,3,hybrid,120,yes,4,single_record,not_in_admin,97
+IE3032,Network Security,3,1,CYBER,4,written,150,no,2,single_record,not_in_admin,98
+IE3040,Information Storage Management,3,2,CSNE,4,hybrid,120,yes,4,single_record,not_in_admin,99
+IE3041,Data Management and Business Intelligence,3,1,ISE,4,written,150,no,2,single_record,not_in_admin,100
+IE3042,Secure Software Systems,3,2,CYBER,4,computer_based,120,no,3,single_record,not_in_admin,101
+IE3050,Wireless Communications,3,1,CSNE,4,written,150,no,2,single_record,not_in_admin,102
+IE3051,E Business Strategy & Architecture and Design,3,2,ISE,3,computer_based,120,no,3,single_record,not_in_admin,103
+IE3052,Information Security Risk Management,3,1,CYBER,2,hybrid,60,no,4,single_record,not_in_admin,104
+IE3060,Business Management for IT,3,2,CSNE,3,computer_based,120,no,3,single_record,match,105
+IE3061,Information Security Management,3,1,ISE,4,hybrid,120,no,4,single_record,differs,106
+IE3062,Data and Operating Systems Security,3,2,CYBER,4,written,120,yes,2,single_record,match,107
+IE3071,Organizational Business Functions II,3,1,ISE,3,written,120,yes,2,single_record,differs,108
+IE3072,Information Security Policy and Management,3,2,CYBER,2,computer_based,60,no,3,single_record,match,109
+IE3080,Network Security Engineering,3,1,CSNE,4,written,120,yes,2,single_record,differs,110
+IE3081,Enterprise Resource Planning,3,2,ISE,4,computer_based,120,no,3,single_record,match,111
+IE3082,Cryptography,3,1,CYBER,4,hybrid,150,no,4,single_record,differs,112
+IE3091,Information Systems Strategic Management,3,2,ISE,3,hybrid,150,no,4,single_record,match,113
+IE3102,Enterprise Standards for Information Security,3,1,CYBER,2,computer_based,60,no,3,code_year_rule,differs,114
+IE3112,Mobile Security,3,2,CYBER,4,hybrid,120,yes,4,single_record,not_in_admin,115
+IE4010,Information Security Management,4,1,CSNE,4,computer_based,150,no,4,single_record,not_in_admin,156
+IE4011,Business Process Management,4,2,ISE,4,hybrid,150,yes,5,single_record,not_in_admin,157
+IE4012,Offensive Hacking: Tactical and Strategic,4,1,CYBER,4,written,180,no,3,single_record,not_in_admin,158
+IE4020,Enterprise Standards for Information Systems,4,2,CSNE;IT,4,hybrid,150,yes,5,single_record,match,159
+IE4022,Security Economic Analysis,4,1,CYBER,4,computer_based,150,no,4,single_record,not_in_admin,160
+IE4030,Virtualization and Cloud Computing Technologies,4,2,CSNE,4,written,180,no,3,single_record,match,161
+IE4032,Information Warfare,4,1,CYBER,4,hybrid,150,no,5,single_record,match,162
+IE4040,Information Assurance and Auditing,4,2,CSNE;ISE;IT,4,computer_based,150,no,4,single_record,not_in_admin,163
+IE4042,Secure Software Engineering,4,1,CYBER,4,written,150,yes,3,single_record,match,164
+IE4050,Parallel and Distributed Computing,4,2,CSNE,4,hybrid,150,no,5,single_record,not_in_admin,165
+IE4052,Hardware Security,4,1,CYBER,4,computer_based,150,no,4,single_record,match,166
+IE4054,Information Security,4,2,COMPUTER_SCIENCE,4,written,150,no,3,single_record,differs,167
+IE4060,Robotics & Intelligent Systems,4,1,CSNE;IT;SE,4,written,150,yes,3,single_record,match,168
+IE4062,Cyber Forensics and Incident Response,4,2,CYBER,4,hybrid,180,no,5,single_record,not_in_admin,169
+IE4070,Design and Management of Enterprise Network,4,1,CSNE,4,computer_based,150,no,4,single_record,match,170
+IE4071,Practicing Business Analyst,4,2,ISE,4,hybrid,180,no,5,single_record,match,171
+IE4072,Governance and Cyber Law Clinic,4,1,CYBER,4,written,150,no,3,single_record,match,172
+IE4080,Software Defined Networks,4,2,CSNE,4,hybrid,180,no,5,single_record,not_in_admin,173
+IE4081,Supply Chain Management,4,1,ISE,4,written,150,no,3,single_record,match,174
+IE4092,Machine Learning for Cyber Security,4,2,CYBER,4,hybrid,150,no,5,single_record,not_in_admin,175
+IE4094,Robotics (Elective),4,1,COMPUTER_SCIENCE,3,computer_based,180,no,4,single_record,not_in_admin,176
+IE4131,Human Computer Interaction,4,2,ISE,4,hybrid,150,no,5,single_record,match,177
+IE4151,Human Resource Information Systems,4,1,ISE,4,computer_based,150,no,4,single_record,not_in_admin,178
+IT1010,Introduction to Programming,1,2,CSNE;CYBER;DS;IM;ISE;IT;SE,4,computer_based,60,yes,1,single_record,not_in_admin,15
+IT1020,Introduction to Computer Systems,1,1,CSNE;CYBER;DS;IM;ISE;IT;SE,4,hybrid,60,no,2,single_record,not_in_admin,16
+IT1030,Mathematics for Computing,1,2,CSNE;CYBER;DS;IM;ISE;IT;SE,4,written,60,no,1,single_record,not_in_admin,17
+IT1040,Communication Skills,1,1,CSNE;CYBER;DS;IM;ISE;IT;SE,3,computer_based,90,no,1,single_record,not_in_admin,18
+IT1050,Object Oriented Concepts,1,2,CSNE;CYBER;DS;IM;ISE;IT;SE,2,hybrid,60,yes,2,single_record,not_in_admin,19
+IT1060,Software Process Modeling,1,1,CYBER;DS;IM;ISE;IT;SE,3,written,60,no,1,single_record,not_in_admin,20
+IT1080,English for Academic Purposes,1,2,CSNE;CYBER;DS;IM;ISE;IT;SE,3,hybrid,60,no,2,single_record,not_in_admin,21
+IT1090,Information Systems and Data Modeling,1,1,CSNE;CYBER;DS;IM;ISE;IT;SE,4,written,90,yes,1,single_record,not_in_admin,22
+IT1100,Internet and Web Technologies,1,2,CYBER;DS;IM;ISE;IT;SE,4,computer_based,60,yes,1,single_record,not_in_admin,23
+IT2010,Mobile Application Development,2,2,DS;IM;IT;SE,4,written,90,no,1,single_record,not_in_admin,63
+IT2020,Software Engineering,2,1,DS;IM;IT;SE,4,computer_based,120,no,2,code_year_rule,not_in_admin,64
+IT2030,Object Oriented Programming,2,2,CSNE;DS;IM;IT;SE,4,hybrid,90,yes,3,team_decision,not_in_admin,65
+IT2040,Database Management Systems,2,1,DS;IM;ISE;IT;SE,4,written,90,no,1,code_year_rule,not_in_admin,66
+IT2050,Computer Networks,2,2,DS;IM;IT;SE,4,computer_based,90,no,2,single_record,not_in_admin,67
+IT2060,Operating Systems and System Administration,2,1,DS;IM;IT;SE,4,hybrid,90,no,3,single_record,not_in_admin,68
+IT2070,Data Structures and Algorithms,2,2,DS;IM;IT;SE,4,written,120,yes,1,single_record,not_in_admin,69
+IT2090,Professional Skills,2,1,CSNE;CYBER;DS;IM;ISE;IT;SE,2,hybrid,60,no,3,single_record,not_in_admin,70
+IT2100,Probability and Statistics,2,2,CSNE,3,written,90,no,1,single_record,not_in_admin,71
+IT2110,Probability and Statistics,2,1,DS;IM;ISE;IT;SE,3,computer_based,120,no,2,single_record,not_in_admin,72
+IT3010,Network Design and Management,3,1,IT,4,hybrid,120,yes,4,team_decision,not_in_admin,116
+IT3011,Theory and Practices in Statistical Modelling,3,2,DS,4,written,120,no,2,team_decision,not_in_admin,117
+IT3020,Database Systems,3,1,IT,4,written,120,no,2,team_decision,not_in_admin,118
+IT3021,Data Warehousing and Business Intelligence,3,2,DS,4,computer_based,120,no,3,single_record,not_in_admin,119
+IT3030,Programming Applications and Frameworks,3,1,DS;IT,4,computer_based,120,no,3,code_year_rule,not_in_admin,120
+IT3031,Database Systems and Data-Driven Application,3,2,DS,4,hybrid,120,no,4,single_record,not_in_admin,121
+IT3040,IT Project Management,3,1,IT,4,hybrid,120,no,4,single_record,not_in_admin,122
+IT3041,Information Retrieval and Web Analytics,3,2,DS,4,computer_based,120,no,3,single_record,match,125
+IT3051,Fundamentals of Data Mining,3,2,DS,4,computer_based,120,no,3,single_record,match,123
+IT3060,Human Computer Interaction,3,1,IT,3,computer_based,120,no,3,single_record,differs,124
+IT3061,Massive Data Processing and Cloud Computing,3,1,DS,4,hybrid,120,no,4,single_record,differs,126
+IT3070,Information Assurance & Security,3,2,IT,4,hybrid,120,no,4,single_record,match,127
+IT3071,Machine Learning and Optimization Methods,3,1,DS,4,written,120,no,2,single_record,differs,128
+IT3080,Data Science & Analytics,3,2,IT,4,written,120,no,2,single_record,match,129
+IT3090,Business Management for IT,3,1,IT,3,computer_based,120,yes,3,single_record,differs,130
+IT4011,Database Administration and Storage Systems,4,2,DS,4,hybrid,150,no,5,single_record,match,179
+IT4020,Modern Topics in IT,4,1,IT,4,hybrid,150,no,5,team_decision,not_in_admin,180
+IT4021,Internet of Things and Big Data Analytics,4,2,DS,4,written,180,yes,3,single_record,not_in_admin,181
+IT4030,Internet of Things,4,1,CSNE;IT,4,written,180,yes,3,single_record,match,182
+IT4031,Visual Analytics and User Experience Design,4,2,DS,4,computer_based,150,no,4,single_record,not_in_admin,183
+IT4040,Database Administration,4,1,IT,4,computer_based,150,no,4,single_record,match,184
+IT4041,Introduction to Information Security Analytics,4,2,DS,4,hybrid,150,no,5,single_record,match,185
+IT4050,Innovation Management and Entrepreneurship,4,1,ISE;IT,4,hybrid,150,no,5,single_record,match,186
+IT4060,Machine Learning,4,2,IT;SE,4,written,150,no,3,single_record,not_in_admin,187
+IT4090,Cloud Computing,4,1,IT,4,written,150,no,3,single_record,match,188
+IT4100,Software Quality Assurance,4,2,ISE;IT,4,computer_based,150,no,4,single_record,not_in_admin,189
+IT4110,Computer Systems and Network Administration,4,1,IT,4,hybrid,150,no,5,single_record,not_in_admin,190
+IT4120,Knowledge Management,4,2,ISE;IT,4,written,180,yes,3,single_record,not_in_admin,191
+IT4130,Image Understanding & Processing,4,1,SE,4,computer_based,150,no,4,single_record,not_in_admin,192
+SE1012,Programming Methodology,1,2,COMPUTER_SCIENCE,3,computer_based,60,no,1,single_record,not_in_admin,27
+SE1022,Discrete Mathematics,1,1,COMPUTER_SCIENCE,3,hybrid,90,no,2,single_record,not_in_admin,28
+SE1032,Communication Skills,1,2,COMPUTER_SCIENCE,3,written,60,no,1,single_record,not_in_admin,29
+SE1042,English for Academic Purposes,1,1,COMPUTER_SCIENCE,3,computer_based,60,yes,1,single_record,not_in_admin,30
+SE1052,Data Structures and Algorithms,1,2,COMPUTER_SCIENCE,4,hybrid,60,no,2,single_record,not_in_admin,31
+SE2012,Object Oriented Analysis and Design,2,2,COMPUTER_SCIENCE,4,written,90,no,1,code_year_rule,differs,77
+SE2022,Design and Analysis of Algorithms,2,1,COMPUTER_SCIENCE,3,computer_based,90,yes,2,single_record,match,78
+SE2032,Database Management Systems,2,2,COMPUTER_SCIENCE,3,hybrid,90,no,3,single_record,differs,79
+SE2042,Operating Systems,2,1,COMPUTER_SCIENCE,3,written,90,no,1,single_record,not_in_admin,80
+SE2052,Programming Paradigms,2,2,COMPUTER_SCIENCE,4,computer_based,120,no,2,single_record,not_in_admin,81
+SE2062,Distributed Systems,2,1,COMPUTER_SCIENCE,3,hybrid,90,yes,3,single_record,not_in_admin,82
+SE2072,Software Engineering,2,2,COMPUTER_SCIENCE,3,written,90,no,1,single_record,not_in_admin,83
+SE2082,Human Computer Interaction,2,1,COMPUTER_SCIENCE,3,computer_based,90,no,2,single_record,not_in_admin,84
+SE3010,Software Engineering Process & Quality Management,3,1,SE,4,written,120,no,2,team_decision,not_in_admin,132
+SE3011,Technical Evolution of Multimedia,3,2,IM,4,computer_based,120,yes,3,code_year_rule,not_in_admin,133
+SE3012,Industry Economics and Management,3,1,COMPUTER_SCIENCE,3,hybrid,120,no,4,code_year_rule,differs,134
+SE3020,Distributed Systems,3,2,SE,4,computer_based,120,yes,3,team_decision,not_in_admin,135
+SE3021,Design Ideation & Creative Communication,3,1,IM,4,hybrid,120,no,4,code_year_rule,not_in_admin,136
+SE3030,Software Architecture,3,2,SE,4,hybrid,120,no,4,single_record,not_in_admin,137
+SE3031,3D Modeling & Animation,3,1,IM,4,written,120,no,2,single_record,differs,138
+SE3032,Graphics and Visualization,3,2,COMPUTER_SCIENCE,3,computer_based,150,no,3,single_record,differs,139
+SE3040,Application Frameworks,3,1,SE,4,written,120,no,2,single_record,not_in_admin,140
+SE3041,Digital Video Production & Delivery,3,2,IM,4,computer_based,150,no,3,single_record,match,141
+SE3050,User Experience Engineering,3,1,SE,3,computer_based,150,no,3,single_record,differs,142
+SE3060,Database Systems,3,2,SE,4,hybrid,120,yes,4,single_record,match,143
+SE3061,User Experience Designing,3,1,IM,3,written,120,no,2,single_record,not_in_admin,144
+SE3062,Intelligent Systems,3,2,COMPUTER_SCIENCE,3,computer_based,120,no,3,single_record,differs,145
+SE3070,Case Studies in Software Engineering,3,1,SE,4,written,120,no,2,single_record,differs,146
+SE3071,Digital Image Processing,3,2,IM,4,computer_based,120,no,3,single_record,match,147
+SE3080,Software Project Management,3,1,SE,3,computer_based,120,no,3,single_record,differs,148
+SE3081,Digital Marketing Strategies,3,2,IM,3,hybrid,120,no,4,single_record,not_in_admin,149
+SE3082,Parallel Computing,3,1,COMPUTER_SCIENCE,3,written,150,yes,2,single_record,match,150
+SE3091,Games Technology,3,2,IM,4,written,150,yes,2,single_record,match,151
+SE3092,Platform Based Development,3,1,COMPUTER_SCIENCE,3,computer_based,120,no,3,single_record,differs,152
+SE3102,Research Methods,3,2,COMPUTER_SCIENCE,2,hybrid,60,no,4,single_record,match,153
+SE3112,Advanced Software Engineering,3,1,COMPUTER_SCIENCE,3,written,120,no,2,single_record,match,154
+SE4010,Current Trends in Software Engineering,4,2,SE,4,hybrid,150,no,5,single_record,not_in_admin,193
+SE4020,Mobile Application Design & Development,4,1,SE,4,written,150,no,3,single_record,not_in_admin,194
+SE4022,Machine Learning,4,2,COMPUTER_SCIENCE,3,hybrid,150,yes,5,code_year_rule,differs,195
+SE4030,Secure Software Development,4,1,SE,4,computer_based,180,no,4,single_record,match,196
+SE4031,Games Development,4,2,IM,4,hybrid,150,yes,5,single_record,not_in_admin,197
+SE4032,Advanced Mathematics,4,1,COMPUTER_SCIENCE,3,written,150,no,3,single_record,match,198
+SE4040,Enterprise Application Development,4,2,SE,4,hybrid,150,yes,5,single_record,match,199
+SE4041,Mobile Application Design and Development,4,1,IM,4,written,150,no,3,single_record,match,200
+SE4042,Modelling and Simulation of Sciences,4,2,COMPUTER_SCIENCE,4,computer_based,150,no,4,single_record,differs,201
+SE4050,Deep Learning,4,1,IT;SE,4,written,150,no,3,single_record,match,202
+SE4051,Trends in Digital Media,4,2,IM,4,computer_based,150,no,4,single_record,not_in_admin,203
+SE4052,Compiler Construction (Elective),4,1,COMPUTER_SCIENCE,3,hybrid,150,no,5,single_record,not_in_admin,204
+SE4060,Parallel Computing,4,2,IT;SE,4,computer_based,150,no,4,single_record,not_in_admin,205
+SE4061,Multimedia Project Management,4,1,IM,4,hybrid,150,no,5,single_record,match,206
+SE4062,Image Processing and Computer Vision (Elective),4,2,COMPUTER_SCIENCE,3,written,180,yes,3,single_record,not_in_admin,207
+SE4072,Deep Learning (Elective),4,1,COMPUTER_SCIENCE,3,computer_based,150,no,4,single_record,not_in_admin,208
