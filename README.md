@@ -7,6 +7,8 @@ Schedence is a university scheduling platform designed to help institutions plan
 The goal is to generate **feasible, practical timetables** that respect institutional policies, staff availability, student groups, venue capacities, and scheduling conflicts, while improving timetable quality through optimization.
 
 > **Project status:** This README describes the **planned architecture and repository structure**. Creating the folders does not mean the services, endpoints, or infrastructure are implemented yet.
+>
+> **Implemented so far:** `packages/db-core`, `packages/auth-core`, the [Identity Service](services/identity-service/README.md) (Cognito authentication, accounts, roles, permissions, Super Admin bootstrap, audit log), and the administrative-positions part of the [Academic Data Service](services/academic-data-service/README.md) (position types, workload policies, staff appointments, workload contract). Other services are still planned.
 
 ## Technology stack (planned)
 
@@ -71,6 +73,8 @@ Manages **who can access Schedence and what they are permitted to do**.
 
 **Important:** A staff member's **academic rank** (e.g., Professor) or **administrative appointment** (e.g., HOD or Program Coordinator) does **not** automatically grant additional system permissions. Appointments and workload policies belong to the Academic Data Service, while access permissions belong here.
 
+**Status: implemented.** AWS Cognito (managed login, Authorization Code + PKCE), access-token verification via `packages/auth-core`, database-driven RBAC per institution, administrator onboarding with retryable Cognito/Neon provisioning, operator-only Super Admin bootstrap, and audit logs. See [services/identity-service/README.md](services/identity-service/README.md).
+
 ### 2. Academic Data Service (`services/academic-data-service/`)
 
 Owns academic master data needed by timetable generators.
@@ -84,6 +88,8 @@ Owns academic master data needed by timetable generators.
 - Import validation for approved CSV/Excel academic datasets.
 
 **Example:** If a lecturer has an HOD appointment, Schedence can reserve the required **administrative hours** as scheduling constraints without giving that person an admin login role.
+
+**Status: partially implemented.** Administrative position types, versioned administrative-hour policies, minimal staff references, staff appointments and the administrative-workload API are in place. See [services/academic-data-service/README.md](services/academic-data-service/README.md). The rest of the academic master data is still planned.
 
 ### 3. Resource Service (`services/resource-service/`)
 
@@ -148,6 +154,7 @@ This is a **planned service** that may initially remain inside another applicati
 | `shared-schemas`      | Narrow, stable DTOs, IDs, and validation conventions. Avoid sharing internal database models.                                                          |
 | `optimization-common` | Reusable solver setup, time-slot helpers, objective reporting, and diagnostics. Keep teaching/examination business rules in their respective services. |
 | `db-core`             | **Implemented.** Database configuration, async SQLAlchemy engines, per-request sessions, and health checks for Neon PostgreSQL. Owns no tables or models. See [Database infrastructure](#database-infrastructure-packagesdb-core). |
+| `auth-core`           | **Implemented.** AWS Cognito access-token verification (JWKS cache with key rotation, issuer, expiry, `token_use`, `client_id`) and shared Cognito settings. No roles or permissions. See [packages/auth-core](packages/auth-core/README.md). |
 
 ## How the components communicate
 
@@ -219,8 +226,9 @@ Actual permissions should be **scoped** and configurable. A person may have mult
 - [ ] Scaffold Next.js in `apps/web/`.
 - [ ] Scaffold FastAPI projects for the core services.
 - [ ] Set up PostgreSQL, Redis, local Docker Compose, and service configuration.
-- [ ] Build identity, authorization, and campus onboarding.
-- [ ] Build academic data imports and workload policies.
+- [x] Build identity, authorization (Cognito + RBAC), and administrator onboarding.
+- [x] Build administrative positions, appointments, and administrative workload policies.
+- [ ] Build campus onboarding and academic data imports.
 - [ ] Build centralized venue availability and booking validation.
 - [ ] Implement a small **teaching timetable MVP** with CP-SAT.
 - [ ] Extend teaching constraints (weekend, administrative hours, lunch, lab groups).
@@ -231,7 +239,40 @@ Actual permissions should be **scoped** and configurable. A person may have mult
 
 **Prerequisites (planned):** Node.js, a compatible Python release for FastAPI/OR-Tools, Docker, and Docker Compose.
 
-The repository currently contains an **architecture scaffold**. Once the Next.js app, FastAPI apps, and `docker-compose.yml` are configured, add the exact installation, environment-variable, and startup commands here. Do not assume `docker compose up` will work before those files are implemented.
+### Running the backend (all services, one command)
+
+Each backend service is its own FastAPI application. Its entry point is `services/<name>/app/main.py` → `create_app()`, which uvicorn runs as a factory. The database is the existing Neon project, so there is nothing local to start. One launcher checks the database and starts every implemented service:
+
+```powershell
+# repository root, once:
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ./packages/db-core -e ./packages/auth-core
+python -m pip install --group services/identity-service/pyproject.toml:dev --group services/academic-data-service/pyproject.toml:dev
+
+# every time:
+python scripts\run_services.py            # Ctrl+C stops everything
+python scripts\run_services.py --reload   # auto-restart on code changes
+```
+
+| Service | URL | Swagger UI |
+|---|---|---|
+| Identity Service | http://localhost:8001 | http://localhost:8001/docs |
+| Academic Data Service | http://localhost:8002 | http://localhost:8002/docs |
+
+The launcher works in five steps:
+1. It wakes the Neon compute and checks the connection with `SELECT 1`. Credentials are never printed.
+2. It reports each service's migration state. It **never applies migrations**; run `alembic upgrade head` in the service folder after review.
+3. It starts the services with their log lines prefixed, `[identity]` / `[academic]`.
+4. It waits until `/health` and `/health/db` answer.
+5. It stops all services when you press Ctrl+C, or when one of them crashes.
+
+Other options:
+- `--only identity`: start one service only.
+- `--smoke`: start everything, check health, then exit.
+- `--identity-port` / `--academic-port`: use other ports.
+
+The other planned services (resource, teaching, examination, notification) and `docker-compose.yml` are not implemented yet.
 
 ### Environment variables
 

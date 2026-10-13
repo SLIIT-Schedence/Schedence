@@ -1,0 +1,3570 @@
+{
+  "info": {
+    "_postman_id": "a586b398-cd98-59ec-9227-107bdcd7f457",
+    "name": "Schedence API (local)",
+    "description": "Every endpoint of the Identity Service and the Academic Data Service, with automatic checks. Read docs/testing/API_TESTING.md first. Run folders 00-09 in order (Collection Runner works); M-folders need manual steps.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "grant_type",
+        "value": "authorization_code_with_pkce",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "{{cognitoDomain}}/oauth2/authorize",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "{{cognitoDomain}}/oauth2/token",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{devtoolsClientId}}",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "openid email profile",
+        "type": "string"
+      },
+      {
+        "key": "redirect_uri",
+        "value": "https://oauth.pstmn.io/v1/callback",
+        "type": "string"
+      },
+      {
+        "key": "useBrowser",
+        "value": false,
+        "type": "boolean"
+      },
+      {
+        "key": "challengeAlgorithm",
+        "value": "S256",
+        "type": "string"
+      },
+      {
+        "key": "client_authentication",
+        "value": "body",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      },
+      {
+        "key": "headerPrefix",
+        "value": "Bearer",
+        "type": "string"
+      },
+      {
+        "key": "tokenName",
+        "value": "Schedence access token",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "identityUrl",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "academicUrl",
+      "value": "http://localhost:8002",
+      "type": "string"
+    },
+    {
+      "key": "cognitoDomain",
+      "value": "PASTE_COGNITO_DOMAIN (https://<prefix>.auth.ap-south-1.amazoncognito.com)",
+      "type": "string"
+    },
+    {
+      "key": "devtoolsClientId",
+      "value": "PASTE_COGNITO_DEVTOOLS_CLIENT_ID",
+      "type": "string"
+    },
+    {
+      "key": "institutionId",
+      "value": "PASTE_SLIIT_INSTITUTION_ID",
+      "type": "string"
+    },
+    {
+      "key": "otherInstitutionId",
+      "value": "99999999-9999-4999-8999-999999999999",
+      "type": "string"
+    },
+    {
+      "key": "testEmailLocal",
+      "value": "PASTE_GMAIL_NAME_BEFORE_@",
+      "type": "string"
+    },
+    {
+      "key": "testEmailDomain",
+      "value": "gmail.com",
+      "type": "string"
+    },
+    {
+      "key": "runSuffix",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "myUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "academicAdminUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lecturerProvisioningId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hodPositionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pcPositionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "deanPositionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staffId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staff2Id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hodAppointmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pcAppointmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staff2AppointmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lecturerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failedProvisioningId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cancelProvisioningId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "description": "Run first in every test run: picks a new random suffix so codes, staff numbers and e-mails are unique.",
+      "item": [
+        {
+          "name": "Start a new test run (new suffix)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();",
+                  "pm.collectionVariables.set(\"runSuffix\", suffix);",
+                  "console.log(\"Schedence test run suffix: \" + suffix);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Health (no token)",
+      "description": "Liveness and SELECT 1 database checks. No authentication.",
+      "item": [
+        {
+          "name": "Identity: /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"service ok\", function () { pm.expect(body.status === \"ok\", \"service ok\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Identity: /health/db",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"database healthy\", function () { pm.expect(body.status === \"healthy\", \"database healthy\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/health/db",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Academic: /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"service ok\", function () { pm.expect(body.status === \"ok\", \"service ok\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/health",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Academic: /health/db",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"database healthy\", function () { pm.expect(body.status === \"healthy\", \"database healthy\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/health/db",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Identity - current user (Super Admin token)",
+      "description": "Uses the collection OAuth token (sign in as the Super Admin).",
+      "item": [
+        {
+          "name": "GET /me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"has SUPER_ADMIN\", function () { pm.expect(body.roles.some(r => r.role_code === \"SUPER_ADMIN\"), \"has SUPER_ADMIN\").to.be.true; });",
+                  "  pm.test(\"ACTIVE\", function () { pm.expect(body.account_status === \"ACTIVE\", \"ACTIVE\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"myUserId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /me/permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"can create users in the institution\", function () { pm.expect(body.institutions.some(i => i.institution_id === pm.collectionVariables.get(\"institutionId\") && i.permissions.includes(\"identity:users:create\")), \"can create users in the institution\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me/permissions",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Identity - roles, permissions, audit",
+      "description": "",
+      "item": [
+        {
+          "name": "GET /roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"6 system roles\", function () { pm.expect(body.length === 6, \"6 system roles\").to.be.true; });",
+                  "  pm.test(\"no academic positions as roles\", function () { pm.expect(!body.some(r => [\"HOD\", \"HEAD_OF_DEPARTMENT\", \"PROGRAM_COORDINATOR\", \"DEAN\"].includes(r.code)), \"no academic positions as roles\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/roles",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"25 permissions\", function () { pm.expect(body.length === 25, \"25 permissions\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/permissions",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /audit-logs (bootstrap event)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"bootstrap recorded\", function () { pm.expect(body.total >= 1, \"bootstrap recorded\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/audit-logs?action=superadmin.bootstrapped",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Identity - user management",
+      "description": "Creates two real accounts. Each POST /users sends a real Cognito invitation e-mail (plus-addressed, so it reaches your inbox) and counts toward Cognito's 50 e-mails/day.",
+      "item": [
+        {
+          "name": "POST /users (Lecturer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"provisioning COMPLETED\", function () { pm.expect(body.provisioning.status === \"COMPLETED\", \"provisioning COMPLETED\").to.be.true; });",
+                  "  pm.test(\"role LECTURER\", function () { pm.expect(body.user.roles[0].role_code === \"LECTURER\", \"role LECTURER\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"userId\", body.user.id);",
+                  "  pm.collectionVariables.set(\"lecturerProvisioningId\", body.provisioning.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+lect{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"Test Lecturer {{runSuffix}}\",\n  \"role_code\": \"LECTURER\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /users (Academic Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"academicAdminUserId\", body.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+acad{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"Test Academic Admin {{runSuffix}}\",\n  \"role_code\": \"ACADEMIC_ADMIN\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"has items\", function () { pm.expect(body.total >= 3, \"has items\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users?page=1&page_size=20",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users?search=",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"finds the lecturer\", function () { pm.expect(body.total === 1, \"finds the lecturer\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users?search=lect{{runSuffix}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users?role_code=LECTURER&status=ACTIVE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"only lecturers\", function () { pm.expect(body.items.every(u => u.roles.some(r => r.role_code === \"LECTURER\")), \"only lecturers\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users?role_code=LECTURER&status=ACTIVE",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"same user\", function () { pm.expect(body.id === pm.collectionVariables.get(\"userId\"), \"same user\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users/{id}/status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"awaiting first sign-in\", function () { pm.expect(body.cognito_status === \"FORCE_CHANGE_PASSWORD\", \"awaiting first sign-in\").to.be.true; });",
+                  "  pm.test(\"e-mail verified\", function () { pm.expect(body.cognito_email_verified === true, \"e-mail verified\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/status",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users/{id}/provisioning",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"one completed record\", function () { pm.expect(body.length === 1 && body[0].status === \"COMPLETED\", \"one completed record\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/provisioning",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /users/{id}/resend-invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/resend-invitation",
+            "description": ""
+          }
+        },
+        {
+          "name": "PATCH /users/{id} (full_name)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"name updated\", function () { pm.expect(body.user.full_name.endsWith(\"Updated\"), \"name updated\").to.be.true; });",
+                  "  pm.test(\"synced to Cognito\", function () { pm.expect(body.cognito_sync === \"ok\", \"synced to Cognito\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Test Lecturer {{runSuffix}} Updated\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PUT /users/{id}/roles (add ACADEMIC_ADMIN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"two roles\", function () { pm.expect(body.roles.length === 2, \"two roles\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"LECTURER\",\n    \"ACADEMIC_ADMIN\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PUT /users/{id}/roles (back to LECTURER)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"only LECTURER\", function () { pm.expect(body.roles.length === 1 && body.roles[0].role_code === \"LECTURER\", \"only LECTURER\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"LECTURER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /users/{id}/disable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"DISABLED\", function () { pm.expect(body.user.account_status === \"DISABLED\", \"DISABLED\").to.be.true; });",
+                  "  pm.test(\"Cognito disabled too\", function () { pm.expect(body.cognito_sync === \"ok\", \"Cognito disabled too\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/disable",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"API test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /users/{id}/status (after disable)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"local DISABLED\", function () { pm.expect(body.account_status === \"DISABLED\", \"local DISABLED\").to.be.true; });",
+                  "  pm.test(\"Cognito disabled\", function () { pm.expect(body.cognito_enabled === false, \"Cognito disabled\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/status",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /users/{id}/enable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"ACTIVE again\", function () { pm.expect(body.user.account_status === \"ACTIVE\", \"ACTIVE again\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/enable",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /audit-logs?target_user_id=",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"history recorded\", function () { pm.expect(body.items.some(e => e.action === \"user.disabled\") && body.items.some(e => e.action === \"user.role_revoked\"), \"history recorded\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/audit-logs?target_user_id={{userId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /provisioning",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"has records\", function () { pm.expect(body.total >= 2, \"has records\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning?status=COMPLETED",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Identity - validation and security",
+      "description": "Each request must be refused with the stated status and error code.",
+      "item": [
+        {
+          "name": "No token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "if (pm.response.code === 401 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code UNAUTHENTICATED\", function () { pm.expect(body.error && body.error.code).to.eql(\"UNAUTHENTICATED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Garbage token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "if (pm.response.code === 401 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code INVALID_TOKEN\", function () { pm.expect(body.error && body.error.code).to.eql(\"INVALID_TOKEN\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "not.a.jwt",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ID token instead of access token -> 401 (paste idToken first)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "if (pm.response.code === 401 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code INVALID_TOKEN\", function () { pm.expect(body.error && body.error.code).to.eql(\"INVALID_TOKEN\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "Copy the id_token from Postman's token details into the idToken variable.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{idToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Duplicate e-mail -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code EMAIL_ALREADY_REGISTERED\", function () { pm.expect(body.error && body.error.code).to.eql(\"EMAIL_ALREADY_REGISTERED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+lect{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"Duplicate\",\n  \"role_code\": \"LECTURER\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Academic position as login role -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code UNKNOWN_ROLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"UNKNOWN_ROLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+hod{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"X\",\n  \"role_code\": \"HEAD_OF_DEPARTMENT\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Extra field account_status -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+x{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"X\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{institutionId}}\",\n  \"account_status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Other institution -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });",
+                  "if (pm.response.code === 403 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code FORBIDDEN\", function () { pm.expect(body.error && body.error.code).to.eql(\"FORBIDDEN\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+y{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"X\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{otherInstitutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disable own account -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });",
+                  "if (pm.response.code === 403 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code CANNOT_DISABLE_SELF\", function () { pm.expect(body.error && body.error.code).to.eql(\"CANNOT_DISABLE_SELF\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{myUserId}}/disable",
+            "description": ""
+          }
+        },
+        {
+          "name": "Change own roles -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });",
+                  "if (pm.response.code === 403 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code SELF_ROLE_CHANGE_FORBIDDEN\", function () { pm.expect(body.error && body.error.code).to.eql(\"SELF_ROLE_CHANGE_FORBIDDEN\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{myUserId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"SUPER_ADMIN\",\n    \"VENUE_MANAGER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown role in PUT roles -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code UNKNOWN_ROLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"UNKNOWN_ROLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"DEAN\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duplicate role codes -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"LECTURER\",\n    \"lecturer\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH e-mail is not allowed -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown user -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "if (pm.response.code === 404 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code NOT_FOUND\", function () { pm.expect(body.error && body.error.code).to.eql(\"NOT_FOUND\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/00000000-0000-4000-8000-000000000001",
+            "description": ""
+          }
+        },
+        {
+          "name": "Malformed user id -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/not-a-uuid",
+            "description": ""
+          }
+        },
+        {
+          "name": "Resend invitation to a confirmed user -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code INVITATION_NOT_APPLICABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"INVITATION_NOT_APPLICABLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{myUserId}}/resend-invitation",
+            "description": ""
+          }
+        },
+        {
+          "name": "Retry a completed onboarding -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code PROVISIONING_NOT_RETRYABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"PROVISIONING_NOT_RETRYABLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning/{{lecturerProvisioningId}}/retry",
+            "description": ""
+          }
+        },
+        {
+          "name": "Cancel a completed onboarding -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code PROVISIONING_NOT_CANCELLABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"PROVISIONING_NOT_CANCELLABLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning/{{lecturerProvisioningId}}/cancel",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Academic - position types and policies",
+      "description": "",
+      "item": [
+        {
+          "name": "POST /positions (Head of Department)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"10 hours\", function () { pm.expect(body.default_admin_hours_per_week === 10, \"10 hours\").to.be.true; });",
+                  "  pm.test(\"policy v1\", function () { pm.expect(body.policy_history.length === 1, \"policy v1\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"hodPositionId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_HOD_{{runSuffix}}\",\n  \"name\": \"Head of Department (test {{runSuffix}})\",\n  \"description\": \"Leads an academic department\",\n  \"unit_type\": \"DEPARTMENT\",\n  \"is_exclusive_per_unit\": true,\n  \"admin_hours_per_week\": 10,\n  \"policy_reference\": \"Example policy reference\",\n  \"effective_from\": \"2026-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /positions (Program Coordinator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"pcPositionId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_PC_{{runSuffix}}\",\n  \"name\": \"Program Coordinator (test {{runSuffix}})\",\n  \"description\": \"Responsible for coordinating an academic program\",\n  \"unit_type\": \"PROGRAM\",\n  \"admin_hours_per_week\": 6,\n  \"effective_from\": \"2026-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /positions (Dean, stays unused)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"deanPositionId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_DEAN_{{runSuffix}}\",\n  \"name\": \"Dean (test {{runSuffix}})\",\n  \"unit_type\": \"FACULTY\",\n  \"is_exclusive_per_unit\": true,\n  \"admin_hours_per_week\": 12,\n  \"effective_from\": \"2026-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /positions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"has items\", function () { pm.expect(body.total >= 3, \"has items\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions?institution_id={{institutionId}}&page_size=100",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /positions/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"history present\", function () { pm.expect(body.policy_history.length === 1, \"history present\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{hodPositionId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "PATCH /positions/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"updated\", function () { pm.expect(body.description.includes(\"updated\"), \"updated\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{hodPositionId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Leads an academic department (updated by API test)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /positions/{id}/workload-policies (new hours version)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"two versions\", function () { pm.expect(body.policy_history.length === 2, \"two versions\").to.be.true; });",
+                  "  pm.test(\"v1 closed the day before\", function () { pm.expect(body.policy_history[0].effective_until === \"2026-10-31\", \"v1 closed the day before\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{pcPositionId}}/workload-policies",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"admin_hours_per_week\": 8,\n  \"combination_rule\": \"ADDITIVE\",\n  \"policy_reference\": \"Revised policy (test)\",\n  \"effective_from\": \"2026-11-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /positions/{id}/workload-policies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"versions 1 and 2\", function () { pm.expect(body.length === 2 && body[1].version === 2, \"versions 1 and 2\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{pcPositionId}}/workload-policies",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /positions/{id}/disable (unused)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"inactive\", function () { pm.expect(body.is_active === false, \"inactive\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{deanPositionId}}/disable",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /positions?include_inactive=true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"disabled one listed\", function () { pm.expect(body.items.some(p => p.id === pm.collectionVariables.get(\"deanPositionId\")), \"disabled one listed\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions?include_inactive=true&page_size=100",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /positions/{id}/enable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"active\", function () { pm.expect(body.is_active === true, \"active\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{deanPositionId}}/enable",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Academic - staff",
+      "description": "",
+      "item": [
+        {
+          "name": "POST /staff (linked to the test Lecturer login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"staffId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"staff_number\": \"TEST-{{runSuffix}}-1\",\n  \"full_name\": \"Test Lecturer {{runSuffix}}\",\n  \"email\": \"{{testEmailLocal}}+lect{{runSuffix}}@{{testEmailDomain}}\",\n  \"academic_rank\": \"Senior Lecturer\",\n  \"identity_user_id\": \"{{userId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /staff (no Schedence login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"no login link\", function () { pm.expect(body.identity_user_id === null, \"no login link\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"staff2Id\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"staff_number\": \"TEST-{{runSuffix}}-2\",\n  \"full_name\": \"Visiting Lecturer {{runSuffix}}\",\n  \"academic_rank\": \"Lecturer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /staff?search=",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"both found\", function () { pm.expect(body.total === 2, \"both found\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff?search=TEST-{{runSuffix}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /staff/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"rank\", function () { pm.expect(body.academic_rank === \"Senior Lecturer\", \"rank\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Academic - appointments and workload",
+      "description": "",
+      "item": [
+        {
+          "name": "POST appointment: HOD of COMPUTING",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"unit type from position\", function () { pm.expect(body.unit_type === \"DEPARTMENT\", \"unit type from position\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"hodAppointmentId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"COMPUTING\",\n  \"unit_name\": \"Department of Computing\",\n  \"effective_from\": \"2026-02-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST appointment: Program Coordinator of BSC_IT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"pcAppointmentId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{pcPositionId}}\",\n  \"unit_code\": \"BSC_IT\",\n  \"unit_name\": \"BSc (Hons) in IT\",\n  \"effective_from\": \"2026-03-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST appointment: staff without login, with hours override",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set(\"staff2AppointmentId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{pcPositionId}}\",\n  \"unit_code\": \"BSC_IT\",\n  \"effective_from\": \"2026-04-01\",\n  \"admin_hours_override\": 4,\n  \"override_reason\": \"Shared coordination (test)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /staff/{id}/appointments (current)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"two current\", function () { pm.expect(body.length === 2, \"two current\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/appointments",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /appointments/{id} (with audit trail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"assigned event\", function () { pm.expect(body.audit_trail.some(e => e.action === \"appointment.assigned\"), \"assigned event\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{hodAppointmentId}}",
+            "description": ""
+          }
+        },
+        {
+          "name": "PATCH /appointments/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"until set\", function () { pm.expect(body.effective_until === \"2028-12-31\", \"until set\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{hodAppointmentId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unit_name\": \"School of Computing\",\n  \"effective_until\": \"2028-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET workload (two appointments, unresolved rule)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"not combined\", function () { pm.expect(body.aggregate.status === \"NOT_COMPUTED\", \"not combined\").to.be.true; });",
+                  "  pm.test(\"two items\", function () { pm.expect(body.appointments.length === 2, \"two items\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/administrative-workload?as_of=2026-10-13",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET workload (override, single appointment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"4 hours\", function () { pm.expect(body.aggregate.total_admin_hours_per_week === 4, \"4 hours\").to.be.true; });",
+                  "  pm.test(\"from override\", function () { pm.expect(body.appointments[0].hours_source === \"OVERRIDE\", \"from override\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/administrative-workload?as_of=2026-10-13",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /appointments/{id}/end",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"ended\", function () { pm.expect(body.effective_until === \"2026-09-30\" && body.end_reason !== null, \"ended\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{pcAppointmentId}}/end",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"end_date\": \"2026-09-30\",\n  \"reason\": \"Term completed (test)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /staff/{id}/appointments?include_ended=true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"history keeps both\", function () { pm.expect(body.length === 2, \"history keeps both\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/appointments?include_ended=true",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET workload after ending (single HOD)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"10 hours\", function () { pm.expect(body.aggregate.total_admin_hours_per_week === 10, \"10 hours\").to.be.true; });",
+                  "  pm.test(\"rule\", function () { pm.expect(body.aggregate.rule === \"SINGLE_APPOINTMENT\", \"rule\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/administrative-workload?as_of=2026-10-13",
+            "description": ""
+          }
+        },
+        {
+          "name": "GET workload on a past date (both active)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"both active then\", function () { pm.expect(body.appointments.length === 2, \"both active then\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/administrative-workload?as_of=2026-03-15",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Academic - validation and conflicts",
+      "description": "Each request must be refused with the stated status and error code.",
+      "item": [
+        {
+          "name": "No token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "if (pm.response.code === 401 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code UNAUTHENTICATED\", function () { pm.expect(body.error && body.error.code).to.eql(\"UNAUTHENTICATED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Duplicate position code -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code POSITION_CODE_EXISTS\", function () { pm.expect(body.error && body.error.code).to.eql(\"POSITION_CODE_EXISTS\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_HOD_{{runSuffix}}\",\n  \"name\": \"Duplicate\",\n  \"admin_hours_per_week\": 1,\n  \"effective_from\": \"2026-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Position in another institution -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "if (pm.response.code === 404 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code NOT_FOUND\", function () { pm.expect(body.error && body.error.code).to.eql(\"NOT_FOUND\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{otherInstitutionId}}\",\n  \"code\": \"TEST_X_{{runSuffix}}\",\n  \"name\": \"X\",\n  \"admin_hours_per_week\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CAPPED without a cap -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{pcPositionId}}/workload-policies",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"admin_hours_per_week\": 5,\n  \"combination_rule\": \"CAPPED\",\n  \"effective_from\": \"2027-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Back-dated policy version -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code INVALID_EFFECTIVE_DATE\", function () { pm.expect(body.error && body.error.code).to.eql(\"INVALID_EFFECTIVE_DATE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{pcPositionId}}/workload-policies",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"admin_hours_per_week\": 5,\n  \"effective_from\": \"2026-05-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Second HOD for the same department -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code POSITION_ALREADY_HELD\", function () { pm.expect(body.error && body.error.code).to.eql(\"POSITION_ALREADY_HELD\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"COMPUTING\",\n  \"effective_from\": \"2026-06-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Same appointment twice -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code DUPLICATE_APPOINTMENT\", function () { pm.expect(body.error && body.error.code).to.eql(\"DUPLICATE_APPOINTMENT\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"COMPUTING\",\n  \"effective_from\": \"2026-05-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Department position without unit_code -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code INVALID_UNIT\", function () { pm.expect(body.error && body.error.code).to.eql(\"INVALID_UNIT\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"effective_from\": \"2026-05-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "effective_until before effective_from -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"SCIENCE\",\n  \"effective_from\": \"2026-05-01\",\n  \"effective_until\": \"2026-04-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Start before any policy exists -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code NO_WORKLOAD_POLICY\", function () { pm.expect(body.error && body.error.code).to.eql(\"NO_WORKLOAD_POLICY\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staff2Id}}/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"SCIENCE\",\n  \"effective_from\": \"2025-06-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown staff -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "if (pm.response.code === 404 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code STAFF_NOT_FOUND\", function () { pm.expect(body.error && body.error.code).to.eql(\"STAFF_NOT_FOUND\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/staff/00000000-0000-4000-8000-000000000001/appointments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_type_id\": \"{{hodPositionId}}\",\n  \"unit_code\": \"COMPUTING\",\n  \"effective_from\": \"2026-05-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "End an ended appointment -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code APPOINTMENT_ENDED\", function () { pm.expect(body.error && body.error.code).to.eql(\"APPOINTMENT_ENDED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{pcAppointmentId}}/end",
+            "description": ""
+          }
+        },
+        {
+          "name": "Edit an ended appointment -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code APPOINTMENT_ENDED\", function () { pm.expect(body.error && body.error.code).to.eql(\"APPOINTMENT_ENDED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{pcAppointmentId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"should fail\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change staff of an appointment -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.code === 422 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code VALIDATION_ERROR\", function () { pm.expect(body.error && body.error.code).to.eql(\"VALIDATION_ERROR\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/appointments/{{hodAppointmentId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staff_id\": \"00000000-0000-4000-8000-000000000001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disable a position that is in use -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.code === 409 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code POSITION_IN_USE\", function () { pm.expect(body.error && body.error.code).to.eql(\"POSITION_IN_USE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions/{{hodPositionId}}/disable",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "M1 Manual - as the Lecturer (appointments are not login roles)",
+      "description": "Needs lecturerToken: complete the test Lecturer's first sign-in, get an access token for that user (see the guide) and paste it into the lecturerToken variable. The Lecturer is now Head of Department in the Academic Data Service, yet keeps only LECTURER access.",
+      "item": [
+        {
+          "name": "Lecturer: GET /me (only LECTURER)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"only LECTURER\", function () { pm.expect(body.roles.length >= 1 && body.roles.every(r => r.role_code === \"LECTURER\"), \"only LECTURER\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer: GET /me/permissions (none)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"no admin permissions\", function () { pm.expect(body.institutions.every(i => i.permissions.length === 0), \"no admin permissions\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me/permissions",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer: POST /users -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+z{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"X\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer: spoofed role headers -> still 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Role",
+                "value": "SUPER_ADMIN"
+              },
+              {
+                "key": "X-Roles",
+                "value": "SUPER_ADMIN"
+              },
+              {
+                "key": "X-Permissions",
+                "value": "identity:users:create"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+z{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"X\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer (an HOD!): GET positions -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer (an HOD!): POST positions -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_NO_{{runSuffix}}\",\n  \"name\": \"X\",\n  \"admin_hours_per_week\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer: GET workload -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/staff/{{staffId}}/administrative-workload",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "M2 Manual - disabled account is blocked immediately",
+      "description": "Uses the Super Admin token for disable/enable and lecturerToken for the blocked calls. The Lecturer's token is still unexpired; the API rejects it anyway.",
+      "item": [
+        {
+          "name": "Super Admin: disable the Lecturer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"DISABLED\", function () { pm.expect(body.user.account_status === \"DISABLED\", \"DISABLED\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/disable",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"M2 test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Lecturer: GET /me -> 403 ACCOUNT_DISABLED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });",
+                  "if (pm.response.code === 403 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code ACCOUNT_DISABLED\", function () { pm.expect(body.error && body.error.code).to.eql(\"ACCOUNT_DISABLED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lecturer: Academic write -> 403 ACCOUNT_DISABLED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });",
+                  "if (pm.response.code === 403 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code ACCOUNT_DISABLED\", function () { pm.expect(body.error && body.error.code).to.eql(\"ACCOUNT_DISABLED\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"code\": \"TEST_NO_{{runSuffix}}\",\n  \"name\": \"X\",\n  \"admin_hours_per_week\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Super Admin: enable the Lecturer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"ACTIVE\", function () { pm.expect(body.user.account_status === \"ACTIVE\", \"ACTIVE\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/enable",
+            "description": ""
+          }
+        },
+        {
+          "name": "Lecturer: GET /me works again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{lecturerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "M3 Manual - Identity Service down (fail closed)",
+      "description": "Stop the launcher, start only the Academic service (python scripts\\run_services.py --only academic), wait 20 seconds (read permissions are cached for 15 s), then send.",
+      "item": [
+        {
+          "name": "Academic call while Identity is down -> 503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 503\", function () { pm.response.to.have.status(503); });",
+                  "if (pm.response.code === 503 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code IDENTITY_SERVICE_UNAVAILABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"IDENTITY_SERVICE_UNAVAILABLE\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "M4 Manual - Cognito failure, retry and cancel",
+      "description": "Simulates an AWS outage. Stop the launcher, set AWS_PROFILE=schedence-broken in .env, start again, run the first two requests; restore AWS_PROFILE=schedence-identity, restart, run the rest.",
+      "item": [
+        {
+          "name": "Create user while Cognito is unreachable -> 503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 503\", function () { pm.response.to.have.status(503); });",
+                  "if (pm.response.code === 503 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code IDENTITY_PROVIDER_UNAVAILABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"IDENTITY_PROVIDER_UNAVAILABLE\"); });",
+                  "  pm.collectionVariables.set(\"failedProvisioningId\", body.error.details.provisioning_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+retry{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"Retry Test {{runSuffix}}\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create another one to cancel -> 503",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 503\", function () { pm.response.to.have.status(503); });",
+                  "if (pm.response.code === 503 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"error code IDENTITY_PROVIDER_UNAVAILABLE\", function () { pm.expect(body.error && body.error.code).to.eql(\"IDENTITY_PROVIDER_UNAVAILABLE\"); });",
+                  "  pm.collectionVariables.set(\"cancelProvisioningId\", body.error.details.provisioning_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+cancel{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"Cancel Test {{runSuffix}}\",\n  \"role_code\": \"STUDENT\",\n  \"institution_id\": \"{{institutionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "(after restoring AWS_PROFILE) GET /provisioning?status=FAILED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"failed record listed\", function () { pm.expect(body.items.some(p => p.id === pm.collectionVariables.get(\"failedProvisioningId\")), \"failed record listed\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning?status=FAILED",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /provisioning/{id}/retry -> completes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"COMPLETED\", function () { pm.expect(body.provisioning.status === \"COMPLETED\", \"COMPLETED\").to.be.true; });",
+                  "  pm.test(\"second attempt\", function () { pm.expect(body.provisioning.attempt_count === 2, \"second attempt\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning/{{failedProvisioningId}}/retry",
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /provisioning/{id}/cancel -> cancelled",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"CANCELLED\", function () { pm.expect(body.status === \"CANCELLED\", \"CANCELLED\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/provisioning/{{cancelProvisioningId}}/cancel",
+            "description": ""
+          }
+        }
+      ]
+    }
+  ]
+}
