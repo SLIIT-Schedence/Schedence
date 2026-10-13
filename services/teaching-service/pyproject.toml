@@ -1,0 +1,44 @@
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "schedence-teaching-service"
+version = "0.1.0"
+description = "Teaching timetable service for Schedence"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.115,<1",
+    "openpyxl>=3.1,<4",
+    "ortools>=9.15,<9.16",
+    "pydantic>=2.7,<3",
+    "schedence-auth-core>=0.1.0,<0.2",
+    "httpx>=0.27,<1",
+    "uvicorn[standard]>=0.30,<1"
+]
+
+[project.optional-dependencies]
+pdf = [
+    "reportlab>=4,<6",
+    "pypdf>=5,<7"
+]
+persistence = [
+    "schedence-db-core>=0.1.0,<0.2",
+    "sqlalchemy[asyncio]>=2.0.36,<2.2",
+    "alembic>=1.13,<2"
+]
+dev = [
+    "pytest>=8,<10",
+    "httpx>=0.27,<1"
+]
+
+[project.scripts]
+schedence-teaching-import = "schedence_teaching.excel_import.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/schedence_teaching"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
