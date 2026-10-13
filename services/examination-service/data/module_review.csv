@@ -1,0 +1,36 @@
+module_code,issue,source_row,module_name,academic_year,semester,specializations,credits,exam_type,duration_minutes,has_extra_reading_time,difficulty,admin_evidence,note
+IE2004,admin_year_semester_differs,33,Computer Networks,2,2,COMPUTER_SCIENCE,3,written,90,no,1,Main Admin: Y2 S1,kept from exam dataset; please confirm year/semester
+IE2004,name_differs_from_admin,33,Computer Networks,2,2,COMPUTER_SCIENCE,3,written,90,no,1,Main Admin name: Computer Netowrks,exam dataset name kept
+IE2024,admin_year_semester_differs,39,Probability and Statistics,2,2,COMPUTER_SCIENCE,3,hybrid,90,yes,3,Main Admin: Y2 S1,kept from exam dataset; please confirm year/semester
+IE3010,admin_year_semester_differs,90,Network Programming,3,1,CSNE,4,hybrid,120,no,4,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE3061,admin_year_semester_differs,106,Information Security Management,3,1,ISE,4,hybrid,120,no,4,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE3062,name_differs_from_admin,107,Data and Operating Systems Security,3,2,CYBER,4,written,120,yes,2,Main Admin name: Data and Operating System Security,exam dataset name kept
+IE3071,admin_year_semester_differs,108,Organizational Business Functions II,3,1,ISE,3,written,120,yes,2,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE3080,admin_year_semester_differs,110,Network Security Engineering,3,1,CSNE,4,written,120,yes,2,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE3082,admin_year_semester_differs,112,Cryptography,3,1,CYBER,4,hybrid,150,no,4,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE3102,admin_year_semester_differs,114,Enterprise Standards for Information Security,3,1,CYBER,2,computer_based,60,no,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IE4054,admin_year_semester_differs,167,Information Security,4,2,COMPUTER_SCIENCE,4,written,150,no,3,Main Admin: Y4 S1,kept from exam dataset; please confirm year/semester
+IE4060,name_differs_from_admin,168,Robotics & Intelligent Systems,4,1,CSNE;IT;SE,4,written,150,yes,3,Main Admin name: Robotics and Intelligent Systems,exam dataset name kept
+IE4070,name_differs_from_admin,170,Design and Management of Enterprise Network,4,1,CSNE,4,computer_based,150,no,4,Main Admin name: Design and Management of Enterprise Networks,exam dataset name kept
+IT3060,admin_year_semester_differs,124,Human Computer Interaction,3,1,IT,3,computer_based,120,no,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IT3060,name_differs_from_admin,124,Human Computer Interaction,3,1,IT,3,computer_based,120,no,3,Main Admin name: Human Computer Interation,exam dataset name kept
+IT3061,admin_year_semester_differs,126,Massive Data Processing and Cloud Computing,3,1,DS,4,hybrid,120,no,4,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IT3071,admin_year_semester_differs,128,Machine Learning and Optimization Methods,3,1,DS,4,written,120,no,2,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IT3090,admin_year_semester_differs,130,Business Management for IT,3,1,IT,3,computer_based,120,yes,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+IT4050,name_differs_from_admin,186,Innovation Management and Entrepreneurship,4,1,ISE;IT,4,hybrid,150,no,5,Main Admin name: Innovation Management & Entrepreneurship,exam dataset name kept
+SE2012,admin_year_semester_differs,77,Object Oriented Analysis and Design,2,2,COMPUTER_SCIENCE,4,written,90,no,1,Main Admin: Y2 S1,kept from exam dataset; please confirm year/semester
+SE2032,admin_year_semester_differs,79,Database Management Systems,2,2,COMPUTER_SCIENCE,3,hybrid,90,no,3,Main Admin: Y2 S1,kept from exam dataset; please confirm year/semester
+SE3012,admin_year_semester_differs,134,Industry Economics and Management,3,1,COMPUTER_SCIENCE,3,hybrid,120,no,4,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3031,admin_year_semester_differs,138,3D Modeling & Animation,3,1,IM,4,written,120,no,2,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3031,name_differs_from_admin,138,3D Modeling & Animation,3,1,IM,4,written,120,no,2,Main Admin name: 3D Modelling and Animation,exam dataset name kept
+SE3032,admin_year_semester_differs,139,Graphics and Visualization,3,2,COMPUTER_SCIENCE,3,computer_based,150,no,3,Main Admin: Y3 S1,kept from exam dataset; please confirm year/semester
+SE3041,name_differs_from_admin,141,Digital Video Production & Delivery,3,2,IM,4,computer_based,150,no,3,Main Admin name: Digital Video Production and Delivery,exam dataset name kept
+SE3050,admin_year_semester_differs,142,User Experience Engineering,3,1,SE,3,computer_based,150,no,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3062,admin_year_semester_differs,145,Intelligent Systems,3,2,COMPUTER_SCIENCE,3,computer_based,120,no,3,Main Admin: Y3 S1,kept from exam dataset; please confirm year/semester
+SE3070,admin_year_semester_differs,146,Case Studies in Software Engineering,3,1,SE,4,written,120,no,2,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3080,admin_year_semester_differs,148,Software Project Management,3,1,SE,3,computer_based,120,no,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3092,admin_year_semester_differs,152,Platform Based Development,3,1,COMPUTER_SCIENCE,3,computer_based,120,no,3,Main Admin: Y3 S2,kept from exam dataset; please confirm year/semester
+SE3092,name_differs_from_admin,152,Platform Based Development,3,1,COMPUTER_SCIENCE,3,computer_based,120,no,3,Main Admin name: Platform Based Developments,exam dataset name kept
+SE4022,admin_year_semester_differs,195,Machine Learning,4,2,COMPUTER_SCIENCE,3,hybrid,150,yes,5,Main Admin: Y4 S1,kept from exam dataset; please confirm year/semester
+SE4042,admin_year_semester_differs,201,Modelling and Simulation of Sciences,4,2,COMPUTER_SCIENCE,4,computer_based,150,no,4,Main Admin: Y4 S1,kept from exam dataset; please confirm year/semester
+SE4061,name_differs_from_admin,206,Multimedia Project Management,4,1,IM,4,hybrid,150,no,5,Main Admin name: Multmedia Project Management,exam dataset name kept

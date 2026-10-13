@@ -1,0 +1,27 @@
+module_code,academic_year,semester,basis,note
+IE2004,2,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE2012,2,2,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IE2020,2,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE2021,2,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE2022,2,1,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IE2030,2,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE3010,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE3011,3,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE3020,3,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE3021,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IE3102,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IT2020,2,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IT2030,2,2,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IT2040,2,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IT3010,3,1,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IT3011,3,2,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IT3020,3,1,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+IT3030,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+IT4020,4,1,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+SE2012,2,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+SE3010,3,1,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+SE3011,3,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+SE3012,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+SE3020,3,2,team_decision,PP1 team decision: Record B (year matches code digit); not officially verified
+SE3021,3,1,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
+SE4022,4,2,code_year_rule,Uncertain: kept record whose year matches the code's year digit; verify with curriculum
