@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "schedence-examination-service"
+version = "0.1.0"
+description = "Schedence Examination Service: examination timetabling and cognitive load optimization."
+requires-python = ">=3.11"
+dependencies = [
+    # Install from this repository first: python -m pip install -e ./packages/db-core
+    # (it is not published on PyPI; see README "Depending on db-core").
+    "schedence-db-core",
+    "sqlalchemy[asyncio]>=2.0.36,<2.2",
+    "alembic>=1.13,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=1.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+markers = [
+    "live: talks to the real configured database (opt-in: pytest --live)",
+]

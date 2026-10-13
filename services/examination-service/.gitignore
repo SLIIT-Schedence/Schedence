@@ -1,0 +1,2 @@
+# Local database backups (python -m app.seed.backup export). Never commit them.
+backups/
