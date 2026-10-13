@@ -2,9 +2,9 @@
 
 Examination timetabling and cognitive load optimization for Schedence.
 
-**Current phase: development data only.** This service has a synthetic,
-reproducible dataset and the tables to store it. It has no API, scheduler or
-UI yet.
+**Current phase: data and read-only API.** This service has a synthetic,
+reproducible dataset, the tables to store it, and a read-only FastAPI backend
+to read it. It has no scheduler or UI yet.
 
 ## Layout
 
@@ -18,6 +18,14 @@ services/examination-service/
 │       ├── 20261012_0001_create_seed_tables.py
 │       └── 20261012_0002_real_module_catalog.py
 ├── app/
+│   ├── main.py                    # FastAPI app (create_app); uvicorn app.main:app
+│   ├── database.py                # engine + read-only request sessions (via db-core)
+│   ├── api/                       # routes, response schemas, input rules, safe errors
+│   ├── sources/                   # read-only data layer shared with the future scheduler
+│   │   ├── base.py                # ExamDataSource interface
+│   │   ├── types.py               # Module, Student, Registration, Venue, ... records
+│   │   ├── database.py            # DatabaseSource: reads the seed_* tables
+│   │   └── memory.py              # DatasetSource: same answers from the generated dataset
 │   ├── db/
 │   │   ├── base.py                # Base with MetaData(schema="examinations")
 │   │   └── seed_models.py         # development-only seed_* tables
@@ -34,7 +42,7 @@ services/examination-service/
 │       ├── replace.py             # atomic replacement of old seed data
 │       └── __main__.py            # CLI: python -m app.seed
 ├── data/                          # cleaned catalogue + cleaning audit files
-└── tests/                         # unit tests + one opt-in live test
+└── tests/                         # unit + API tests; opt-in live tests (--live)
 ```
 
 ## Module catalogue (real data)
@@ -82,10 +90,10 @@ from `seed_registrations`. `seed_modules.specialization` is a legacy column
 of the original SYN rows (NULL for new rows); it will be dropped once those
 rows are removed.
 
-**Replacing the seed tables later:** the scheduler will read input through
-small source interfaces (for example `RegistrationSource` and `VenueSource`).
-The first versions will read these `seed_*` tables; later versions will call
-the Academic Data and Resource service APIs instead.
+**Replacing the seed tables later:** the API and the scheduler read input only
+through `app.sources.ExamDataSource`. `DatabaseSource` reads these `seed_*`
+tables today; a later source can call the Academic Data and Resource service
+APIs instead, without changing the callers.
 
 ## Dataset (fixed random seed `20261019`)
 
@@ -172,10 +180,43 @@ python -m app.seed.backup restore backups\seed_backup_... --pooled --dry-run    
 dataset, then seeds, then checks final counts, leftovers and foreign keys. Any
 failure rolls back the whole transaction.
 
+## Read-only API
+
+Start the server from `services/examination-service` (Windows needs the
+selector event loop for psycopg async):
+
+```powershell
+cd services/examination-service
+uvicorn app.main:app --port 8003 --loop asyncio:SelectorEventLoop
+```
+
+Interactive docs: <http://127.0.0.1:8003/docs>. The API uses the pooled
+`DATABASE_URL`, one engine per process, and opens every transaction
+`READ ONLY`, so it cannot change the database.
+
+| Method and path | Purpose | Filters / paging |
+|---|---|---|
+| `GET /health` | process is running (no database) | |
+| `GET /health/db` | `SELECT 1`; `503` with a safe reason if unreachable | |
+| `GET /api/v1/modules` | modules with specializations and candidate counts | `academic_year`, `specialization`, `exam_type` |
+| `GET /api/v1/modules/{module_code}` | one module | |
+| `GET /api/v1/students` | students, paginated | `academic_year`, `specialization`, `limit` (1-500, default 50), `offset` |
+| `GET /api/v1/students/{student_id}` | one student with their registrations | |
+| `GET /api/v1/registrations` | registrations, paginated | `student_id`, `module_code`, `registration_type`, `limit`, `offset` |
+| `GET /api/v1/venues` | venues with exam capacity | `venue_type` |
+| `GET /api/v1/venue-blocks` | times a venue is unavailable | `venue_id`, `source`, `date_from`, `date_to` |
+| `GET /api/v1/exam-periods` | periods with exclusions and exam days | |
+| `GET /api/v1/exam-periods/{period_code}` | one period | |
+
+Paginated responses look like `{"items": [...], "total": 390, "limit": 50, "offset": 0}`.
+Invalid input answers `422`, unknown IDs `404`, and database problems `503`
+with a generic message (details go to the server log without credentials).
+
 ## Tests
 
 ```powershell
 cd services/examination-service
 python -m pytest            # unit tests; no database or credentials needed
-python -m pytest --live     # also seeds twice inside a transaction, then ROLLS BACK
+python -m pytest --live tests/test_live_api.py   # read-only checks against the real database
+python -m pytest --live     # all live tests; the seed test writes inside a transaction, then ROLLS BACK
 ```
