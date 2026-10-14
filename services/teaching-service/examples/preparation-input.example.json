@@ -1,0 +1,24 @@
+{
+  "staff_members": [
+    {"staff_id": "SYNTHETIC-STAFF", "staff_name": "Synthetic Academic", "position": "Lecturer", "staff_type": "ACADEMIC"}
+  ],
+  "module_offerings": [
+    {"offering_id": "OFFER-WD", "module_code": "EXAMPLE100", "module_name": "Synthetic Module", "academic_year": 2, "semester": 1, "specialization": "Synthetic Specialization", "degree_type": "Synthetic Degree", "stream": "WEEKDAY"},
+    {"offering_id": "OFFER-WE", "module_code": "EXAMPLE100", "module_name": "Synthetic Module", "academic_year": 2, "semester": 1, "specialization": "Synthetic Specialization", "degree_type": "Synthetic Degree", "stream": "WEEKEND"}
+  ],
+  "teaching_team_members": [
+    {"offering_id": "OFFER-WD", "staff_id": "SYNTHETIC-STAFF", "role": "LIC"},
+    {"offering_id": "OFFER-WE", "staff_id": "SYNTHETIC-STAFF", "role": "LIC"}
+  ],
+  "student_groups": [
+    {"group_id": "MAIN-WD", "academic_year": 2, "semester": 1, "stream": "WEEKDAY", "student_count": 120},
+    {"group_id": "LAB-A", "academic_year": 2, "semester": 1, "stream": "WEEKDAY", "student_count": 60, "parent_group_id": "MAIN-WD"},
+    {"group_id": "LAB-B", "academic_year": 2, "semester": 1, "stream": "WEEKDAY", "student_count": 60, "parent_group_id": "MAIN-WD"},
+    {"group_id": "MAIN-WE", "academic_year": 2, "semester": 1, "stream": "WEEKEND", "student_count": 75}
+  ],
+  "session_requirements": [
+    {"requirement_id": "REQ001", "offering_id": "OFFER-WD", "group_id": "MAIN-WD", "session_type": "LECTURE", "duration_minutes": 120, "sessions_per_week": 2},
+    {"requirement_id": "REQ002", "offering_id": "OFFER-WD", "group_id": "LAB-A", "session_type": "LAB", "duration_minutes": 60, "sessions_per_week": 1},
+    {"requirement_id": "REQ003", "offering_id": "OFFER-WE", "group_id": "MAIN-WE", "session_type": "TUTORIAL", "duration_minutes": 90, "sessions_per_week": 1}
+  ]
+}
