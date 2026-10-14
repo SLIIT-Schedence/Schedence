@@ -1,0 +1,36 @@
+{
+  "layout": "department-aligned-preferences-v1",
+  "source_reference": "development:inspected-department-aligned-preference-layout-step10a",
+  "scope": null,
+  "stream": null,
+  "confirmation_status": null,
+  "free_day_column": "Preferred_Free_Day",
+  "free_day_values": {
+    "Monday": "MONDAY", "Tuesday": "TUESDAY", "Wednesday": "WEDNESDAY",
+    "Thursday": "THURSDAY", "Friday": "FRIDAY", "Saturday": "SATURDAY",
+    "Sunday": "SUNDAY", "No Preference": null
+  },
+  "slot_columns": {
+    "Monday_Morning": {"day": "MONDAY", "time_of_day": "MORNING"},
+    "Monday_Afternoon": {"day": "MONDAY", "time_of_day": "AFTERNOON"},
+    "Tuesday_Morning": {"day": "TUESDAY", "time_of_day": "MORNING"},
+    "Tuesday_Afternoon": {"day": "TUESDAY", "time_of_day": "AFTERNOON"},
+    "Wednesday_Morning": {"day": "WEDNESDAY", "time_of_day": "MORNING"},
+    "Wednesday_Afternoon": {"day": "WEDNESDAY", "time_of_day": "AFTERNOON"},
+    "Thursday_Morning": {"day": "THURSDAY", "time_of_day": "MORNING"},
+    "Thursday_Afternoon": {"day": "THURSDAY", "time_of_day": "AFTERNOON"},
+    "Friday_Morning": {"day": "FRIDAY", "time_of_day": "MORNING"},
+    "Friday_Afternoon": {"day": "FRIDAY", "time_of_day": "AFTERNOON"},
+    "Saturday_Morning": {"day": "SATURDAY", "time_of_day": "MORNING"},
+    "Saturday_Afternoon": {"day": "SATURDAY", "time_of_day": "AFTERNOON"},
+    "Sunday_Morning": {"day": "SUNDAY", "time_of_day": "MORNING"},
+    "Sunday_Afternoon": {"day": "SUNDAY", "time_of_day": "AFTERNOON"}
+  },
+  "slot_values": {
+    "Preferred": "PREFER", "Not Preferred": "AVOID",
+    "Available": "NEUTRAL", "Not Available": "AVAILABILITY_ASSERTION"
+  },
+  "weekend_pattern_column": "Weekend_Work_Pattern",
+  "weekend_pattern_values": {},
+  "weekend_mapping_confirmation_reference": null
+}

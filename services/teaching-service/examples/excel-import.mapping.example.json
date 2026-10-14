@@ -1,0 +1,59 @@
+{
+  "tables": [
+    {
+      "kind": "staff",
+      "workbook": "REPLACE_STAFF.xlsx",
+      "worksheet": "REPLACE_STAFF_SHEET",
+      "header_row": 1,
+      "columns": {
+        "staff_id": "REPLACE_STAFF_ID_HEADER",
+        "staff_name": "REPLACE_STAFF_NAME_HEADER",
+        "position": "REPLACE_POSITION_HEADER",
+        "staff_type": "REPLACE_STAFF_TYPE_HEADER"
+      }
+    },
+    {
+      "kind": "preferences",
+      "workbook": "REPLACE_PREFERENCES.xlsx",
+      "worksheet": "REPLACE_PREFERENCES_SHEET",
+      "header_row": 1,
+      "columns": {
+        "staff_id": "REPLACE_STAFF_ID_HEADER"
+      },
+      "preference_fields": {
+        "replace_with_confirmed_preference_key": {
+          "column": "REPLACE_PREFERENCE_HEADER",
+          "value_type": "text",
+          "required": true
+        }
+      }
+    },
+    {
+      "kind": "offerings",
+      "workbook": "REPLACE_MODULES.xlsx",
+      "worksheet": "REPLACE_OFFERINGS_SHEET",
+      "header_row": 1,
+      "columns": {
+        "offering_id": "REPLACE_OFFERING_ID_HEADER",
+        "module_code": "REPLACE_MODULE_CODE_HEADER",
+        "module_name": "REPLACE_MODULE_NAME_HEADER",
+        "academic_year": "REPLACE_STUDY_YEAR_HEADER",
+        "semester": "REPLACE_SEMESTER_HEADER",
+        "specialization": "REPLACE_SPECIALIZATION_HEADER",
+        "degree_type": "REPLACE_DEGREE_TYPE_HEADER",
+        "stream": "REPLACE_STREAM_HEADER"
+      }
+    },
+    {
+      "kind": "teaching_teams",
+      "workbook": "REPLACE_MODULES.xlsx",
+      "worksheet": "REPLACE_TEAMS_SHEET",
+      "header_row": 1,
+      "columns": {
+        "offering_id": "REPLACE_OFFERING_ID_HEADER",
+        "staff_id": "REPLACE_STAFF_ID_HEADER",
+        "role": "REPLACE_ROLE_HEADER"
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "layout": "venue-v1",
+  "venues": {
+    "workbook": "synthetic-venues.xlsx",
+    "worksheet": "Venue_Master",
+    "header_row": 1
+  },
+  "columns": {
+    "venue_id": "Venue_ID",
+    "venue_name": "Venue_Name",
+    "venue_type": "Venue_Type",
+    "capacity": "Capacity",
+    "building": "Building",
+    "floor": "Floor",
+    "lab_specialization": "Lab_Specialization"
+  },
+  "source_metadata_columns": [
+    "Type_Data_Status", "Capacity_Data_Status", "Location_Data_Status", "Notes"
+  ],
+  "unknown_location_values": ["To Verify"],
+  "verification_file": null
+}

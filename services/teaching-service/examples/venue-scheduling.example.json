@@ -1,0 +1,43 @@
+{
+  "teaching_input": {
+    "staff_members": [
+      {"staff_id": "SYNTHETIC-STAFF-A", "staff_name": "Synthetic lecturer A", "position": "Synthetic", "staff_type": "ACADEMIC"},
+      {"staff_id": "SYNTHETIC-STAFF-B", "staff_name": "Synthetic lecturer B", "position": "Synthetic", "staff_type": "ACADEMIC"}
+    ],
+    "module_offerings": [
+      {"offering_id": "SYNTHETIC-OFFER-A", "module_code": "SYNTHETIC-CODE", "module_name": "Synthetic Module A", "academic_year": 2, "semester": 1, "specialization": "Synthetic", "degree_type": "Synthetic", "stream": "WEEKDAY"},
+      {"offering_id": "SYNTHETIC-OFFER-B", "module_code": "SYNTHETIC-CODE", "module_name": "Synthetic Module B", "academic_year": 2, "semester": 1, "specialization": "Synthetic", "degree_type": "Synthetic", "stream": "WEEKDAY"}
+    ],
+    "teaching_team_members": [
+      {"offering_id": "SYNTHETIC-OFFER-A", "staff_id": "SYNTHETIC-STAFF-A", "role": "LIC"},
+      {"offering_id": "SYNTHETIC-OFFER-A", "staff_id": "SYNTHETIC-STAFF-B", "role": "CO_LIC"},
+      {"offering_id": "SYNTHETIC-OFFER-B", "staff_id": "SYNTHETIC-STAFF-A", "role": "LIC"}
+    ],
+    "student_groups": [
+      {"group_id": "SYNTHETIC-GROUP-A", "academic_year": 2, "semester": 1, "stream": "WEEKDAY", "student_count": 25},
+      {"group_id": "SYNTHETIC-GROUP-B", "academic_year": 2, "semester": 1, "stream": "WEEKDAY", "student_count": 25}
+    ],
+    "session_requirements": [
+      {"requirement_id": "REQ-A", "offering_id": "SYNTHETIC-OFFER-A", "group_id": "SYNTHETIC-GROUP-A", "session_type": "LECTURE", "duration_minutes": 30, "sessions_per_week": 1},
+      {"requirement_id": "REQ-B", "offering_id": "SYNTHETIC-OFFER-B", "group_id": "SYNTHETIC-GROUP-B", "session_type": "LECTURE", "duration_minutes": 30, "sessions_per_week": 1}
+    ]
+  },
+  "solver_config": {
+    "days": [{"day": "SYNTHETIC-DAY", "windows": {"WEEKDAY": [{"start_minute": 540, "end_minute": 570}]}}],
+    "granularity_minutes": 15,
+    "max_time_seconds": 5,
+    "random_seed": 7
+  },
+  "venue_input": {
+    "venues": [
+      {"venue_id": "SYNTHETIC-ROOM-A", "venue_name": "Synthetic room A", "venue_type": "Lecture Hall", "capacity": 30, "building": "Synthetic", "floor": 1},
+      {"venue_id": "SYNTHETIC-ROOM-B", "venue_name": "Synthetic room B", "venue_type": "Lecture Hall", "capacity": 30, "building": "Synthetic", "floor": 1}
+    ],
+    "unresolved_venue_ids": [],
+    "calendars": [
+      {"venue_id": "SYNTHETIC-ROOM-A", "available_windows": {"SYNTHETIC-DAY": [{"start_minute": 540, "end_minute": 570}]}, "blocked_periods": []},
+      {"venue_id": "SYNTHETIC-ROOM-B", "available_windows": {"SYNTHETIC-DAY": [{"start_minute": 540, "end_minute": 570}]}, "blocked_periods": []}
+    ],
+    "requirements": [{"requirement_id": "REQ-B", "eligible_venue_ids": ["SYNTHETIC-ROOM-A"]}]
+  }
+}
