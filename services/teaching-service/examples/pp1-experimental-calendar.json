@@ -1,0 +1,10 @@
+{
+  "reference": "user-requested:step12a35:experimental-weekend-online-monday-end-1830",
+  "output_label": "PP1_EXPERIMENTAL_CALENDAR",
+  "online_day": "MONDAY",
+  "baseline_end_minute": 1080,
+  "experimental_end_minute": 1110,
+  "seconds_per_cohort": 30.0,
+  "num_search_workers": 1,
+  "lab_variables_first": true
+}
