@@ -9,7 +9,8 @@ import pytest
 from schedence_db.config import ENV_FILE_VARIABLE
 
 SERVICE_DIR = Path(__file__).resolve().parents[1]
-_SETTINGS_VARIABLES = ("APP_ENV", "DATABASE_URL", "DIRECT_DATABASE_URL", ENV_FILE_VARIABLE)
+_SETTINGS_VARIABLES = ("APP_ENV", "DATABASE_URL", "DIRECT_DATABASE_URL", "FRONTEND_URL", ENV_FILE_VARIABLE)
+_SETTINGS_PREFIXES = ("DB_", "AWS_", "COGNITO_", "IDENTITY_", "SLIIT_", "EXAMINATION_")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -42,7 +43,7 @@ def isolated_environment(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
         return
     for name in list(os.environ):
         upper = name.upper()
-        if upper in _SETTINGS_VARIABLES or upper.startswith("DB_") or upper.endswith("_DATABASE_URL"):
+        if upper in _SETTINGS_VARIABLES or upper.startswith(_SETTINGS_PREFIXES) or upper.endswith("_DATABASE_URL"):
             monkeypatch.delenv(name)
     (tmp_path / ".git").mkdir()  # bounds the upward .env search to tmp_path
     monkeypatch.chdir(tmp_path)

@@ -2,9 +2,10 @@
 
 Examination timetabling and cognitive load optimization for Schedence.
 
-**Current phase: data and read-only API.** This service has a synthetic,
+**Current phase: data and secured read-only API.** This service has a synthetic,
 reproducible dataset, the tables to store it, and a read-only FastAPI backend
-to read it. It has no scheduler or UI yet.
+for examination administrators (Cognito login + Identity Service permissions).
+It has no scheduler or UI yet.
 
 ## Layout
 
@@ -20,6 +21,7 @@ services/examination-service/
 ├── app/
 │   ├── main.py                    # FastAPI app (create_app); uvicorn app.main:app
 │   ├── database.py                # engine + read-only request sessions (via db-core)
+│   ├── auth/                      # Cognito token check (auth-core) + Identity Service permissions
 │   ├── api/                       # routes, response schemas, input rules, safe errors
 │   ├── sources/                   # read-only data layer shared with the future scheduler
 │   │   ├── base.py                # ExamDataSource interface
@@ -153,7 +155,7 @@ Run from the repository root:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ./packages/db-core
+python -m pip install -e ./packages/db-core -e ./packages/auth-core
 python -m pip install -e "./services/examination-service[dev]"
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }   # then set DATABASE_URL
 python -m schedence_db.check_connection
@@ -261,12 +263,39 @@ selector event loop for psycopg async):
 
 ```powershell
 cd services/examination-service
-uvicorn app.main:app --port 8003 --loop asyncio:SelectorEventLoop
+uvicorn app.main:create_app --factory --port 8003 --loop asyncio:SelectorEventLoop
 ```
 
-Interactive docs: <http://127.0.0.1:8003/docs>. The API uses the pooled
-`DATABASE_URL`, one engine per process, and opens every transaction
-`READ ONLY`, so it cannot change the database.
+Interactive docs: <http://127.0.0.1:8003/docs> (hidden when `APP_ENV=production`).
+The API uses the pooled `DATABASE_URL`, one engine per process, and opens every
+transaction `READ ONLY`, so it cannot change the database.
+
+### Security (RBAC)
+
+Reuses the team's authentication; there is no separate login system.
+
+1. The caller sends a Cognito **access token** (`Authorization: Bearer ...`).
+   auth-core verifies it locally (signature, issuer, expiry, `token_use`, app client).
+2. Permissions come from the Identity Service: `GET /api/v1/identity/me/permissions`
+   with the caller's own token (same contract as the Academic Data Service). The
+   answer must be about the same user. Reads may reuse it for 15 s; if the Identity
+   Service is down the request is refused (`503`, fail closed). Role or permission
+   headers from the browser are ignored.
+3. Every `/api/v1` route needs `examinations:generate` **or** `examinations:approve`
+   in the institution `SLIIT_INSTITUTION_ID` (today: the `EXAMINATION_ADMIN` role).
+   All other roles, including `STUDENT`, get `403`. Student self-service stays off
+   until a secure user -> student ID mapping exists.
+
+`/health` and `/health/db` are public. Errors: `401` (no or invalid token),
+`403` (no permission, disabled or unknown account), `503` (Identity Service
+unavailable). Settings (repository-root `.env`): `AWS_REGION`, `COGNITO_USER_POOL_ID`,
+`COGNITO_APP_CLIENT_ID`, `SLIIT_INSTITUTION_ID`, optional `IDENTITY_SERVICE_URL`
+(default `http://localhost:8001`) and `FRONTEND_URL` (CORS).
+
+To call the API locally, run the Identity Service too
+(`python scriptsun_services.py --only identity` from the repository root),
+sign in as an examination admin, and paste the **access token** into Swagger's
+"Authorize" button.
 
 | Method and path | Purpose | Filters / paging |
 |---|---|---|
