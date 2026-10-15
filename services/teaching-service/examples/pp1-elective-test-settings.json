@@ -1,0 +1,26 @@
+{
+  "configuration_reference": "user-confirmed:step12a33:editable-pp1-online-days-and-electives",
+  "catalog_classification_reference": "user-confirmed:step12a33:year4-pp1-elective-candidate-pool-except-explicit-required-overrides",
+  "weekday_online_day": "WEDNESDAY",
+  "weekend_online_day": "MONDAY",
+  "weekday_online_window": {"start_minute": 510, "end_minute": 1080},
+  "weekend_online_window": {"start_minute": 510, "end_minute": 1080},
+  "allocation_policy": {
+    "output_label": "PP1_TEST_ELECTIVE_ALLOCATION",
+    "reference": "pp1-test-profile:balanced-pair-cohorts-not-actual-university-registrations",
+    "random_seed": 7,
+    "selection_strategy": "BALANCED_TEST_PAIRS",
+    "allowed_pairs_by_cohort": {}
+  },
+  "research": {
+    "policy_reference": "user-confirmed:step12a33:compulsory-research-pending-session-mapping",
+    "complete_cohort_ids": [],
+    "session_mappings": []
+  },
+  "blocked_scopes": [
+    {"academic_year": 4, "semester": 1, "stream": "WEEKDAY", "specialization": "DS", "reason": "USER_CONFIRMED_BLOCKED_MISSING_APPLICABLE_MODULE_MAPPINGS"},
+    {"academic_year": 4, "semester": 1, "stream": "WEEKEND", "specialization": "DS", "reason": "USER_CONFIRMED_BLOCKED_MISSING_APPLICABLE_MODULE_MAPPINGS"}
+  ],
+  "scope_solve_seconds": 120.0,
+  "global_solve_seconds": 180.0
+}
