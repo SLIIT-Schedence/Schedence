@@ -152,6 +152,8 @@ def load_rows(backup_dir: Path, table: str) -> list[dict[str, Any]]:
             for c in model_table.columns
             if c.name in raw and c.identity is None  # identity values are regenerated
         }
+        # Backups taken before migration 0003 have no building / floor / source_ref:
+        # those keys are simply absent (NULL), which 0003 allows and 0004 does not.
         # Backups taken before migration 0002 have no reading-time flag.
         if table == "seed_modules" and "has_extra_reading_time" not in row:
             row["has_extra_reading_time"] = row["reading_time_minutes"] > 0

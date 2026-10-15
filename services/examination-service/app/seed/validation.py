@@ -11,9 +11,9 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
+from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, SIMULATED_BLOCK_SOURCES, VENUE_TYPES
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS, SeedAssumptions
-from app.seed.generator import exam_days
+from app.seed.generator import exam_capacity, exam_days
 from app.seed.records import Dataset
 
 
@@ -123,6 +123,13 @@ def validate_dataset(data: Dataset, assumptions: SeedAssumptions = DEFAULT_ASSUM
             err(f"venue {v.venue_id}: normal capacity must be positive")
         if not 0 < v.exam_capacity <= v.normal_capacity:
             err(f"venue {v.venue_id}: exam capacity must be > 0 and <= normal capacity")
+        if v.exam_capacity != exam_capacity(v.normal_capacity, assumptions):
+            err(f"venue {v.venue_id}: exam capacity {v.exam_capacity} must be floor("
+                f"{v.normal_capacity} x {assumptions.exam_seating_ratio}) = {exam_capacity(v.normal_capacity, assumptions)}")
+        if not v.building or not v.building.strip():
+            err(f"venue {v.venue_id}: building is missing")
+        if not isinstance(v.floor, int):
+            err(f"venue {v.venue_id}: floor must be a whole number")
 
     # --- Exam periods ------------------------------------------------------------
     periods = {p.period_code: p for p in data.exam_periods}
@@ -152,6 +159,8 @@ def validate_dataset(data: Dataset, assumptions: SeedAssumptions = DEFAULT_ASSUM
             err(f"{label}: end time must be after start time")
         if b.source not in BLOCK_SOURCES:
             err(f"{label}: unknown source {b.source!r}")
+        if b.source in SIMULATED_BLOCK_SOURCES and not b.reason.startswith("SIMULATED"):
+            err(f"{label}: simulated block must be labelled 'SIMULATED' in its reason")
         if not any(p.start_date <= b.block_date <= p.end_date for p in data.exam_periods):
             err(f"{label}: date is outside every examination period")
     by_slot: dict[tuple, list] = defaultdict(list)
@@ -172,7 +181,22 @@ def validate_dataset(data: Dataset, assumptions: SeedAssumptions = DEFAULT_ASSUM
             err(f"module {code}: no venue of a compatible type ({', '.join(allowed)})")
         elif n > sum(capacities):
             err(f"module {code}: {n} candidates exceed all compatible capacity {sum(capacities)}")
-        elif n > max(capacities):
-            report.warnings.append(f"module {code} ({module.exam_type}): {n} candidates need several rooms or sessions")
+        else:
+            rooms = rooms_needed(n, capacities)
+            limit = assumptions.max_rooms_per_exam
+            if limit is not None and rooms > limit:
+                err(f"module {code}: {n} candidates need {rooms} rooms, more than max_rooms_per_exam={limit}")
+            elif rooms > 1:
+                report.warnings.append(f"module {code} ({module.exam_type}): {n} candidates need at least {rooms} rooms")
 
     return report
+
+
+def rooms_needed(candidates: int, capacities: list[int]) -> int:
+    """Fewest rooms that can seat ``candidates`` (largest rooms first)."""
+    seated = 0
+    for rooms, capacity in enumerate(sorted(capacities, reverse=True), start=1):
+        seated += capacity
+        if seated >= candidates:
+            return rooms
+    return len(capacities) + 1  # cannot be seated at all

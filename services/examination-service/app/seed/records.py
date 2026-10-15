@@ -50,8 +50,10 @@ class Venue:
     venue_id: str
     venue_name: str
     venue_type: str
-    normal_capacity: int
-    exam_capacity: int
+    building: str
+    floor: int
+    normal_capacity: int  # full capacity
+    exam_capacity: int  # floor(full capacity x exam_seating_ratio)
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class VenueBlock:
     end_time: dt.time
     source: str
     reason: str
+    source_ref: str | None = None  # booking ID in the owning system; None for seed rows
 
 
 @dataclass(frozen=True)

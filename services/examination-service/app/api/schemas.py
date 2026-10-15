@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
 
@@ -54,8 +54,10 @@ class VenueOut(_Out):
     venue_id: str
     venue_name: str
     venue_type: str
-    normal_capacity: int
-    exam_capacity: int
+    building: str
+    floor: int
+    normal_capacity: int = Field(description="Full seating capacity")
+    exam_capacity: int = Field(description="Seats usable in an exam: floor(full capacity x 0.5)")
 
 
 class VenueBlockOut(_Out):
@@ -65,6 +67,7 @@ class VenueBlockOut(_Out):
     end_time: dt.time
     source: str
     reason: str
+    source_ref: str | None
 
 
 class ExamPeriodExclusionOut(_Out):

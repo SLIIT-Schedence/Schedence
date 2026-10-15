@@ -104,6 +104,9 @@ def test_get_module_and_404(client: TestClient) -> None:
         f"{API}/registrations?registration_type=late",
         f"{API}/registrations?module_code=IT1",
         f"{API}/venues?venue_type=garden",
+        f"{API}/venues?venue_type=exam_hall",  # old fictional type
+        f"{API}/venue-blocks?venue_id=bad;drop",
+        f"{API}/venue-blocks?venue_id=%20F1301",  # leading space
         f"{API}/venue-blocks?source=holiday",
         f"{API}/venue-blocks?date_from=2026-13-01",
         f"{API}/venue-blocks?date_from=2026-11-20&date_to=2026-11-16",
@@ -165,14 +168,27 @@ def test_registrations(client: TestClient) -> None:
 
 
 def test_venues_and_blocks(client: TestClient) -> None:
-    assert len(client.get(f"{API}/venues").json()) == 9
-    assert len(client.get(f"{API}/venues", params={"venue_type": "exam_hall"}).json()) == 2
+    venues = client.get(f"{API}/venues").json()
+    assert len(venues) == 62
+    f303 = next(v for v in venues if v["venue_id"] == "F303")
+    assert f303 == {"venue_id": "F303", "venue_name": "F303", "venue_type": "lecture_hall", "building": "F",
+                    "floor": 3, "normal_capacity": 240, "exam_capacity": 120}
+    assert len(client.get(f"{API}/venues", params={"venue_type": "smart_classroom"}).json()) == 10
+    assert len(client.get(f"{API}/venues", params={"venue_type": "byod_lab"}).json()) == 2
     blocks = client.get(f"{API}/venue-blocks").json()
     assert len(blocks) == 27
-    lab1 = client.get(f"{API}/venue-blocks", params={"venue_id": "V-LAB1"}).json()
-    assert all(b["venue_id"] == "V-LAB1" for b in lab1)
-    teaching = client.get(f"{API}/venue-blocks", params={"source": "teaching_timetable"}).json()
-    assert len(teaching) == 22
+    venue = blocks[0]["venue_id"]
+    one = client.get(f"{API}/venue-blocks", params={"venue_id": venue}).json()
+    assert one and all(b["venue_id"] == venue for b in one)
+    teaching = client.get(f"{API}/venue-blocks", params={"source": "simulated_teaching"}).json()
+    assert len(teaching) == 22 and all(b["reason"].startswith("SIMULATED") for b in teaching)
+
+
+@pytest.mark.parametrize("code", ["F1301+F1302", "Robotics Lab", "CyberSecLab", "G1305"])
+def test_special_venue_codes_are_accepted(client: TestClient, code: str) -> None:
+    response = client.get(f"{API}/venue-blocks", params={"venue_id": code})
+    assert response.status_code == 200
+    assert all(b["venue_id"] == code for b in response.json())
 
 
 def test_exam_periods(client: TestClient) -> None:

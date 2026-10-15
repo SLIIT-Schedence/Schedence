@@ -15,7 +15,8 @@ from app.sources import DatabaseSource, ExamDataSource
 MODULE_CODE = r"^[A-Z]{2,4}[0-9]{4}$"  # e.g. IT3041
 STUDENT_ID = r"^[A-Z]{2}[0-9]{8}$"  # e.g. IT30315600
 SPECIALIZATION = r"^[A-Z_]{2,30}$"  # e.g. SE, COMPUTER_SCIENCE
-VENUE_ID = r"^[A-Z0-9-]{1,16}$"  # e.g. V-LAB1
+# Campus codes are kept exactly: e.g. F1301, F1301+F1302, CyberSecLab, "Robotics Lab".
+VENUE_ID = r"^[A-Za-z0-9+](?:[A-Za-z0-9+ -]{0,14}[A-Za-z0-9+])?$"
 PERIOD_CODE = r"^[A-Z0-9-]{1,32}$"  # e.g. PP1-2026-S2-FINAL
 
 ExamType = Literal[EXAM_TYPES]
