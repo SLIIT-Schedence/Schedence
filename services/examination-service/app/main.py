@@ -8,6 +8,7 @@ for psycopg async; see the service README)::
 Security: ``/health`` and ``/health/db`` are public; every ``/api/v1`` route
 requires a Cognito access token whose holder has ``examinations:generate`` or
 ``examinations:approve`` in this service's institution (see ``app.auth``).
+Changing settings (``PUT``/``DELETE /api/v1/settings/...``) needs ``examinations:approve``.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import exam_periods, health, modules, students, venues
+from app.api import exam_periods, health, modules, settings, students, venues
 from app.api.errors import register_error_handlers
 from app.auth.context import AuthContext, build_auth_context
 from app.auth.dependencies import require_exam_data_access
@@ -57,7 +58,7 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=[auth.settings.frontend_url],
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["GET", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
     register_error_handlers(app)
@@ -65,7 +66,7 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
 
     # One check for every data route, so no route can be added unprotected.
     api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(require_exam_data_access)])
-    for module in (modules, students, venues, exam_periods):
+    for module in (modules, students, venues, exam_periods, settings):
         api.include_router(module.router)
     app.include_router(api)
     return app

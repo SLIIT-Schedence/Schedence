@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import io
 import re
 
@@ -10,17 +11,17 @@ from alembic import command
 from alembic.config import Config
 
 from app.db.base import Base
-from app.db import seed_models  # noqa: F401
+from app.db import seating_models, seed_models  # noqa: F401
 
 from conftest import SERVICE_DIR
 
 FAKE_URL = "postgresql://fake_user:fake_password@ep-example-123456.eu-central-1.aws.neon.tech/neondb"
 
 
-def _sql(monkeypatch: pytest.MonkeyPatch, revisions: str, *, downgrade: bool = False) -> str:
+def _sql(monkeypatch: pytest.MonkeyPatch, revisions: str, *, downgrade: bool = False, x: list[str] = ()) -> str:
     monkeypatch.setenv("DATABASE_URL", FAKE_URL)
     buffer = io.StringIO()
-    config = Config(str(SERVICE_DIR / "alembic.ini"), stdout=buffer)
+    config = Config(str(SERVICE_DIR / "alembic.ini"), stdout=buffer, cmd_opts=argparse.Namespace(x=list(x)))
     config.output_buffer = buffer
     (command.downgrade if downgrade else command.upgrade)(config, revisions, sql=True)
     return buffer.getvalue()
@@ -66,7 +67,7 @@ def test_migrations_are_not_destructive(upgrade_sql: str) -> None:
                       "CREATE SCHEMA", "RENAME"):
         assert forbidden not in sql
     # Dropped checks are re-created at once (wider or tighter); the old block key
-    # is replaced by one that includes the source.
+    # is replaced by one that includes the source; 0005 removes the fixed 50% rule.
     dropped = re.findall(r"DROP CONSTRAINT (\w+)", upgrade_sql)
     assert dropped == [
         "ck_seed_modules_exam_type_valid",  # 0002
@@ -74,14 +75,16 @@ def test_migrations_are_not_destructive(upgrade_sql: str) -> None:
         "ck_seed_venue_blocks_source_valid",  # 0003
         "ck_seed_venues_venue_type_valid",  # 0004 (contract)
         "uq_seed_venue_blocks_venue_id_block_date_start_time",  # 0004
+        "ck_seed_venues_exam_capacity_half",  # 0005 (now configurable)
     ]
-    for name in set(dropped) - {"uq_seed_venue_blocks_venue_id_block_date_start_time"}:
-        assert f"ADD CONSTRAINT {name} CHECK" in upgrade_sql
+    for name in set(dropped) - {"uq_seed_venue_blocks_venue_id_block_date_start_time",
+                                "ck_seed_venues_exam_capacity_half"}:
+        assert upgrade_sql.rindex(f"DROP CONSTRAINT {name}") < upgrade_sql.rindex(f"ADD CONSTRAINT {name} CHECK")
     assert "ADD CONSTRAINT uq_seed_venue_blocks_source_venue_id_block_date_start_time UNIQUE" in upgrade_sql
 
 
 def test_migrations_touch_only_examinations(upgrade_sql: str) -> None:
-    pattern = r"(?:CREATE TABLE|CREATE INDEX \w+ ON|REFERENCES|ALTER TABLE|UPDATE) (\S+)"
+    pattern = r"(?:CREATE TABLE|CREATE (?:UNIQUE )?INDEX \w+ ON|REFERENCES|ALTER TABLE|UPDATE|INSERT INTO|FROM) (\S+)"
     for name in re.findall(pattern, upgrade_sql):
         assert name.startswith("examinations."), name
 
@@ -137,6 +140,75 @@ def test_downgrade_order_restores_the_old_schema(monkeypatch: pytest.MonkeyPatch
     assert _check(sql, "ck_seed_venue_blocks_source_valid")[-1] == "source IN ('teaching_timetable', 'maintenance')"
     for name in re.findall(r"(?:ALTER TABLE|REFERENCES) (\S+)", sql):
         assert name.startswith("examinations."), name
+
+
+# --- 0005: configurable examination seating -----------------------------------------------
+
+
+def _between(sql: str) -> str:
+    """Statements of one revision, without the alembic_version bookkeeping."""
+    return sql.split("BEGIN;", 1)[1].split("UPDATE examinations.alembic_version")[0]
+
+
+def test_0005_replaces_the_fixed_50_percent_rule(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0004:0005")
+    body = _between(sql)
+    assert re.findall(r"DROP CONSTRAINT (\w+)", body) == ["ck_seed_venues_exam_capacity_half"]
+    # Nothing else in the existing tables changes: no column, row or other constraint.
+    assert set(re.findall(r"ALTER TABLE (\S+)", body)) == {"examinations.seed_venues"}
+    for forbidden in ("DROP TABLE", "DROP COLUMN", "DELETE FROM", "TRUNCATE", "UPDATE ", "ALTER COLUMN"):
+        assert forbidden not in body.upper()
+    assert set(re.findall(r"CREATE TABLE examinations\.(\w+)", body)) == {
+        "exam_seating_rules", "exam_seating_rule_history"}
+    assert sql.count("BEGIN;") == 1
+
+
+def _inline_check(sql: str, name: str) -> list[str]:
+    """Bodies of ``CONSTRAINT <name> CHECK (...)`` inside CREATE TABLE."""
+    return re.findall(rf"CONSTRAINT {name} CHECK \((.*?)\),? ?\n", sql)
+
+
+def test_0005_seating_rule_constraints(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0004:0005")
+    assert _inline_check(sql, "ck_exam_seating_rules_percentage_range") == ["percentage BETWEEN 1 AND 100"]
+    assert _inline_check(sql, "ck_exam_seating_rules_version_positive") == ["version >= 1"]
+    assert "scope = 'default' AND venue_id IS NULL" in _inline_check(sql, "ck_exam_seating_rules_scope_valid")[0]
+    assert "CONSTRAINT uq_exam_seating_rules_venue_id UNIQUE (venue_id)" in sql
+    assert ("CREATE UNIQUE INDEX uq_exam_seating_rules_default ON examinations.exam_seating_rules (scope) "
+            "WHERE scope = 'default'") in sql
+    assert "REFERENCES examinations.seed_venues (venue_id) ON DELETE RESTRICT" in sql
+    [values] = _inline_check(sql, "ck_exam_seating_rule_history_action_values")
+    assert "action = 'delete' AND old_percentage IS NOT NULL AND new_percentage IS NULL" in values
+    # History keeps no foreign key: it must outlive deleted overrides and venues.
+    history = re.search(r"CREATE TABLE examinations\.exam_seating_rule_history \((.*?)\n\);", sql, re.S).group(1)
+    assert "REFERENCES" not in history
+
+
+def test_0005_inserts_the_initial_50_percent_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0004:0005")
+    inserts = re.findall(r"INSERT INTO (\S+)", sql)
+    assert inserts == ["examinations.exam_seating_rules", "examinations.exam_seating_rule_history"]
+    assert "VALUES ('default', NULL, 50, 1, " in sql
+    assert "SELECT rule_id, 'create', 'default', NULL, NULL, percentage, version, NULL, reason" in sql
+
+
+def test_0005_downgrade_refuses_to_lose_user_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0005:0004", downgrade=True)
+    guard = sql.index("RAISE EXCEPTION")
+    assert "WHERE changed_by IS NOT NULL" in sql
+    assert guard < sql.index("DROP TABLE examinations.exam_seating_rule_history")
+    assert _check(sql, "ck_seed_venues_exam_capacity_half") == ["exam_capacity = normal_capacity / 2"]
+    assert sql.index("DROP TABLE examinations.exam_seating_rules") < sql.index(
+        "ADD CONSTRAINT ck_seed_venues_exam_capacity_half")
+    assert set(re.findall(r"DROP TABLE ([\w.]+)", sql)) == {
+        "examinations.exam_seating_rules", "examinations.exam_seating_rule_history"}
+    assert sql.count("BEGIN;") == 1
+
+
+def test_0005_downgrade_guard_can_be_skipped_explicitly(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0005:0004", downgrade=True, x=["drop_seating_history=true"])
+    assert "RAISE EXCEPTION" not in sql
+    assert "DROP TABLE examinations.exam_seating_rule_history" in sql
 
 
 def test_url_is_never_written_to_output(upgrade_sql: str) -> None:

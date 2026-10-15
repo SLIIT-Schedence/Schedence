@@ -2,10 +2,11 @@
 
 Examination timetabling and cognitive load optimization for Schedence.
 
-**Current phase: data and secured read-only API.** This service has a synthetic,
-reproducible dataset, the tables to store it, and a read-only FastAPI backend
+**Current phase: data, secured API and seating settings.** This service has a
+synthetic, reproducible dataset, the tables to store it, and a FastAPI backend
 for examination administrators (Cognito login + Identity Service permissions).
-It has no scheduler or UI yet.
+The data routes are read-only; the only writes are the configurable exam
+seating rules. It has no scheduler or UI yet.
 
 ## Layout
 
@@ -17,10 +18,13 @@ services/examination-service/
 │   ├── env.py                     # only touches the "examinations" schema
 │   └── versions/
 │       ├── 20261012_0001_create_seed_tables.py
-│       └── 20261012_0002_real_module_catalog.py
+│       ├── 20261012_0002_real_module_catalog.py
+│       ├── 20261014_0003_campus_venues_expand.py
+│       ├── 20261014_0004_campus_venues_contract.py
+│       └── 20261015_0005_configurable_exam_seating.py
 ├── app/
 │   ├── main.py                    # FastAPI app (create_app); uvicorn app.main:app
-│   ├── database.py                # engine + read-only request sessions (via db-core)
+│   ├── database.py                # engine + read-only sessions; writable only for seating changes
 │   ├── auth/                      # Cognito token check (auth-core) + Identity Service permissions
 │   ├── api/                       # routes, response schemas, input rules, safe errors
 │   ├── sources/                   # read-only data layer shared with the future scheduler
@@ -28,9 +32,16 @@ services/examination-service/
 │   │   ├── types.py               # Module, Student, Registration, Venue, ... records
 │   │   ├── database.py            # DatabaseSource: reads the seed_* tables
 │   │   └── memory.py              # DatasetSource: same answers from the generated dataset
+│   ├── seating/                   # configurable exam seating capacity
+│   │   ├── rules.py               # floor(full x percentage / 100), policy (default + overrides)
+│   │   ├── store.py               # SeatingRuleStore + DatabaseSeatingStore
+│   │   ├── memory.py              # in-memory store (tests)
+│   │   ├── service.py             # validation, versions, dry run, history, logging
+│   │   └── snapshot.py            # frozen capacity snapshot for the future CP-SAT scheduler
 │   ├── db/
 │   │   ├── base.py                # Base with MetaData(schema="examinations")
-│   │   └── seed_models.py         # development-only seed_* tables
+│   │   ├── seed_models.py         # development-only seed_* tables
+│   │   └── seating_models.py      # exam_seating_rules + exam_seating_rule_history
 │   └── seed/
 │       ├── assumptions.py         # every configurable number (NOT real policy)
 │       ├── catalog.py             # loads data/module_catalog.csv + data/venue_catalog.csv
@@ -96,13 +107,20 @@ Codes and names are kept exactly as supplied (`F1301+F1302`, `CyberSecLab`,
 duplicate lines are dropped; two different records with one code are never
 merged: the import fails and writes nothing.
 
-**Examination capacity rule:** only half of a venue can be used in an exam:
-`exam_capacity = floor(full_capacity x 0.5)` for every venue type (240 -> 120,
-60 -> 30, 30 -> 15). Both values are stored (`normal_capacity` = full capacity,
-never reduced). Migration 0004 enforces it in the database, and the scheduler
-must never seat more students than `exam_capacity`. One exam may use several
-compatible rooms; `max_rooms_per_exam` in the assumptions can limit that
-(no limit by default).
+**Examination capacity rule:** only part of a venue can be used in an exam.
+The share is configurable (see "Exam seating settings" below); it starts at 50%:
+
+```text
+effective exam capacity = floor(full capacity x percentage / 100)   (whole numbers only)
+```
+
+240 -> 120, 61 -> 30, 99 seats at 33% -> 32. A venue whose effective capacity
+is 0 is **unavailable for examinations**. `normal_capacity` (full capacity) is
+never reduced. The stored seed column `seed_venues.exam_capacity` stays
+(always floor(full x 0.5)) for compatibility only; the API and the scheduler use
+the effective capacity. The scheduler must never seat more students than the
+effective capacity. One exam may use several compatible rooms;
+`max_rooms_per_exam` in the assumptions can limit that (no limit by default).
 
 ## Seed tables (schema `examinations`)
 
@@ -145,7 +163,7 @@ written exams use lecture halls and smart classrooms, computer-based exams use
 computer labs only (not BYOD labs), hybrid exams may use any venue unless
 restricted (`hybrid_venue_types`, `hybrid_lab_required_modules`); simulated
 teaching and maintenance blocks; weekends off; one simulated non-exam day.
-The 50% exam seating rule is the examination policy above, not an assumption.
+The exam seating percentage is a setting (initially 50%), not an assumption.
 Student IDs use fictional intakes 30-33 so they cannot match real students.
 
 ## Setup on Windows PowerShell
@@ -179,6 +197,7 @@ CREATE SCHEMA IF NOT EXISTS examinations;
 | `0002` | real module catalogue support (non-destructive) |
 | `0003` | campus venues, **expand**: adds `building`, `floor`, `source_ref`; allows the new venue types and `simulated_*` block sources. The old rows stay valid. |
 | `0004` | campus venues, **contract**: `building`/`floor` NOT NULL, only campus venue types, `exam_capacity = normal_capacity / 2`. Run it only **after** the venue replacement. |
+| `0005` | configurable seating: drops the fixed 50% check, creates `exam_seating_rules` + `exam_seating_rule_history`, inserts the 50% default. Changes no existing row. **Not applied to Neon yet** (see "Applying 0005"). |
 
 Alembic runs all pending revisions in **one** transaction. Running
 `upgrade head` before the venue replacement therefore fails at 0004 and
@@ -211,12 +230,24 @@ the database that are not in the dataset are only reported as `extra`.
 ## Backup and atomic replacement
 
 ```powershell
-python -m app.seed.backup export --pooled             # all seed tables -> backups/ (git-ignored)
+python -m app.seed.backup export --pooled             # seed tables (+ seating tables from 0005) -> backups/
 python -m app.seed.backup verify backups\seed_backup_...  # checksums, no database
 python -m app.seed.replace --backup backups\seed_backup_... --pooled --dry-run   # full rehearsal, rolled back
 python -m app.seed.replace --backup backups\seed_backup_... --pooled             # delete old + seed new, one transaction
 python -m app.seed.backup restore backups\seed_backup_... --pooled --dry-run     # re-insert missing rows from a backup
 ```
+
+Backups work at 0004 and at 0005: tables that do not exist yet are left out, and
+the manifest records the Alembic revision. The seating tables keep their IDs.
+`restore` brings them back only when no change can be lost:
+
+* backup taken at 0004: the seating rules in the database are not touched;
+* database with only the 50% default written by 0005: replaced by the backup;
+* otherwise every database row must already be in the backup, unchanged, and
+  only missing rows are added. If the database has a newer change, the whole
+  restore stops and changes nothing.
+
+A 0005 backup into a 0004 database needs `--skip-seating` (seed tables only).
 
 `replace` deletes only rows that are in the verified backup and not in the new
 dataset, then seeds, then checks final counts, leftovers and foreign keys. Any
@@ -256,7 +287,60 @@ ID; `(source, source_ref)` is unique, so a repeated sync updates a booking
 instead of duplicating it. A sync never touches `simulated_*` rows; once real
 bookings exist, the simulated teaching blocks are switched off.
 
-## Read-only API
+## Exam seating settings
+
+Tables (schema `examinations`, owned by this service, created by 0005):
+
+| Table | Content |
+|---|---|
+| `exam_seating_rules` | one `default` rule + at most one `venue` override per venue; `percentage` 1-100; `version` |
+| `exam_seating_rule_history` | append-only: action (`create`/`update`/`delete`), old and new percentage, version, `changed_by` (Identity Service `user_id`; NULL = migration), `changed_at`, `reason` |
+
+* A venue uses its override if it has one, otherwise the default.
+* Every change needs the version you last read (`expected_version`). If someone
+  changed the rule in the meantime the answer is `409` and nothing is saved.
+  The rule row is locked (`SELECT ... FOR UPDATE`, waits at most 5 s) and the
+  update also checks the version. A re-created override never reuses an old
+  version number.
+* The rule and its history row are written in **one** transaction: if anything
+  fails, both are rolled back.
+* `dry_run=true` returns the same preview (affected venues, capacity before and
+  after, venues that become unavailable) in a `READ ONLY` transaction; nothing is saved.
+* Saved changes are logged (`app.seating.service`: action, percentages, version,
+  user ID; never the token or the reason text).
+* Setting the same value again answers `changed: false` and writes nothing.
+
+**For the future CP-SAT scheduler:** read capacities once per run with
+`app.seating.load_capacity_snapshot()` inside `snapshot_session(engine)` (one
+`REPEATABLE READ`, `READ ONLY` transaction). The snapshot is frozen; store its
+`ruleset_version` and `fingerprint` with the run. Never use
+`Venue.exam_capacity` (the legacy seed value) for scheduling.
+
+### Applying 0005 (later, after review)
+
+Each step needs approval. Only the two new tables and one check change.
+
+```powershell
+cd services/examination-service
+python -m app.seed.backup export --pooled                 # 1. backup at 0004: 2,314 seed rows, no seating tables
+alembic -x pooled=true upgrade 0004:0005 --sql            # 2. preview the SQL; changes nothing
+alembic -x pooled=true upgrade 0005                       # 3. one transaction
+alembic -x pooled=true current                            # 4. expect 0005
+python -m pytest --live tests/test_live_api.py            # 5. read-only check: seed data == dataset
+```
+
+Deploy the new API code together with (not before) 0005: until 0005 exists,
+`GET /api/v1/venues` and the settings routes answer `503` ("seating rules are
+not configured"); the other routes keep working.
+
+After step 3, take a new backup: it then includes the seating tables.
+
+**Rollback:** `alembic -x pooled=true downgrade 0004` drops the two tables and
+restores the 50% check (the seed column was never changed, so it holds again).
+If any user has changed a rule, the downgrade stops and changes nothing, so
+the history is not lost by accident. Export it first (`python -m app.seed.backup export --pooled`), then run `alembic -x pooled=true -x drop_seating_history=true downgrade 0004`.
+
+## API
 
 Start the server from `services/examination-service` (Windows needs the
 selector event loop for psycopg async):
@@ -268,7 +352,9 @@ uvicorn app.main:create_app --factory --port 8003 --loop asyncio:SelectorEventLo
 
 Interactive docs: <http://127.0.0.1:8003/docs> (hidden when `APP_ENV=production`).
 The API uses the pooled `DATABASE_URL`, one engine per process, and opens every
-transaction `READ ONLY`, so it cannot change the database.
+transaction `READ ONLY`. The only exception: saved seating changes (`PUT`/`DELETE`
+under `/api/v1/settings/exam-seating`, without `dry_run`) get a writable
+session that commits explicitly.
 
 ### Security (RBAC)
 
@@ -285,6 +371,9 @@ Reuses the team's authentication; there is no separate login system.
    in the institution `SLIIT_INSTITUTION_ID` (today: the `EXAMINATION_ADMIN` role).
    All other roles, including `STUDENT`, get `403`. Student self-service stays off
    until a secure user -> student ID mapping exists.
+4. Changing settings (`PUT`/`DELETE /api/v1/settings/...`) also needs
+   `examinations:approve` (holders of only `examinations:generate` get `403`).
+   Writes always ask the Identity Service again (no cache).
 
 `/health` and `/health/db` are public. Errors: `401` (no or invalid token),
 `403` (no permission, disabled or unknown account), `503` (Identity Service
@@ -306,14 +395,28 @@ sign in as an examination admin, and paste the **access token** into Swagger's
 | `GET /api/v1/students` | students, paginated | `academic_year`, `specialization`, `limit` (1-500, default 50), `offset` |
 | `GET /api/v1/students/{student_id}` | one student with their registrations | |
 | `GET /api/v1/registrations` | registrations, paginated | `student_id`, `module_code`, `registration_type`, `limit`, `offset` |
-| `GET /api/v1/venues` | venues with exam capacity | `venue_type` |
+| `GET /api/v1/venues` | venues with `exam_seating_percentage`, `exam_seating_rule` (`default`/`venue`), effective `exam_capacity`, `available_for_exams`, legacy `seed_exam_capacity` | `venue_type` |
 | `GET /api/v1/venue-blocks` | times a venue is unavailable | `venue_id`, `source`, `date_from`, `date_to` |
 | `GET /api/v1/exam-periods` | periods with exclusions and exam days | |
 | `GET /api/v1/exam-periods/{period_code}` | one period | |
+| `GET /api/v1/settings/exam-seating` | default rule, overrides, totals, unavailable venues, recent history | `history_limit` (0-500, default 20) |
+| `PUT /api/v1/settings/exam-seating/default` | change the default (`examinations:approve`) | body `percentage`, `reason`, `expected_version`; `dry_run` |
+| `PUT /api/v1/settings/exam-seating/venues/{venue_id}` | create (`expected_version: null`) or change an override | body as above; `dry_run` |
+| `DELETE /api/v1/settings/exam-seating/venues/{venue_id}` | remove an override | `expected_version`, `reason`, `dry_run` |
+
+Settings input rules: `percentage` is a whole number 1-100 (`50.5`, `"50"` and
+`true` are rejected); `reason` is 5-500 characters without control characters
+or leading/trailing spaces; unknown fields are rejected. Example:
+
+```text
+PUT /api/v1/settings/exam-seating/default?dry_run=true
+{"percentage": 60, "reason": "Exam board decision 2026-10", "expected_version": 1}
+```
 
 Paginated responses look like `{"items": [...], "total": 390, "limit": 50, "offset": 0}`.
-Invalid input answers `422`, unknown IDs `404`, and database problems `503`
-with a generic message (details go to the server log without credentials).
+Invalid input answers `422`, unknown IDs `404`, version conflicts `409`, and
+database problems `503` with a generic message (details go to the server log
+without credentials).
 
 ## Tests
 
@@ -322,4 +425,14 @@ cd services/examination-service
 python -m pytest            # unit tests; no database or credentials needed
 python -m pytest --live tests/test_live_api.py   # read-only checks against the real database
 python -m pytest --live     # all live tests; the seed test writes inside a transaction, then ROLLS BACK
+```
+
+`tests/test_seating_postgres.py` runs migrations 0001-0005, the downgrade and
+the seating API against a throw-away **local** PostgreSQL (never Neon; only
+localhost URLs are accepted). It creates and drops its own `exam_seating_*`
+databases:
+
+```powershell
+$env:SCHEDENCE_TEST_POSTGRES_URL = "postgresql://postgres@127.0.0.1:5432/postgres"
+python -m pytest tests/test_seating_postgres.py
 ```

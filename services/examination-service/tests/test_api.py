@@ -6,10 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
-from app.api.deps import get_source
+from app.api.deps import get_seating_store, get_source
 from app.api.errors import DATABASE_UNAVAILABLE
 from app.auth.dependencies import require_exam_data_access
 from app.main import create_app
+from app.seating.memory import MemorySeatingStore
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
 from auth_support import EXAM_ADMIN, make_auth_context
@@ -22,6 +23,7 @@ def _app(source=SOURCE):
     """App whose caller is an authenticated EXAMINATION_ADMIN (auth itself is tested in test_auth.py)."""
     app = create_app(make_auth_context())
     app.dependency_overrides[get_source] = lambda: source
+    app.dependency_overrides[get_seating_store] = MemorySeatingStore
     app.dependency_overrides[require_exam_data_access] = lambda: EXAM_ADMIN
     return app
 
@@ -180,7 +182,8 @@ def test_venues_and_blocks(client: TestClient) -> None:
     assert len(venues) == 62
     f303 = next(v for v in venues if v["venue_id"] == "F303")
     assert f303 == {"venue_id": "F303", "venue_name": "F303", "venue_type": "lecture_hall", "building": "F",
-                    "floor": 3, "normal_capacity": 240, "exam_capacity": 120}
+                    "floor": 3, "normal_capacity": 240, "exam_seating_percentage": 50, "exam_seating_rule": "default",
+                    "exam_capacity": 120, "available_for_exams": True, "seed_exam_capacity": 120}
     assert len(client.get(f"{API}/venues", params={"venue_type": "smart_classroom"}).json()) == 10
     assert len(client.get(f"{API}/venues", params={"venue_type": "byod_lab"}).json()) == 2
     blocks = client.get(f"{API}/venue-blocks").json()
@@ -244,4 +247,7 @@ def test_openapi_lists_every_endpoint(client: TestClient) -> None:
         f"{API}/venue-blocks",
         f"{API}/exam-periods",
         f"{API}/exam-periods/{{period_code}}",
+        f"{API}/settings/exam-seating",
+        f"{API}/settings/exam-seating/default",
+        f"{API}/settings/exam-seating/venues/{{venue_id}}",
     }

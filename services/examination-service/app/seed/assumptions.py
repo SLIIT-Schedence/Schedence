@@ -57,7 +57,8 @@ class SeedAssumptions:
     # --- Venues --------------------------------------------------------------------
     # Examination rule: only this share of a venue's full capacity may be used,
     # rounded down (exam capacity = floor(full capacity x ratio)). Same for every
-    # venue type. The database enforces 0.5 (migration 0004).
+    # venue type. Used only for the stored seed column seed_venues.exam_capacity;
+    # the effective capacity comes from examinations.exam_seating_rules (0005).
     exam_seating_ratio: float = 0.5
     # Most rooms one exam may be spread over. None = no limit (decided by policy
     # later); when set, validation reports exams that cannot fit in that many rooms.
