@@ -31,8 +31,9 @@ services/examination-service/
 │   │   └── seed_models.py         # development-only seed_* tables
 │   └── seed/
 │       ├── assumptions.py         # every configurable number (NOT real policy)
-│       ├── catalog.py             # loads data/module_catalog.csv + synthetic venues
+│       ├── catalog.py             # loads data/module_catalog.csv + data/venue_catalog.csv
 │       ├── catalog_import.py      # cleans the Excel module catalogue into data/
+│       ├── venue_import.py        # cleans the campus venue list into data/
 │       ├── xlsx.py                # minimal read-only .xlsx reader
 │       ├── records.py             # immutable dataclasses for the dataset
 │       ├── generator.py           # deterministic dataset generator
@@ -72,6 +73,35 @@ have decisions: `team_decision` (Record B, the 9 PP1 codes) and `code_year_rule`
 are research-prototype choices, marked `uncertain`, not official curriculum
 verification. Rerun the import after editing the decisions file.
 
+## Venue catalogue (campus venues)
+
+Venues come from the campus venue list supplied by the team (tab-separated:
+code, name, type, full capacity, building, floor). The raw file is **not**
+committed; only the cleaned result is.
+
+```powershell
+python -m app.seed.venue_import --source PATH	oenue.txt
+```
+
+| File in `data/` | Content |
+|---|---|
+| `venue_catalog.csv` | one row per venue code: 62 venues (31 lecture halls, 10 smart classrooms, 19 computer labs, 2 BYOD labs) |
+| `venue_cleaning_report.md` | generated summary: corrections, removed duplicates, rejected rows, capacity by type |
+
+Codes and names are kept exactly as supplied (`F1301+F1302`, `CyberSecLab`,
+`Robotics Lab`, ...). Only clear formatting problems are corrected and logged
+(two rows had no name column, so the code is used as the name). Exact
+duplicate lines are dropped; two different records with one code are never
+merged: the import fails and writes nothing.
+
+**Examination capacity rule:** only half of a venue can be used in an exam:
+`exam_capacity = floor(full_capacity x 0.5)` for every venue type (240 -> 120,
+60 -> 30, 30 -> 15). Both values are stored (`normal_capacity` = full capacity,
+never reduced). Migration 0004 enforces it in the database, and the scheduler
+must never seat more students than `exam_capacity`. One exam may use several
+compatible rooms; `max_rooms_per_exam` in the assumptions can limit that
+(no limit by default).
+
 ## Seed tables (schema `examinations`)
 
 | Table | Key | Will later come from |
@@ -81,7 +111,7 @@ verification. Rerun the import after editing the decisions file.
 | `seed_students` | `student_id` (synthetic, e.g. `IT30315600`) | Academic Data Service: students |
 | `seed_registrations` | `(student_id, module_code)` | Academic Data Service: registrations |
 | `seed_venues` | `venue_id` | Resource Service: venues |
-| `seed_venue_blocks` | `block_id`; unique `(venue_id, block_date, start_time)` | Resource Service: availability |
+| `seed_venue_blocks` | `block_id`; unique `(source, venue_id, block_date, start_time)` and `(source, source_ref)` | Resource Service / Teaching Timetable: availability |
 | `seed_exam_periods` | `period_code` | Examination Service (stays), from the institutional calendar |
 | `seed_exam_period_exclusions` | `(period_code, excluded_date)` | same as above |
 
@@ -103,16 +133,17 @@ APIs instead, without changing the callers.
 | Module-specialization links (all programmes kept) | 91 |
 | Students (synthetic IDs, 16 cohorts of 17-35) | 390 |
 | Registrations | 1,700 (63 repeat) |
-| Venues (auditorium, 2 exam halls, 2 lecture halls, 4 computer labs) | 9 |
-| Venue blocks (22 simulated teaching, 5 maintenance) | 27 |
+| Venues: campus list (31 lecture halls, 10 smart classrooms, 19 computer labs, 2 BYOD labs) | 62 |
+| Venue blocks, all labelled SIMULATED (22 teaching, 5 maintenance) | 27 |
 | Exam period: 2026-11-16 to 2026-11-28, weekdays 08:30-17:30, 1 excluded day | 9 exam days |
 
 **Assumptions, not real policy** (all in [app/seed/assumptions.py](app/seed/assumptions.py)):
 cohort sizes; 15% repeat students; 10 minutes when Extra_Reading_Time = Yes;
-written exams use halls, computer-based exams use labs, hybrid exams may use
-any venue unless restricted (`hybrid_venue_types`, `hybrid_lab_required_modules`);
-exam seating 50% of normal capacity for auditorium/lecture halls, 100% for exam
-halls, working machines for labs; weekends off; one simulated non-exam day.
+written exams use lecture halls and smart classrooms, computer-based exams use
+computer labs only (not BYOD labs), hybrid exams may use any venue unless
+restricted (`hybrid_venue_types`, `hybrid_lab_required_modules`); simulated
+teaching and maintenance blocks; weekends off; one simulated non-exam day.
+The 50% exam seating rule is the examination policy above, not an assumption.
 Student IDs use fictional intakes 30-33 so they cannot match real students.
 
 ## Setup on Windows PowerShell
@@ -140,7 +171,16 @@ CREATE SCHEMA IF NOT EXISTS examinations;
 
 ## Migrations
 
-Revisions: `0001` creates the seed tables; `0002` adds the real-catalogue support (non-destructive).
+| Revision | What it does |
+|---|---|
+| `0001` | creates the seed tables |
+| `0002` | real module catalogue support (non-destructive) |
+| `0003` | campus venues, **expand**: adds `building`, `floor`, `source_ref`; allows the new venue types and `simulated_*` block sources. The old rows stay valid. |
+| `0004` | campus venues, **contract**: `building`/`floor` NOT NULL, only campus venue types, `exam_capacity = normal_capacity / 2`. Run it only **after** the venue replacement. |
+
+Alembic runs all pending revisions in **one** transaction. Running
+`upgrade head` before the venue replacement therefore fails at 0004 and
+changes nothing; upgrade to `0003` first (see "Venue replacement").
 
 ```powershell
 cd services/examination-service
@@ -179,6 +219,40 @@ python -m app.seed.backup restore backups\seed_backup_... --pooled --dry-run    
 `replace` deletes only rows that are in the verified backup and not in the new
 dataset, then seeds, then checks final counts, leftovers and foreign keys. Any
 failure rolls back the whole transaction.
+
+### Venue replacement (9 fictional venues -> 62 campus venues)
+
+Each step needs approval; nothing else in the database changes. Modules,
+students, registrations and the exam period are identical before and after.
+
+```powershell
+cd services/examination-service
+python -m app.seed.backup export --pooled                      # 1. backup (2,261 rows), checksums verified
+alembic -x pooled=true upgrade 0003 --sql                      # 2. preview
+alembic -x pooled=true upgrade 0003                            # 3. expand schema
+python -m app.seed.replace --backup backups\<step-1> --pooled --dry-run   # 4. rehearsal, rolled back
+python -m app.seed.replace --backup backups\<step-1> --pooled             # 5. one transaction
+alembic -x pooled=true upgrade 0004                            # 6. contract schema
+python -m pytest --live tests/test_live_api.py                 # 7. read-only check: database == dataset
+```
+
+Expected after step 5: 9 venues and 27 old blocks deleted; 62 venues and 27
+simulated blocks inserted; every other table unchanged; 2,314 rows in total.
+
+**Rollback (reverse order):** take a new backup; `alembic downgrade 0003`;
+check out the previous code (9 fictional venues) and run `replace` with the
+new backup (deletes the campus venues and blocks, re-inserts the old ones);
+then `alembic downgrade 0002`. 0003's downgrade is only valid once no campus
+venue or simulated block remains.
+
+### Real availability from the Teaching Timetable (later)
+
+The scheduler reads every unavailable period through
+`ExamDataSource.list_venue_blocks()`. Real teaching sessions will be stored
+with `source = "teaching_timetable"` and `source_ref` = the session's booking
+ID; `(source, source_ref)` is unique, so a repeated sync updates a booking
+instead of duplicating it. A sync never touches `simulated_*` rows; once real
+bookings exist, the simulated teaching blocks are switched off.
 
 ## Read-only API
 

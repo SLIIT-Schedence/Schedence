@@ -62,6 +62,8 @@ _VENUE_COLUMNS = (
     SeedVenue.venue_id,
     SeedVenue.venue_name,
     SeedVenue.venue_type,
+    SeedVenue.building,
+    SeedVenue.floor,
     SeedVenue.normal_capacity,
     SeedVenue.exam_capacity,
 )
@@ -72,6 +74,7 @@ _BLOCK_COLUMNS = (
     SeedVenueBlock.end_time,
     SeedVenueBlock.source,
     SeedVenueBlock.reason,
+    SeedVenueBlock.source_ref,
 )
 _PERIOD_COLUMNS = tuple(c for c in SeedExamPeriod.__table__.columns)
 _EXCLUSION_COLUMNS = (
@@ -218,7 +221,9 @@ class DatabaseSource:
         if date_to is not None:
             stmt = stmt.where(SeedVenueBlock.block_date <= date_to)
         rows = await self._session.execute(
-            stmt.order_by(SeedVenueBlock.venue_id, SeedVenueBlock.block_date, SeedVenueBlock.start_time)
+            stmt.order_by(
+                SeedVenueBlock.venue_id, SeedVenueBlock.block_date, SeedVenueBlock.start_time, SeedVenueBlock.source
+            )
         )
         return [VenueBlock(**row._asdict()) for row in rows]
 

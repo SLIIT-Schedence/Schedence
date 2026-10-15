@@ -9,8 +9,8 @@ from collections import Counter
 import pytest
 
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS, SeedAssumptions
-from app.seed.catalog import load_catalog
-from app.seed.generator import exam_days, generate_dataset
+from app.seed.catalog import load_catalog, load_venues
+from app.seed.generator import exam_capacity, exam_days, generate_dataset
 from app.seed.validation import validate_dataset
 
 SCOPE = set(DEFAULT_ASSUMPTIONS.specializations)
@@ -31,8 +31,8 @@ def test_record_counts(data, catalog) -> None:
     assert len(data.modules) == len(in_scope) >= 30
     assert len(data.students) == sum(size for _, _, size in DEFAULT_ASSUMPTIONS.cohort_sizes) == 390
     assert 1200 <= len(data.registrations) <= 2000
-    assert len(data.venues) == 9
-    assert 15 <= len(data.venue_blocks) <= 30
+    assert len(data.venues) == 62
+    assert len(data.venue_blocks) == 27
     assert len(data.exam_periods) == 1
 
 
@@ -119,6 +119,64 @@ def test_registration_counts_are_derived_from_records(data) -> None:
     assert counts == dict(Counter(r.module_code for r in data.registrations))
 
 
+def test_venues_are_the_campus_catalogue(data) -> None:
+    source = {v.venue_id: v for v in load_venues(DEFAULT_ASSUMPTIONS.venue_catalog_path)}
+    assert len(source) == 62
+    assert {v.venue_id for v in data.venues} == set(source)
+    for v in data.venues:
+        s = source[v.venue_id]
+        assert (v.venue_name, v.venue_type, v.building, v.floor, v.normal_capacity) == (
+            s.venue_name, s.venue_type, s.building, s.floor, s.full_capacity)
+    assert Counter(v.venue_type for v in data.venues) == {
+        "lecture_hall": 31, "smart_classroom": 10, "computer_lab": 19, "byod_lab": 2}
+
+
+def test_special_venue_codes_are_kept_exactly(data) -> None:
+    venues = {v.venue_id: v for v in data.venues}
+    for code in ("F1301+F1302", "F1303+F1304", "CyberSecLab", "Emblab", "DClab", "Robotics Lab", "MMlab"):
+        assert venues[code].venue_name == code
+        assert venues[code].venue_type == "computer_lab"
+    assert venues["A504"].venue_name == "A504 Smart Classroom"
+    assert venues["G1305"].venue_name == "G1305 Linux Lab"
+    assert (venues["CyberSecLab"].building, venues["CyberSecLab"].floor) == ("G", 9)
+
+
+def test_exam_capacity_is_half_of_full_capacity_rounded_down(data) -> None:
+    for v in data.venues:
+        assert v.exam_capacity == v.normal_capacity // 2
+    examples = {240: 120, 120: 60, 60: 30, 30: 15, 31: 15, 1: 0}
+    assert {full: exam_capacity(full) for full in examples} == examples
+    assert {v.normal_capacity: v.exam_capacity for v in data.venues} == {240: 120, 120: 60, 60: 30, 30: 15}
+
+
+def test_written_and_computer_based_venue_rules() -> None:
+    a = DEFAULT_ASSUMPTIONS
+    assert a.venue_types_for("written", "IT1030") == ("lecture_hall", "smart_classroom")
+    assert a.venue_types_for("computer_based", "IT1010") == ("computer_lab",)  # BYOD labs are not used
+
+
+def test_venue_catalogue_does_not_change_other_data(data) -> None:
+    fewer = load_venues(DEFAULT_ASSUMPTIONS.venue_catalog_path)[:40]
+    other = generate_dataset(venue_catalog=fewer)
+    assert len(other.venues) == 40
+    for name in ("modules", "module_specializations", "students", "registrations", "exam_periods",
+                 "exam_period_exclusions"):
+        assert getattr(other, name) == getattr(data, name), name
+
+
+def test_simulated_blocks_are_labelled(data) -> None:
+    for b in data.venue_blocks:
+        assert b.source.startswith("simulated_") and b.reason.startswith("SIMULATED"), b
+        assert b.source_ref is None
+
+
+def test_max_rooms_per_exam_is_configurable(data) -> None:
+    assert DEFAULT_ASSUMPTIONS.max_rooms_per_exam is None
+    assert validate_dataset(data, dataclasses.replace(DEFAULT_ASSUMPTIONS, max_rooms_per_exam=4)).ok
+    report = validate_dataset(data, dataclasses.replace(DEFAULT_ASSUMPTIONS, max_rooms_per_exam=3))
+    assert any("IT1100" in e and "4 rooms" in e for e in report.errors), report.errors
+
+
 def test_venue_capacities_and_compatibility(data) -> None:
     for v in data.venues:
         assert 0 < v.exam_capacity <= v.normal_capacity
@@ -149,7 +207,7 @@ def test_venue_blocks_have_valid_ranges_and_no_overlaps(data) -> None:
         for other in seen.get((b.venue_id, b.block_date), []):
             assert b.end_time <= other.start_time or other.end_time <= b.start_time
         seen.setdefault((b.venue_id, b.block_date), []).append(b)
-    assert {b.source for b in data.venue_blocks} == {"teaching_timetable", "maintenance"}
+    assert Counter(b.source for b in data.venue_blocks) == {"simulated_teaching": 22, "simulated_maintenance": 5}
 
 
 def test_exam_period_has_exam_days_and_excludes_weekends(data) -> None:

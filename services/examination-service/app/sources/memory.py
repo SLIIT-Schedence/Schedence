@@ -53,7 +53,7 @@ class DatasetSource:
         self._venues = sorted((Venue(**dataclasses.asdict(v)) for v in data.venues), key=lambda v: v.venue_id)
         self._blocks = sorted(
             (VenueBlock(**dataclasses.asdict(b)) for b in data.venue_blocks),
-            key=lambda b: (b.venue_id, b.block_date, b.start_time),
+            key=lambda b: (b.venue_id, b.block_date, b.start_time, b.source),
         )
         exclusions = sorted(
             (ExamPeriodExclusion(**dataclasses.asdict(e)) for e in data.exam_period_exclusions),

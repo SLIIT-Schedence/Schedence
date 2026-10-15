@@ -96,9 +96,34 @@ def test_reading_time_must_match_flag(data) -> None:
     _assert_error(_with(data, modules=(bad,) + data.modules[1:]), "reading-time flag")
 
 
+def _venue(**changes) -> Venue:
+    base = dict(venue_id="X100", venue_name="X100", venue_type="lecture_hall", building="X", floor=1,
+                normal_capacity=40, exam_capacity=20)
+    return Venue(**{**base, **changes})
+
+
 def test_exam_capacity_above_normal_capacity_is_rejected(data) -> None:
-    venues = (Venue("V-BAD", "Bad Room", "lecture_hall", 40, 50),) + data.venues
-    _assert_error(_with(data, venues=venues), "exam capacity")
+    _assert_error(_with(data, venues=(_venue(exam_capacity=50),) + data.venues), "exam capacity")
+
+
+def test_exam_capacity_must_be_half_of_full_capacity(data) -> None:
+    _assert_error(_with(data, venues=(_venue(normal_capacity=60, exam_capacity=60),) + data.venues),
+                  "must be floor(60 x 0.5) = 30")
+    _assert_error(_with(data, venues=(_venue(normal_capacity=31, exam_capacity=16),) + data.venues), "= 15")
+    assert validate_dataset(_with(data, venues=(_venue(normal_capacity=31, exam_capacity=15),) + data.venues)).ok
+
+
+def test_unknown_venue_type_is_rejected(data) -> None:
+    _assert_error(_with(data, venues=(_venue(venue_type="exam_hall"),) + data.venues), "unknown venue_type")
+
+
+def test_venue_without_building_is_rejected(data) -> None:
+    _assert_error(_with(data, venues=(_venue(building=""),) + data.venues), "building is missing")
+
+
+def test_unlabelled_simulated_block_is_rejected(data) -> None:
+    bad = dataclasses.replace(data.venue_blocks[0], reason="Teaching")
+    _assert_error(_with(data, venue_blocks=(bad,) + data.venue_blocks[1:]), "labelled 'SIMULATED'")
 
 
 def test_computer_based_exam_without_labs_is_rejected(data) -> None:

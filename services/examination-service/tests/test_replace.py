@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -34,15 +35,43 @@ def _write_backup(path: Path, tables: dict[str, list[dict]]) -> Path:
 
 
 SYN_STUDENT = {"student_id": "STU-0001", "academic_year": 1, "specialization": "Common"}
-SHARED_VENUE = {"venue_id": "V-AUD", "venue_name": "Main Auditorium", "venue_type": "auditorium",
-                "normal_capacity": 300, "exam_capacity": 150}
+# The 9 fictional venues currently in the database (before the campus venue replacement).
+OLD_VENUES = [
+    {"venue_id": vid, "venue_name": name, "venue_type": vtype, "normal_capacity": normal, "exam_capacity": exam}
+    for vid, name, vtype, normal, exam in (
+        ("V-AUD", "Main Auditorium", "auditorium", 300, 150), ("V-EXH", "Examination Hall A", "exam_hall", 100, 100),
+        ("V-EXH2", "Examination Hall B", "exam_hall", 80, 80), ("V-LH1", "Lecture Hall 1", "lecture_hall", 100, 50),
+        ("V-LH2", "Lecture Hall 2", "lecture_hall", 80, 40), ("V-LAB1", "Computer Lab 1", "computer_lab", 60, 45),
+        ("V-LAB2", "Computer Lab 2", "computer_lab", 40, 30), ("V-LAB3", "Computer Lab 3", "computer_lab", 60, 50),
+        ("V-LAB4", "Computer Lab 4", "computer_lab", 50, 40),
+    )
+]
+OLD_BLOCK = {"venue_id": "V-LAB1", "block_date": "2026-11-17", "start_time": "10:30:00", "end_time": "12:30:00",
+             "source": "teaching_timetable", "reason": "Simulated teaching session"}
 
 
 def test_plan_deletes_only_backup_rows_missing_from_new_dataset(data) -> None:
-    plan = plan_deletions({"seed_students": [SYN_STUDENT], "seed_venues": [SHARED_VENUE]}, data)
+    shared = dataclasses.asdict(data.venues[0])
+    plan = plan_deletions({"seed_students": [SYN_STUDENT], "seed_venues": [OLD_VENUES[0], shared]}, data)
     assert plan["seed_students"] == [("STU-0001",)]
-    assert plan["seed_venues"] == []  # identical venue in the new dataset is kept
+    assert plan["seed_venues"] == [("V-AUD",)]  # identical campus venue in the new dataset is kept
     assert plan["seed_registrations"] == []  # nothing outside the backup is ever planned
+
+
+def test_venue_replacement_plan_touches_only_venues_and_blocks(tmp_path, data) -> None:
+    # A backup of today's database: same non-venue data, 9 old venues, old blocks.
+    current = {spec.table: [dataclasses.asdict(r) for r in spec.records(data)] for spec in TABLE_SPECS}
+    current["seed_venues"] = OLD_VENUES
+    current["seed_venue_blocks"] = [OLD_BLOCK]
+    backup = _write_backup(tmp_path / "b", {table: [json.loads(json.dumps(r, default=str)) for r in rows]
+                                           for table, rows in current.items()})
+    rows = {spec.table: load_rows(backup, spec.table) for spec in TABLE_SPECS}
+    planned = {t: len(keys) for t, keys in plan_deletions(rows, data).items()}
+    assert planned == {
+        "seed_exam_period_exclusions": 0, "seed_exam_periods": 0, "seed_venue_blocks": 1, "seed_venues": 9,
+        "seed_registrations": 0, "seed_students": 0, "seed_module_specializations": 0, "seed_modules": 0,
+    }
+    assert "building" not in rows["seed_venues"][0]  # pre-0003 rows load without the new columns
 
 
 def test_plan_deletes_children_before_parents(data) -> None:
@@ -57,7 +86,7 @@ def test_plan_deletes_children_before_parents(data) -> None:
 def test_expected_final_counts(data) -> None:
     assert expected_counts(data) == {
         "seed_modules": 42, "seed_module_specializations": 91, "seed_students": 390,
-        "seed_registrations": 1700, "seed_venues": 9, "seed_venue_blocks": 27,
+        "seed_registrations": 1700, "seed_venues": 62, "seed_venue_blocks": 27,
         "seed_exam_periods": 1, "seed_exam_period_exclusions": 1,
     }
 
@@ -73,8 +102,9 @@ def test_real_backup_delete_plan(data) -> None:
     assert verify_backup(backup) == []
     rows = {spec.table: load_rows(backup, spec.table) for spec in TABLE_SPECS}
     planned = {t: len(keys) for t, keys in plan_deletions(rows, data).items()}
+    # The original SYN backup: its 6 fictional venues and 22 blocks are all gone from the new dataset.
     assert planned == {
-        "seed_exam_period_exclusions": 1, "seed_exam_periods": 1, "seed_venue_blocks": 20, "seed_venues": 0,
+        "seed_exam_period_exclusions": 1, "seed_exam_periods": 1, "seed_venue_blocks": 22, "seed_venues": 6,
         "seed_registrations": 748, "seed_students": 200, "seed_module_specializations": 0, "seed_modules": 20,
     }
 

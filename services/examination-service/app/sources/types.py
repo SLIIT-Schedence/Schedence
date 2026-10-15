@@ -50,7 +50,11 @@ class Venue:
     venue_id: str
     venue_name: str
     venue_type: str
+    building: str
+    floor: int
+    # Full seating capacity, never reduced.
     normal_capacity: int
+    # Seats usable in an exam (50% rule). The scheduler must never exceed it.
     exam_capacity: int
 
 
@@ -60,8 +64,11 @@ class VenueBlock:
     block_date: dt.date
     start_time: dt.time
     end_time: dt.time
+    # simulated_teaching / simulated_maintenance (prototype) or a real source
+    # such as teaching_timetable (synced later from the Teaching Timetable).
     source: str
     reason: str
+    source_ref: str | None
 
 
 @dataclass(frozen=True)

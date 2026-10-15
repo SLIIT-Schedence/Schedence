@@ -83,7 +83,7 @@ TABLE_SPECS: tuple[TableSpec, ...] = (
     TableSpec(SeedStudent, ("student_id",), lambda d: d.students),
     TableSpec(SeedRegistration, ("student_id", "module_code"), lambda d: d.registrations),
     TableSpec(SeedVenue, ("venue_id",), lambda d: d.venues),
-    TableSpec(SeedVenueBlock, ("venue_id", "block_date", "start_time"), lambda d: d.venue_blocks),
+    TableSpec(SeedVenueBlock, ("source", "venue_id", "block_date", "start_time"), lambda d: d.venue_blocks),
     TableSpec(SeedExamPeriod, ("period_code",), lambda d: d.exam_periods),
     TableSpec(SeedExamPeriodExclusion, ("period_code", "excluded_date"), lambda d: d.exam_period_exclusions),
 )

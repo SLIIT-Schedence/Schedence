@@ -98,12 +98,16 @@ async def test_registration_filters_and_paging(source: DatasetSource) -> None:
 
 
 async def test_venues_and_blocks(source: DatasetSource) -> None:
-    assert len(await source.list_venues()) == 9
+    venues = await source.list_venues()
+    assert len(venues) == 62
+    assert [v.venue_id for v in venues] == sorted(v.venue_id for v in venues)
+    assert all(v.exam_capacity == v.normal_capacity // 2 for v in venues)
     labs = await source.list_venues(venue_type="computer_lab")
-    assert len(labs) == 4
+    assert len(labs) == 19
     blocks = await source.list_venue_blocks()
     assert len(blocks) == 27
-    assert len(await source.list_venue_blocks(source="maintenance")) == 5
+    assert len(await source.list_venue_blocks(source="simulated_maintenance")) == 5
+    assert await source.list_venue_blocks(source="teaching_timetable") == []  # no real bookings yet
     day = blocks[0].block_date
     same_day = await source.list_venue_blocks(date_from=day, date_to=day)
     assert same_day and all(b.block_date == day for b in same_day)
@@ -161,8 +165,8 @@ async def test_database_source_only_runs_selects() -> None:
     await src.list_students(academic_year=1, specialization="IT", limit=10, offset=20)
     await src.get_student("IT30000001")
     await src.list_registrations(student_id="IT30000001", module_code="IT1010", registration_type="normal", limit=5)
-    await src.list_venues(venue_type="exam_hall")
-    await src.list_venue_blocks(venue_id="V-LAB1", source="maintenance", date_from=dt.date(2026, 11, 16))
+    await src.list_venues(venue_type="smart_classroom")
+    await src.list_venue_blocks(venue_id="Robotics Lab", source="simulated_maintenance", date_from=dt.date(2026, 11, 16))
     await src.list_exam_periods()
     await src.get_exam_period("PP1-2026-S2-FINAL")
 

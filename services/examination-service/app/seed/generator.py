@@ -1,7 +1,8 @@
 """Deterministic synthetic dataset generator.
 
-Modules come from the cleaned real catalogue. Students, registrations,
-venues, blocks and the exam period are synthetic. The same
+Modules come from the cleaned real catalogue and venues from the campus venue
+list. Students, registrations, venue blocks and the exam period are synthetic
+(blocks are labelled "simulated"). The same
 ``SeedAssumptions`` (and catalogue file) always produce exactly the same
 dataset: all randomness comes from one ``random.Random(random_seed)`` and
 inputs are sorted before sampling. Nothing here touches the database.
@@ -10,11 +11,12 @@ inputs are sorted before sampling. Nothing here touches the database.
 from __future__ import annotations
 
 import datetime as dt
+import math
 import random
 from collections.abc import Iterable
 
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS, SeedAssumptions
-from app.seed.catalog import VENUES, CatalogModule, load_catalog
+from app.seed.catalog import CatalogModule, CatalogVenue, load_catalog, load_venues
 from app.seed.records import (
     Dataset,
     ExamPeriod,
@@ -31,10 +33,12 @@ from app.seed.records import (
 def generate_dataset(
     assumptions: SeedAssumptions = DEFAULT_ASSUMPTIONS,
     catalog: tuple[CatalogModule, ...] | None = None,
+    venue_catalog: tuple[CatalogVenue, ...] | None = None,
 ) -> Dataset:
     a = assumptions
     rng = random.Random(a.random_seed)
     catalog = catalog if catalog is not None else load_catalog(a.catalog_path)
+    venue_catalog = venue_catalog if venue_catalog is not None else load_venues(a.venue_catalog_path)
 
     in_scope = sorted(
         (m for m in catalog if m.semester == a.semester and set(m.specializations) & set(a.specializations)),
@@ -46,7 +50,7 @@ def generate_dataset(
 
     students = _students(a, rng)
     registrations = _registrations(a, rng, in_scope, students)
-    venues = _venues(a)
+    venues = _venues(a, venue_catalog)  # no randomness
     period, exclusions = _exam_period(a)
     blocks = _venue_blocks(a, rng, venues, exam_days(period, exclusions))
 
@@ -136,18 +140,28 @@ def _registrations(
     return tuple(sorted(registrations, key=lambda r: (r.student_id, r.module_code)))
 
 
-def _exam_capacity(a: SeedAssumptions, venue_type: str, normal: int, machines: int | None) -> int:
-    if venue_type == "computer_lab":
-        return machines if machines is not None else normal
-    if venue_type == "exam_hall":
-        return normal
-    return int(normal * a.exam_seating_ratio)
+def exam_capacity(full_capacity: int, a: SeedAssumptions = DEFAULT_ASSUMPTIONS) -> int:
+    """Seats usable in an exam: floor(full capacity x ratio), for every venue type."""
+    return math.floor(full_capacity * a.exam_seating_ratio)
 
 
-def _venues(a: SeedAssumptions) -> tuple[Venue, ...]:
+def _venues(a: SeedAssumptions, catalog: tuple[CatalogVenue, ...]) -> tuple[Venue, ...]:
     return tuple(
-        Venue(vid, name, vtype, normal, _exam_capacity(a, vtype, normal, machines))
-        for vid, name, vtype, normal, machines in VENUES
+        sorted(
+            (
+                Venue(
+                    venue_id=v.venue_id,
+                    venue_name=v.venue_name,
+                    venue_type=v.venue_type,
+                    building=v.building,
+                    floor=v.floor,
+                    normal_capacity=v.full_capacity,
+                    exam_capacity=exam_capacity(v.full_capacity, a),
+                )
+                for v in catalog
+            ),
+            key=lambda v: v.venue_id,
+        )
     )
 
 
@@ -182,8 +196,9 @@ def _venue_blocks(
     a: SeedAssumptions, rng: random.Random, venues: tuple[Venue, ...], days: tuple[dt.date, ...]
 ) -> tuple[VenueBlock, ...]:
     # Simulated teaching sessions that keep running in some rooms during exams.
+    # Real sessions will come from the Teaching Timetable (source "teaching_timetable").
     teaching_candidates = [
-        VenueBlock(v.venue_id, day, start, end, "teaching_timetable", "Simulated teaching session")
+        VenueBlock(v.venue_id, day, start, end, "simulated_teaching", a.simulated_teaching_reason)
         for v in venues
         if v.venue_type in a.teaching_venue_types
         for day in days
@@ -193,7 +208,7 @@ def _venue_blocks(
     blocks = rng.sample(teaching_candidates, min(a.teaching_block_count, len(teaching_candidates)))
 
     maintenance_candidates = [
-        VenueBlock(v.venue_id, day, start, end, "maintenance", "Simulated maintenance")
+        VenueBlock(v.venue_id, day, start, end, "simulated_maintenance", a.simulated_maintenance_reason)
         for v in venues
         for day in days
         for start, end in a.maintenance_block_slots
