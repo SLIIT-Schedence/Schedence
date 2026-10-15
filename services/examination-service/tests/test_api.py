@@ -8,20 +8,28 @@ from sqlalchemy.exc import OperationalError
 
 from app.api.deps import get_source
 from app.api.errors import DATABASE_UNAVAILABLE
+from app.auth.dependencies import require_exam_data_access
 from app.main import create_app
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
+from auth_support import EXAM_ADMIN, make_auth_context
 
 SOURCE = DatasetSource(generate_dataset())
 API = "/api/v1"
 
 
+def _app(source=SOURCE):
+    """App whose caller is an authenticated EXAMINATION_ADMIN (auth itself is tested in test_auth.py)."""
+    app = create_app(make_auth_context())
+    app.dependency_overrides[get_source] = lambda: source
+    app.dependency_overrides[require_exam_data_access] = lambda: EXAM_ADMIN
+    return app
+
+
 @pytest.fixture
 def client() -> TestClient:
-    app = create_app()
-    app.dependency_overrides[get_source] = lambda: SOURCE
     # Not used as a context manager: the lifespan (real database engine) never starts.
-    return TestClient(app)
+    return TestClient(_app())
 
 
 # --- Health -------------------------------------------------------------------------
@@ -209,9 +217,7 @@ class _BrokenSource:
 
 
 def test_database_error_is_safe_503() -> None:
-    app = create_app()
-    app.dependency_overrides[get_source] = lambda: _BrokenSource()
-    response = TestClient(app).get(f"{API}/modules")
+    response = TestClient(_app(_BrokenSource())).get(f"{API}/modules")
     assert response.status_code == 503
     assert response.json() == {"detail": DATABASE_UNAVAILABLE}
     for secret in ("hunter2", "ep-secret", "secret_column"):

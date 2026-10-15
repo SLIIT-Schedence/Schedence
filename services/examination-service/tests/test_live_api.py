@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from schedence_db import create_db_engine, dispose_engine, load_settings
 
+from app.auth.dependencies import require_exam_data_access
 from app.database import close_database, open_database
 from app.main import create_app
 from app.seed.generator import generate_dataset
@@ -70,8 +71,12 @@ async def test_api_sessions_are_read_only_on_the_real_database() -> None:
 
 
 def test_live_api_end_to_end() -> None:
+    # Database check only: the caller is treated as an examination admin (no real Cognito login here;
+    # authentication itself is covered by test_auth.py). /health/db stays public.
+    app = create_app()
+    app.dependency_overrides[require_exam_data_access] = lambda: None
     # psycopg async needs a selector event loop on Windows.
-    with TestClient(create_app(), backend_options={"loop_factory": asyncio.SelectorEventLoop}) as client:
+    with TestClient(app, backend_options={"loop_factory": asyncio.SelectorEventLoop}) as client:
         assert client.get("/health/db").json()["status"] == "healthy"
         assert len(client.get("/api/v1/modules").json()) == 42
         assert client.get("/api/v1/students", params={"limit": 1}).json()["total"] == 390
