@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import VENUE_ID, BlockSource, SourceDep, VenueType
+from app.api.deps import VENUE_ID, BlockSource, SeatingReaderDep, SourceDep, VenueType
 from app.api.schemas import VenueBlockOut, VenueOut
 
 router = APIRouter(tags=["venues"])
@@ -15,9 +15,25 @@ router = APIRouter(tags=["venues"])
 
 @router.get("/venues", response_model=list[VenueOut])
 async def list_venues(
-    source: SourceDep, venue_type: Annotated[VenueType | None, Query()] = None
+    seating: SeatingReaderDep, venue_type: Annotated[VenueType | None, Query()] = None
 ) -> list[VenueOut]:
-    return [VenueOut.model_validate(v) for v in await source.list_venues(venue_type=venue_type)]
+    """Venues with their effective exam seating percentage and capacity."""
+    return [
+        VenueOut(
+            venue_id=v.venue_id,
+            venue_name=v.venue_name,
+            venue_type=v.venue_type,
+            building=v.building,
+            floor=v.floor,
+            normal_capacity=v.normal_capacity,
+            exam_seating_percentage=c.percentage,
+            exam_seating_rule=c.rule_scope,
+            exam_capacity=c.exam_capacity,
+            available_for_exams=c.available_for_exams,
+            seed_exam_capacity=v.exam_capacity,
+        )
+        for v, c in await seating.venues(venue_type=venue_type)
+    ]
 
 
 @router.get("/venue-blocks", response_model=list[VenueBlockOut])

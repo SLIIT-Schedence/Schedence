@@ -6,6 +6,10 @@
 * Every request gets its own session whose transaction is ``READ ONLY``: the
   API cannot change the database even by mistake. psycopg opens it with
   ``BEGIN READ ONLY``, so this costs no extra round trip to Neon.
+* The only exception: the seating-rule changes (``PUT``/``DELETE
+  /api/v1/settings/exam-seating...``) get a writable session from
+  :func:`get_write_session`, which never commits by itself. A dry run
+  (``dry_run=true``) gets the read-only session instead.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ async def open_database(app: FastAPI) -> None:
     # Same pool; connections are returned to the pool with read-only switched off again.
     read_only = app.state.engine.execution_options(postgresql_readonly=True)
     app.state.session_factory = create_session_factory(read_only)
+    app.state.write_session_factory = create_session_factory(app.state.engine)
 
 
 async def close_database(app: FastAPI) -> None:
@@ -35,4 +40,15 @@ async def close_database(app: FastAPI) -> None:
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one read-only session per request, always closed."""
     async with session_scope(request.app.state.session_factory, commit=False) as session:
+        yield session
+
+
+async def get_write_session(request: Request, dry_run: bool = False) -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency for seating-rule changes: writable unless ``dry_run``.
+
+    Nothing is committed here; the caller commits explicitly. Uncommitted work
+    is rolled back when the session closes, and on any error.
+    """
+    factory = request.app.state.session_factory if dry_run else request.app.state.write_session_factory
+    async with session_scope(factory, commit=False) as session:
         yield session

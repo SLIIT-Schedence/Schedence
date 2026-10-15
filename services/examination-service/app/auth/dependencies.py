@@ -79,3 +79,6 @@ def require_any_permission(*permissions: str):
 # Every examination data endpoint (modules, students, registrations, venues,
 # blocks, periods): examination administrators only.
 require_exam_data_access = require_any_permission(GENERATE, APPROVE)
+
+# Changing examination settings (seating rules): only holders of examinations:approve.
+require_exam_settings_admin = require_any_permission(APPROVE)

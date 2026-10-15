@@ -11,9 +11,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_source
+from app.api.deps import get_seating_store, get_source
 from app.auth.settings import load_auth_settings
 from app.main import create_app
+from app.seating.memory import MemorySeatingStore
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
 from auth_support import INSTITUTION, OTHER_INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context
@@ -25,7 +26,7 @@ SOURCE = DatasetSource(generate_dataset())
 DATA_ENDPOINTS = [
     f"{API}/modules", f"{API}/modules/IT3041", f"{API}/students", f"{API}/students/IT30129034",
     f"{API}/registrations", f"{API}/venues", f"{API}/venue-blocks", f"{API}/exam-periods",
-    f"{API}/exam-periods/PP1-2026-S2-FINAL",
+    f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/settings/exam-seating",
 ]
 STUDENT_DATA = [f"{API}/students", f"{API}/students/IT30129034", f"{API}/registrations"]
 
@@ -50,6 +51,7 @@ class _Untouchable:
 def _client(tokens, identity, source=SOURCE, **settings) -> TestClient:
     app = create_app(make_auth_context(tokens, identity, **settings))
     app.dependency_overrides[get_source] = lambda: source
+    app.dependency_overrides[get_seating_store] = MemorySeatingStore
     return TestClient(app)
 
 

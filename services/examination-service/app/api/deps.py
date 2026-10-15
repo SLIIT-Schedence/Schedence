@@ -7,8 +7,10 @@ from typing import Annotated, Literal
 from fastapi import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
+from app.database import get_session, get_write_session
 from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
+from app.seating.service import SeatingService
+from app.seating.store import DatabaseSeatingStore, SeatingRuleStore
 from app.sources import DatabaseSource, ExamDataSource
 
 # Identifier formats. Anything else is rejected with 422 before a query runs.
@@ -38,3 +40,23 @@ def get_source(session: Annotated[AsyncSession, Depends(get_session)]) -> ExamDa
 
 
 SourceDep = Annotated[ExamDataSource, Depends(get_source)]
+
+
+def get_seating_store(session: Annotated[AsyncSession, Depends(get_session)]) -> SeatingRuleStore:
+    """Seating rules on the request's read-only session (the same session as ``get_source``)."""
+    return DatabaseSeatingStore(session)
+
+
+def get_seating_reader(
+    source: SourceDep, store: Annotated[SeatingRuleStore, Depends(get_seating_store)]
+) -> SeatingService:
+    return SeatingService(store, source)
+
+
+def get_seating_writer(session: Annotated[AsyncSession, Depends(get_write_session)]) -> SeatingService:
+    """Rules and venues on one writable session (read-only for dry runs)."""
+    return SeatingService(DatabaseSeatingStore(session), DatabaseSource(session))
+
+
+SeatingReaderDep = Annotated[SeatingService, Depends(get_seating_reader)]
+SeatingWriterDep = Annotated[SeatingService, Depends(get_seating_writer)]

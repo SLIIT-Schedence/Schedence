@@ -54,7 +54,9 @@ class Venue:
     floor: int
     # Full seating capacity, never reduced.
     normal_capacity: int
-    # Seats usable in an exam (50% rule). The scheduler must never exceed it.
+    # Legacy stored seed value (always floor(full x 0.5)), kept for compatibility.
+    # Scheduling uses the effective capacity from the seating rules instead:
+    # app.seating.load_capacity_snapshot().
     exam_capacity: int
 
 

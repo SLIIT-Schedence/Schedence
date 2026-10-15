@@ -144,9 +144,8 @@ class SeedVenue(Base):
         CheckConstraint(
             "exam_capacity > 0 AND exam_capacity <= normal_capacity", name="exam_capacity_range"
         ),
-        # Examination rule: only half of a venue's full capacity may be used
-        # (integer division = floor for positive numbers).
-        CheckConstraint("exam_capacity = normal_capacity / 2", name="exam_capacity_half"),
+        # The fixed 50% check (0004) was removed by 0005: the usable share now
+        # comes from examinations.exam_seating_rules (see app.seating).
         UniqueConstraint("venue_name"),
     )
 
@@ -158,6 +157,8 @@ class SeedVenue(Base):
     floor: Mapped[int] = mapped_column(SmallInteger)
     # Full (normal) seating capacity, never reduced.
     normal_capacity: Mapped[int] = mapped_column(SmallInteger)
+    # Legacy seed value (always floor(full x 0.5)), kept for compatibility. The
+    # API and the scheduler use the effective capacity from the seating rules.
     exam_capacity: Mapped[int] = mapped_column(SmallInteger)
 
 
