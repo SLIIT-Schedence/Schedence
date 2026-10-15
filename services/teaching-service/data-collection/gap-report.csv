@@ -1,0 +1,81 @@
+Field,Status,Existing evidence,Collection action,Pilot requirement
+Venue ID,ALREADY_CONFIRMED,62 campus-confirmed development records,Reuse inventory without renaming,Mandatory reference
+Venue capacity,ALREADY_CONFIRMED,62 campus-confirmed development capacities,Do not request or change again,Mandatory reference
+Venue type,ALREADY_CONFIRMED,62 campus-confirmed development types,Reuse inventory,Mandatory reference
+Venue name,ALREADY_CONFIRMED,Existing confirmed inventory,Reuse inventory,Mandatory reference
+Venue building,ALREADY_CONFIRMED,All 62 supplied including corrected locations,Inventory only - no distance optimization,Optional for scheduling
+Venue floor,ALREADY_CONFIRMED,All 62 supplied including corrected locations,Inventory only - no travel modeling,Optional for scheduling
+Teaching targets by band,ALREADY_CONFIRMED,Confirmed separate teaching-hour policy,Confirm applicability and staff classification only,Mandatory
+Professor HOD Dean admin allocation,ALREADY_CONFIRMED,Separate 240 minutes each,Do not collect the hours again; collect applicable approvals,Mandatory applicability
+Student lunch periods by study year,ALREADY_CONFIRMED,Years 1/2 750-810; years 3/4 810-870,Collect date and stream scope only,Mandatory
+Staff ID,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Staff name,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Staff position,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Staff type,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module code,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module name,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module study year,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module semester,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module specialization,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Module degree type,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Teaching-team staff ID,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Teaching-team role,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Lecturer preference statements,ALREADY_CONFIRMED,User-confirmed university-sourced records (Step12A.3),Preserve exact supplied values and source-row references; do not request source verification again,Reuse supplied records; missing scheduling scope remains separate
+Institution UUID,MISSING,No authorized pilot identity supplied,Technical team obtains existing institution UUID,Mandatory
+Academic term reference,MISSING,No authoritative pilot term supplied,Obtain actual term identifier,Mandatory
+Academic week reference,MISSING,User-configured PP1 test week2026-10-19 through25; weekdaysMon-Fri andweekendSat-Sun08:30-17:30,Reuse editable PP1 test-calendar configuration; actual university term/calendar remains separate,Provided for PP1; not a real university term declaration
+Academic week start,MISSING,User-configured PP1 test week2026-10-19 through25; weekdaysMon-Fri andweekendSat-Sun08:30-17:30,Reuse editable PP1 test-calendar configuration; actual university term/calendar remains separate,Provided for PP1; not a real university term declaration
+Academic week end,MISSING,User-configured PP1 test week2026-10-19 through25; weekdaysMon-Fri andweekendSat-Sun08:30-17:30,Reuse editable PP1 test-calendar configuration; actual university term/calendar remains separate,Provided for PP1; not a real university term declaration
+Day ID to actual date mapping,MISSING,User-configured PP1 test week2026-10-19 through25; weekdaysMon-Fri andweekendSat-Sun08:30-17:30,Reuse editable PP1 test-calendar configuration; actual university term/calendar remains separate,Provided for PP1; not a real university term declaration
+Teaching date windows,MISSING,User-configured PP1 test week2026-10-19 through25; weekdaysMon-Fri andweekendSat-Sun08:30-17:30,Reuse editable PP1 test-calendar configuration; actual university term/calendar remains separate,Provided for PP1; not a real university term declaration
+ADS staff UUID crosswalk,MISSING,Teaching staff IDs differ from ADS UUIDs,Fill staff-crosswalk.csv without replacing Staff IDs,Mandatory
+Offering ID,MISSING,Missing on all 184 source module rows,Obtain stable IDs from ADS; never generate from module codes,Mandatory
+Offering stream,MISSING,Missing on all 184 source module rows,Confirm WEEKDAY or WEEKEND per offering,Mandatory
+IT2100 identity resolution,MISSING,Two distinct university-sourced module rows share IT2100,Preserve both source identities; obtain distinct actual offering IDs,Mandatory
+Student group ID,OPTIONAL_PILOT,Deterministic planned IDs generated from supplied cohort scopes,Retain planning IDs or map existing authoritative group IDs,Mandatory
+Group study year,ALREADY_CONFIRMED,Supplied student-count workbook: study years 1-4,Preserve supplied study years,Mandatory
+Group semester,ALREADY_CONFIRMED,Supplied semesters and confirmed intake mapping,Preserve supplied semesters,Mandatory
+Group specialization,ALREADY_CONFIRMED,128 user-approved proportional PP1 allocations in STUDENT_ALLOCATIONS; estimates not exact enrollment,Import allocations and derive group mapping automatically; reconcile all original cohort totals,Mandatory
+Group stream,ALREADY_CONFIRMED,Supplied student workbook includes WEEKDAY and WEEKEND scopes,Preserve supplied streams; module offering applicability remains separate,Mandatory
+Group student count,ALREADY_CONFIRMED,6720 exact original total; proportional PP1 allocation produces 140 main groups and198 lab subgroups,Preserve original cohort totals and approved proportional estimates; do not claim exact specialization enrollment,Mandatory
+Group parent relationship,ALREADY_CONFIRMED,Deterministic planned main/lab hierarchy generated without duplicate student totals,Retain hierarchy and exact counts; actual population evidence remains separate,Mandatory declaration
+Population relationship evidence,MISSING,No authoritative aggregate population evidence,Use population-evidence.csv for unrelated groups including cross-stream cases,Conditional on more than one unrelated group
+Requirement ID,OPTIONAL_PILOT,Deterministic demand IDs generated from supplied offering/group/type,Generated planning IDs do not claim to be database identifiers,Mandatory
+Requirement offering ID,MISSING,No group-specific requirements supplied,Link existing approved IDs,Mandatory
+Requirement group ID,MISSING,No group-specific requirements supplied,Link existing approved IDs,Mandatory
+Session type,ALREADY_CONFIRMED,Separate Lecture/Tutorial/Workshop/Lab weekly-hour columns,Keep types separate and supply applicable group audiences,Mandatory
+Weekly frequency,MISSING,One weekly lecture; PP1 unsplit weekly contact-column convention,Keep each configured weekly block continuous and preserve exact source hours,Mandatory
+Session duration,MISSING,Confirmed lecture1h/2h; PP1 unsplit full-column weekly blocks for other contact types,Use source contact minutes without splitting or changing totals; PP1 convention is not a new university policy,Mandatory
+Shared teaching-content equivalence,POLICY_CONFIRMATION,Same specialization alone is insufficient,Confirm only where different offerings share eligible content,Conditional
+Combination permission,POLICY_CONFIRMATION,Same-specialization combination allowed in principle,Confirm ALLOW or DISALLOW for pilot and any limits,Mandatory declaration
+Staff allowed teaching days,MISSING,Source preferences do not establish availability,One staff/day row with explicit windows and blocks,Mandatory
+Staff available windows,MISSING,Source preferences do not establish availability,One staff/day row with explicit windows and blocks,Mandatory
+Staff blocked periods,MISSING,Source preferences do not establish availability,One staff/day row with explicit windows and blocks,Mandatory
+Venue available windows,ALREADY_CONFIRMED,User permits suitable venues throughout configured PP1 test teaching hours,Reuse PP1 windows with native capacity/type and no-double-booking rules,Mandatory for included bookable venues
+Venue blocked periods,MISSING,Inventory confirmation does not establish availability,One venue/day row with explicit windows and blocks,Mandatory for included bookable venues
+Combined-room relationships,AMBIGUOUS,Two inventory booking relationships unresolved,Supply explicit components or retain exclusion; never split names,Conditional
+Shared venue resources,POLICY_CONFIRMATION,No supplied booking relationships,Confirm explicit relationships or approved absence,Mandatory declaration
+Staff workload classification,POLICY_CONFIRMATION,Source rank alone is not dated target applicability,Confirm band and any HOD/DEAN appointment without changing rank,Mandatory
+Dated appointment resolutions,POLICY_CONFIRMATION,ADS supports daily workload snapshots,Obtain dated appointment and aggregate applicability; do not stretch daily result,Conditional on appointments
+Administrative and research protection,POLICY_CONFIRMATION,Weekly allocations do not imply approved time slots,Supply approved policy exports and applicable calendar or confirmed absence,Mandatory declaration
+Preference academic week scope,POLICY_CONFIRMATION,594 candidates lack complete scope,Use preference-approvals.csv and confirm applicable subset,Conditional on preferences
+Preference stream scope,POLICY_CONFIRMATION,594 candidates lack complete scope,Use preference-approvals.csv and confirm applicable subset,Conditional on preferences
+Preference weights,POLICY_CONFIRMATION,594 candidates have no approved penalty weights,Supply nonnegative weights and approval references,Conditional on preferences
+Day-part numeric boundaries,POLICY_CONFIRMATION,514 time-of-day candidates lack numeric boundaries,Use time-of-day-windows.csv without guessed opening hours,Conditional on time-of-day preferences
+Weekend preference interpretation,AMBIGUOUS,90 weekend patterns need interpretation,Provide explicit approved interpretation in reviewed base,Conditional on those preferences
+Fairness cohort applicability,POLICY_CONFIRMATION,No actual-campus approved cohort policy,Use explicit cohorts or approve existing eligibility-based scope,Mandatory for current full-policy profile
+Optimization priorities,POLICY_CONFIRMATION,Engine order exists but no campus approval supplied,Approve reviewed policy references; do not invent new order,Mandatory for current full-policy profile
+Consecutive-session scoring,POLICY_CONFIRMATION,No universal campus break duration established,Approve existing configurable soft policy; hard rules need explicit evidence,Mandatory for current full-policy profile
+Student lunch dates and streams,POLICY_CONFIRMATION,Fixed times known but scope remains unknown,Complete student_lunch row with explicit dates and streams,Mandatory
+Source authority,POLICY_CONFIRMATION,Accepted academic development sources remain unverified,Provide approval/export references valid for entire pilot week,Mandatory
+Source export reference,POLICY_CONFIRMATION,Accepted academic development sources remain unverified,Provide approval/export references valid for entire pilot week,Mandatory
+Source confirmation status,ALREADY_CONFIRMED,User-confirmed university-sourced academic records; checksum-bound confirmation in local mapping,Reuse confirmation; do not request university source verification again,Mandatory
+Source confirmation reference,ALREADY_CONFIRMED,User-confirmed university-sourced academic records; checksum-bound confirmation in local mapping,Reuse confirmation; do not request university source verification again,Mandatory
+Source valid from,POLICY_CONFIRMATION,Academic source provenance confirmed; dated scheduling calendars and policy applicability still needed,Supply actual dated calendar/policy scope; no repeat verification of supplied academic records,Mandatory
+Source valid until,POLICY_CONFIRMATION,Academic source provenance confirmed; dated scheduling calendars and policy applicability still needed,Supply actual dated calendar/policy scope; no repeat verification of supplied academic records,Mandatory
+Complete demand scope,POLICY_CONFIRMATION,No authorized pilot completeness declaration,Technical base must explicitly declare demand_complete true,Mandatory
+Staff departments,ALREADY_CONFIRMED,Supplied departments are user-confirmed university-sourced values; original provenance labels retained,Preserve supplied departments and source labels; no repeat verification request,Optional
+Daily and weekly teaching caps,OPTIONAL_PILOT,No university-wide cap inferred from targets,Keep existing explicit caps; add only authoritative cap policy,Optional
+Individual student identifiers,OPTIONAL_PILOT,Aggregate evidence preferred,Do not collect when verified aggregate relationships suffice,Not requested
+Completed admin work and attendance evidence,OPTIONAL_PILOT,Reservations are not completed work or attendance,Keep separate; absence must remain unknown,Optional for generation
+Location travel penalties,OPTIONAL_PILOT,Explicitly outside research scope,Do not request distances or walking matrices,Out of scope

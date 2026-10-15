@@ -1,0 +1,48 @@
+{
+  "output_label": "PP1_TEST_CALENDAR",
+  "configuration_reference": "user-confirmed:step12a3:pp1-test-calendar",
+  "calendar": {
+    "week_reference": "PP1-TEST-2026-10-19",
+    "week_start": "2026-10-19",
+    "week_end": "2026-10-25",
+    "synthetic_data": true,
+    "day_dates": {
+      "MONDAY": "2026-10-19", "TUESDAY": "2026-10-20", "WEDNESDAY": "2026-10-21",
+      "THURSDAY": "2026-10-22", "FRIDAY": "2026-10-23", "SATURDAY": "2026-10-24", "SUNDAY": "2026-10-25"
+    }
+  },
+  "solver_config": {
+    "days": [
+      {"day": "MONDAY", "windows": {"WEEKDAY": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "TUESDAY", "windows": {"WEEKDAY": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "WEDNESDAY", "windows": {"WEEKDAY": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "THURSDAY", "windows": {"WEEKDAY": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "FRIDAY", "windows": {"WEEKDAY": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "SATURDAY", "windows": {"WEEKEND": [{"start_minute": 510, "end_minute": 1050}]}},
+      {"day": "SUNDAY", "windows": {"WEEKEND": [{"start_minute": 510, "end_minute": 1050}]}}
+    ],
+    "granularity_minutes": 30,
+    "max_time_seconds": 120.0,
+    "random_seed": 7
+  },
+  "nonlecture_pattern": "UNSPLIT_WEEKLY_CONTACT",
+  "session_audiences": {"LECTURE": "MAIN", "TUTORIAL": "MAIN", "WORKSHOP": "MAIN", "LAB": "LAB_SUBGROUP"},
+  "venue_types": {
+    "LECTURE": ["Lecture Hall", "Smart Classroom"],
+    "TUTORIAL": ["Lecture Hall", "Smart Classroom"],
+    "WORKSHOP": ["Lecture Hall", "Smart Classroom"],
+    "LAB": ["Computer Lab", "BYOD Lab"]
+  },
+  "staff_calendar_mode": "PP1_TEST_WINDOWS_OR_SUPPLIED_OVERRIDE",
+  "workload_band_by_source_position": {
+    "Instructor": "INSTRUCTOR", "Assistant Lecturer": "ASSISTANT_LECTURER", "Lecturer": "LECTURER",
+    "Senior Lecturer": "SENIOR_LECTURER", "Senior Lecturer (HG)": "SENIOR_LECTURER",
+    "Dr.": "DR", "Assistant Professor": "ASSISTANT_PROFESSOR", "Professor": "PROFESSOR"
+  },
+  "weekend_preference_values": {
+    "Saturday Only": ["SATURDAY"], "Sunday Only": ["SUNDAY"], "Saturday and Sunday": ["SATURDAY", "SUNDAY"]
+  },
+  "test_soft_preference_weight": 1,
+  "max_model_variables": 500000,
+  "max_model_constraints": 1000000
+}
