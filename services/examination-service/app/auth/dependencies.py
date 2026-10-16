@@ -8,8 +8,9 @@ Layering (same as the Identity and Academic Data services):
 2. :func:`require_any_permission`: deny by default; the caller needs at least one
    of the permissions **in this service's institution**.
 
-Only the existing permissions are used: ``examinations:generate`` and
-``examinations:approve`` (held by EXAMINATION_ADMIN). Student-specific access is
+Reading examination data requires ``examinations:read``; changing seating
+settings requires ``examinations:manage``. Generation and approval permissions
+are reserved for future scheduling workflows. Student-specific access is
 intentionally absent until a secure user -> student ID mapping exists.
 """
 
@@ -28,6 +29,8 @@ from schedence_auth import JwksUnavailableError, TokenVerificationError
 
 logger = logging.getLogger(__name__)
 
+READ = "examinations:read"
+MANAGE = "examinations:manage"
 GENERATE = "examinations:generate"
 APPROVE = "examinations:approve"
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -76,9 +79,8 @@ def require_any_permission(*permissions: str):
     return dependency
 
 
-# Every examination data endpoint (modules, students, registrations, venues,
-# blocks, periods): examination administrators only.
-require_exam_data_access = require_any_permission(GENERATE, APPROVE)
+# Every examination GET route, including seating settings.
+require_exam_data_access = require_any_permission(READ)
 
-# Changing examination settings (seating rules): only holders of examinations:approve.
-require_exam_settings_admin = require_any_permission(APPROVE)
+# Seating changes (including dry runs) do not also require read permission.
+require_exam_settings_admin = require_any_permission(MANAGE)

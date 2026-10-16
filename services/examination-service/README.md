@@ -367,13 +367,35 @@ Reuses the team's authentication; there is no separate login system.
    answer must be about the same user. Reads may reuse it for 15 s; if the Identity
    Service is down the request is refused (`503`, fail closed). Role or permission
    headers from the browser are ignored.
-3. Every `/api/v1` route needs `examinations:generate` **or** `examinations:approve`
-   in the institution `SLIIT_INSTITUTION_ID` (today: the `EXAMINATION_ADMIN` role).
-   All other roles, including `STUDENT`, get `403`. Student self-service stays off
-   until a secure user -> student ID mapping exists.
-4. Changing settings (`PUT`/`DELETE /api/v1/settings/...`) also needs
-   `examinations:approve` (holders of only `examinations:generate` get `403`).
-   Writes always ask the Identity Service again (no cache).
+3. Every `/api/v1` route requires authentication. Examination GET routes require
+   `examinations:read` in the institution `SLIIT_INSTITUTION_ID`.
+4. Seating changes (`PUT`/`DELETE /api/v1/settings/exam-seating/...`), including
+   dry runs, require `examinations:manage` in that institution. They do not also
+   require `examinations:read`. Writes always ask Identity again (no cache).
+
+Only `EXAMINATION_ADMIN` receives these permissions in the Identity catalog.
+Its existing `examinations:generate`, `examinations:approve`,
+`academic:staff:read`, `academic:workload:read` and `venues:read` grants remain.
+Other roles, including `SUPER_ADMIN`, have no examination override. Supporting
+permissions alone do not grant access to this service. Student self-service
+stays off until a secure user -> student ID mapping exists.
+
+| Examination permission | Purpose |
+|---|---|
+| `examinations:read` | Current data/settings GET routes; future timetable views, report views, comparisons and exports |
+| `examinations:manage` | Current seating PUT/DELETE routes; future period, daily hours, scheduling policy configuration and draft edits |
+| `examinations:generate` | Future CP-SAT generation, cognitive load optimization and validation runs |
+| `examinations:approve` | Future approval and publication |
+
+Generation and approval alone no longer grant reads or seating changes. No
+scheduling routes are added by this RBAC change. Existing API paths, request
+and response formats, seating history and version checks are preserved.
+
+**Rollout:** deploy these checks only after a separately approved Identity RBAC
+data update has added `examinations:read` and `examinations:manage` and granted
+them to `EXAMINATION_ADMIN`. The code change does not update Neon. Existing
+admins without the new grants will receive `403` until that step is complete.
+No database schema migration or Cognito change is needed.
 
 `/health` and `/health/db` are public. Errors: `401` (no or invalid token),
 `403` (no permission, disabled or unknown account), `503` (Identity Service
@@ -400,7 +422,7 @@ sign in as an examination admin, and paste the **access token** into Swagger's
 | `GET /api/v1/exam-periods` | periods with exclusions and exam days | |
 | `GET /api/v1/exam-periods/{period_code}` | one period | |
 | `GET /api/v1/settings/exam-seating` | default rule, overrides, totals, unavailable venues, recent history | `history_limit` (0-500, default 20) |
-| `PUT /api/v1/settings/exam-seating/default` | change the default (`examinations:approve`) | body `percentage`, `reason`, `expected_version`; `dry_run` |
+| `PUT /api/v1/settings/exam-seating/default` | change the default (`examinations:manage`) | body `percentage`, `reason`, `expected_version`; `dry_run` |
 | `PUT /api/v1/settings/exam-seating/venues/{venue_id}` | create (`expected_version: null`) or change an override | body as above; `dry_run` |
 | `DELETE /api/v1/settings/exam-seating/venues/{venue_id}` | remove an override | `expected_version`, `reason`, `dry_run` |
 
@@ -419,6 +441,13 @@ database problems `503` with a generic message (details go to the server log
 without credentials).
 
 ## Tests
+
+The access tests cover all six role labels and all 16 combinations of the four
+examination permissions on every protected route. Role labels do not bypass
+permission checks. Seating writes are checked with and without `dry_run`.
+Tests also cover institution boundaries, revoked permissions, invalid tokens,
+Identity failures, unchanged responses and the complete protected route list.
+RBAC/API tests use fake Identity responses and in-memory data, without AWS or Neon.
 
 ```powershell
 cd services/examination-service

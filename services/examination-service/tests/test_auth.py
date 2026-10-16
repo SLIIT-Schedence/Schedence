@@ -17,7 +17,14 @@ from app.main import create_app
 from app.seating.memory import MemorySeatingStore
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
-from auth_support import INSTITUTION, OTHER_INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context
+from auth_support import (
+    EXAMINATION_PERMISSION_SETS,
+    INSTITUTION,
+    OTHER_INSTITUTION,
+    ROLE_PERMISSIONS,
+    FakeIdentityService,
+    make_auth_context,
+)
 from schedence_auth import ConfigurationError
 from schedence_auth.testing import SigningKey, TokenFactory
 
@@ -136,20 +143,47 @@ def test_other_roles_are_denied(tokens, identity, role, url) -> None:
     assert "student_id" not in response.text and "IT3" not in response.text
 
 
-@pytest.mark.parametrize("permission", ["examinations:generate", "examinations:approve"])
-def test_either_examination_permission_is_enough(client, tokens, identity, permission) -> None:
-    headers = _headers(tokens, identity, "CUSTOM", permissions=[permission])
-    assert client.get(f"{API}/venues", headers=headers).status_code == 200
+@pytest.mark.parametrize("role", sorted(ROLE_PERMISSIONS))
+@pytest.mark.parametrize("permissions", EXAMINATION_PERMISSION_SETS)
+def test_get_endpoints_require_read_for_every_role_and_permission_set(tokens, identity, role, permissions) -> None:
+    # Role labels never bypass (or replace) permissions returned by Identity.
+    allowed = "examinations:read" in permissions
+    client = _client(tokens, identity, source=SOURCE if allowed else _Untouchable())
+    headers = _headers(tokens, identity, role, permissions=permissions)
+    for url in DATA_ENDPOINTS:
+        assert client.get(url, headers=headers).status_code == (200 if allowed else 403), url
 
 
-def test_permission_in_another_institution_does_not_count(tokens, identity) -> None:
+@pytest.mark.parametrize("url", DATA_ENDPOINTS)
+def test_permission_in_another_institution_does_not_count(tokens, identity, url) -> None:
     headers = _headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
-    assert _client(tokens, identity, source=_Untouchable()).get(f"{API}/students", headers=headers).status_code == 403
+    assert _client(tokens, identity, source=_Untouchable()).get(url, headers=headers).status_code == 403
+
+
+def test_read_permission_cannot_be_borrowed_from_another_institution(tokens, identity) -> None:
+    sub = identity.register({
+        INSTITUTION: (["EXAMINATION_ADMIN"], ["examinations:manage"]),
+        OTHER_INSTITUTION: (["EXAMINATION_ADMIN"], ["examinations:read"]),
+    })
+    headers = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
+    client = _client(tokens, identity, source=_Untouchable())
+    for url in DATA_ENDPOINTS:
+        assert client.get(url, headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize("role", sorted(ROLE_PERMISSIONS))
+def test_supporting_permissions_alone_cannot_read_examination_data(tokens, identity, role) -> None:
+    headers = _headers(tokens, identity, role, permissions=[
+        "academic:staff:read", "academic:workload:read", "venues:read",
+    ])
+    client = _client(tokens, identity, source=_Untouchable())
+    for url in DATA_ENDPOINTS:
+        assert client.get(url, headers=headers).status_code == 403
 
 
 def test_role_and_permission_headers_are_ignored(tokens, identity) -> None:
     headers = _headers(tokens, identity, "STUDENT")
-    headers.update({"X-Roles": "EXAMINATION_ADMIN", "X-Permissions": "examinations:generate",
+    headers.update({"X-Roles": "EXAMINATION_ADMIN", "X-Permissions": "examinations:read",
                     "X-User-Role": "EXAMINATION_ADMIN"})
     assert _client(tokens, identity, source=_Untouchable()).get(f"{API}/students", headers=headers).status_code == 403
 
@@ -215,8 +249,29 @@ def test_permissions_are_cached_briefly_for_reads(client, tokens, identity) -> N
 def test_openapi_marks_data_routes_as_protected(client) -> None:
     spec = client.get("/openapi.json").json()
     assert "BearerToken" in spec["components"]["securitySchemes"]
-    assert spec["paths"][f"{API}/students"]["get"]["security"] == [{"BearerToken": []}]
-    assert "security" not in spec["paths"]["/health"]["get"]
+    for path, operations in spec["paths"].items():
+        for operation in operations.values():
+            if path.startswith(API + "/"):
+                assert operation["security"] == [{"BearerToken": []}]
+            else:
+                assert "security" not in operation
+
+
+def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
+    """Fail if an API route is added without adding it to the access tests."""
+    paths = client.get("/openapi.json").json()["paths"]
+    sample_values = {"module_code": "IT3041", "student_id": "IT30129034",
+                     "period_code": "PP1-2026-S2-FINAL", "venue_id": "F303"}
+    gets = {path.format(**sample_values) for path, operations in paths.items()
+            if path.startswith(API + "/") and "get" in operations}
+    writes = {(method.upper(), path.format(**sample_values)) for path, operations in paths.items()
+              if path.startswith(API + "/") for method in operations if method != "get"}
+    assert gets == set(DATA_ENDPOINTS)
+    assert writes == {
+        ("PUT", f"{API}/settings/exam-seating/default"),
+        ("PUT", f"{API}/settings/exam-seating/venues/F303"),
+        ("DELETE", f"{API}/settings/exam-seating/venues/F303"),
+    }
 
 
 def test_production_hides_the_docs(tokens, identity) -> None:

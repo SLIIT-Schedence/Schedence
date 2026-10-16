@@ -6,9 +6,9 @@ for psycopg async; see the service README)::
     uvicorn app.main:create_app --factory --port 8003 --loop asyncio:SelectorEventLoop
 
 Security: ``/health`` and ``/health/db`` are public; every ``/api/v1`` route
-requires a Cognito access token whose holder has ``examinations:generate`` or
-``examinations:approve`` in this service's institution (see ``app.auth``).
-Changing settings (``PUT``/``DELETE /api/v1/settings/...``) needs ``examinations:approve``.
+requires a Cognito access token. GET routes require ``examinations:read``;
+seating PUT/DELETE routes require ``examinations:manage`` in this service's
+institution (see ``app.auth``).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import exam_periods, health, modules, settings, students, venues
 from app.api.errors import register_error_handlers
 from app.auth.context import AuthContext, build_auth_context
-from app.auth.dependencies import require_exam_data_access
+from app.auth.dependencies import get_current_user, require_exam_data_access
 from app.auth.settings import load_auth_settings
 from app.database import close_database, open_database
 
@@ -64,9 +64,11 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
     register_error_handlers(app)
     app.include_router(health.router)  # public
 
-    # One check for every data route, so no route can be added unprotected.
-    api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(require_exam_data_access)])
-    for module in (modules, students, venues, exam_periods, settings):
-        api.include_router(module.router)
+    # Authenticate every data request; each route also has a permission check.
+    api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(get_current_user)])
+    for module in (modules, students, venues, exam_periods):
+        api.include_router(module.router, dependencies=[Depends(require_exam_data_access)])
+    # Settings mixes read and write operations, so it checks each operation.
+    api.include_router(settings.router)
     app.include_router(api)
     return app

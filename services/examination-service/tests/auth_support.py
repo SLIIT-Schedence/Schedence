@@ -6,6 +6,7 @@ Nothing here talks to AWS or the real Identity Service.
 from __future__ import annotations
 
 import uuid
+from itertools import combinations
 from uuid import UUID
 
 import httpx
@@ -24,12 +25,20 @@ OTHER_INSTITUTION = uuid.UUID("22222222-2222-4222-8222-222222222222")
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "SUPER_ADMIN": ["identity:users:read", "identity:roles:assign", "academic:staff:read", "academic:workload:read"],
     "ACADEMIC_ADMIN": ["teaching:generate", "teaching:approve", "academic:staff:read", "venues:read"],
-    "EXAMINATION_ADMIN": ["examinations:generate", "examinations:approve", "academic:staff:read",
+    "EXAMINATION_ADMIN": ["examinations:read", "examinations:manage", "examinations:generate", "examinations:approve", "academic:staff:read",
                           "academic:workload:read", "venues:read"],
     "VENUE_MANAGER": ["venues:read", "venues:manage"],
     "LECTURER": [],
     "STUDENT": [],
 }
+
+EXAMINATION_PERMISSIONS = (
+    "examinations:read", "examinations:manage", "examinations:generate", "examinations:approve",
+)
+EXAMINATION_PERMISSION_SETS = [
+    list(subset) for size in range(len(EXAMINATION_PERMISSIONS) + 1)
+    for subset in combinations(EXAMINATION_PERMISSIONS, size)
+]
 
 
 class FakeIdentityService:

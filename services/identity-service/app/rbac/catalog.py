@@ -13,8 +13,8 @@ Roles have one of two scopes:
   academic data.
 * ``INSTITUTION`` roles are always granted within one institution.
 
-Permissions for future services (teaching, examinations, venues) are declared
-now so roles can be prepared, even though those services don't exist yet.
+Permissions for future scheduling workflows are declared alongside the
+permissions used by existing services, so roles can be prepared in advance.
 """
 
 from __future__ import annotations
@@ -78,11 +78,15 @@ PERMISSIONS: dict[str, str] = {
     "academic:staff:create": "Register academic staff references",
     "academic:staff:read": "View academic staff references",
     "academic:workload:read": "Read administrative workload for scheduling",
-    # Future services (prepared, not implemented)
+    # Teaching Timetable Service (future)
     "teaching:generate": "Generate teaching timetables",
     "teaching:approve": "Approve and publish teaching timetables",
+    # Examination Service (generation and approval workflows are future work)
+    "examinations:read": "View examination data, timetables and reports; compare and export timetables",
+    "examinations:manage": "Configure examination settings and edit draft timetables",
     "examinations:generate": "Generate examination timetables",
     "examinations:approve": "Approve and publish examination timetables",
+    # Venue Service (future)
     "venues:read": "View venues and availability",
     "venues:manage": "Manage venues, availability and bookings",
 }
@@ -120,7 +124,10 @@ ROLES: tuple[RoleDefinition, ...] = (
         EXAMINATION_ADMIN,
         "Examination Admin",
         "Configures, generates and approves examination timetables and duties.",
-        frozenset({"examinations:generate", "examinations:approve", "academic:staff:read", "academic:workload:read", "venues:read"}),
+        frozenset({
+            "examinations:read", "examinations:manage", "examinations:generate", "examinations:approve",
+            "academic:staff:read", "academic:workload:read", "venues:read",
+        }),
     ),
     RoleDefinition(VENUE_MANAGER, "Venue Manager", "Manages venues, availability and bookings.", frozenset({"venues:read", "venues:manage"})),
     RoleDefinition(LECTURER, "Lecturer", "Lecturer portal access.", frozenset()),
