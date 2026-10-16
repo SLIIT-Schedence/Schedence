@@ -4,7 +4,10 @@ Usage (PowerShell, repository root, venv active):
     python scripts\\run_services.py              # check Neon, then start all services
     python scripts\\run_services.py --reload     # restart a service when its code changes
     python scripts\\run_services.py --only identity
+    python scripts\\run_services.py --only identity --only examination
     python scripts\\run_services.py --smoke      # start, check /health and /health/db, then stop
+
+Services and default ports: identity 8001, academic 8002, examination 8003.
 
 What it does:
 1. Wakes the Neon compute and checks the connection (SELECT 1). Credentials are never printed.
@@ -52,7 +55,10 @@ class Service:
 SERVICES = (
     Service("identity", "identity-service", "identity", 8001, "\033[36m" if COLOUR else ""),
     Service("academic", "academic-data-service", "academic", 8002, "\033[35m" if COLOUR else ""),
+    Service("examination", "examination-service", "examinations", 8003, "\033[33m" if COLOUR else ""),
 )
+# Services that ask the Identity Service for the caller's permissions.
+IDENTITY_CLIENTS = ("academic", "examination")
 
 
 def say(message: str) -> None:
@@ -198,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Bind address (default 127.0.0.1 = this computer only)")
     parser.add_argument("--identity-port", type=int, default=8001)
     parser.add_argument("--academic-port", type=int, default=8002)
+    parser.add_argument("--examination-port", type=int, default=8003)
     parser.add_argument("--skip-db-check", action="store_true")
     parser.add_argument("--smoke", action="store_true", help="Start, check /health and /health/db, then stop")
     args = parser.parse_args(argv)
@@ -206,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         os.system("")  # enable ANSI colours in older Windows consoles
     os.chdir(ROOT)  # the root .env is found from here
     services = [s for s in SERVICES if not args.only or s.key in args.only]
-    ports = {"identity": args.identity_port, "academic": args.academic_port}
+    ports = {"identity": args.identity_port, "academic": args.academic_port, "examination": args.examination_port}
 
     busy = [f"{s.name} ({ports[s.key]})" for s in services if port_in_use(ports[s.key])]
     if busy:
@@ -217,8 +224,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     overrides: dict[str, dict[str, str]] = {s.key: {} for s in services}
-    if "academic" in overrides and any(s.key == "identity" for s in services):
-        overrides["academic"]["IDENTITY_SERVICE_URL"] = f"http://127.0.0.1:{args.identity_port}"
+    if any(s.key == "identity" for s in services):
+        for key in IDENTITY_CLIENTS:
+            if key in overrides:
+                overrides[key]["IDENTITY_SERVICE_URL"] = f"http://127.0.0.1:{args.identity_port}"
 
     processes: list[Running] = []
     try:

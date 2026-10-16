@@ -249,6 +249,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ./packages/db-core -e ./packages/auth-core
 python -m pip install --group services/identity-service/pyproject.toml:dev --group services/academic-data-service/pyproject.toml:dev
+python -m pip install -e "./services/examination-service[dev]"
 
 # every time:
 python scripts\run_services.py            # Ctrl+C stops everything
@@ -259,20 +260,21 @@ python scripts\run_services.py --reload   # auto-restart on code changes
 |---|---|---|
 | Identity Service | http://localhost:8001 | http://localhost:8001/docs |
 | Academic Data Service | http://localhost:8002 | http://localhost:8002/docs |
+| Examination Service | http://localhost:8003 | http://localhost:8003/docs |
 
 The launcher works in five steps:
 1. It wakes the Neon compute and checks the connection with `SELECT 1`. Credentials are never printed.
 2. It reports each service's migration state. It **never applies migrations**; run `alembic upgrade head` in the service folder after review.
-3. It starts the services with their log lines prefixed, `[identity]` / `[academic]`.
+3. It starts the services with their log lines prefixed, `[identity]` / `[academic]` / `[examination]`. The Academic Data and Examination services are pointed at the Identity Service it started.
 4. It waits until `/health` and `/health/db` answer.
 5. It stops all services when you press Ctrl+C, or when one of them crashes.
 
 Other options:
-- `--only identity`: start one service only.
+- `--only identity`: start one service only (repeatable, e.g. `--only identity --only examination`).
 - `--smoke`: start everything, check health, then exit.
-- `--identity-port` / `--academic-port`: use other ports.
+- `--identity-port` / `--academic-port` / `--examination-port`: use other ports.
 
-The other planned services (resource, teaching, examination, notification) and `docker-compose.yml` are not implemented yet.
+The other planned services (resource, teaching, notification) and `docker-compose.yml` are not implemented yet. The Examination Service has its data, read API and seating settings; timetable generation is not implemented yet.
 
 ### Environment variables
 
