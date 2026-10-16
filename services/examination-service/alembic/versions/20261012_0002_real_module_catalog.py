@@ -17,6 +17,7 @@ Create Date: 2026-10-12
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.sql.elements import conv
 from alembic import op
 
 revision: str = "0002"
@@ -25,7 +26,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SCHEMA = "examinations"
-EXAM_TYPE_CHECK = op.f("ck_seed_modules_exam_type_valid")
+EXAM_TYPE_CHECK = conv("ck_seed_modules_exam_type_valid")
 
 
 def upgrade() -> None:
