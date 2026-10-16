@@ -1,0 +1,37 @@
+CREATE TABLE resource.source_datasets (
+	id UUID NOT NULL, 
+	institution_id UUID NOT NULL, 
+	record_key TEXT NOT NULL, 
+	filename TEXT NOT NULL, 
+	sha256 VARCHAR(64) NOT NULL, 
+	provenance_kind VARCHAR(40) NOT NULL, 
+	provenance JSONB NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (institution_id, id), 
+	UNIQUE (institution_id, record_key), 
+	CONSTRAINT source_checksum CHECK (sha256 ~ '^[0-9a-f]{64}$')
+);
+CREATE TABLE resource.venues (
+	id UUID NOT NULL, 
+	institution_id UUID NOT NULL, 
+	record_key TEXT NOT NULL, 
+	venue_code VARCHAR(60) NOT NULL, 
+	venue_name TEXT NOT NULL, 
+	venue_type VARCHAR(40) NOT NULL, 
+	capacity INTEGER NOT NULL, 
+	building TEXT, 
+	floor JSONB, 
+	lab_specialization TEXT, 
+	source_id UUID NOT NULL, 
+	source_row INTEGER NOT NULL, 
+	source_values JSONB NOT NULL, 
+	confirmation JSONB NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (institution_id, id), 
+	UNIQUE (institution_id, record_key), 
+	UNIQUE (institution_id, venue_code), 
+	CONSTRAINT positive_capacity CHECK (capacity > 0), 
+	FOREIGN KEY(institution_id, source_id) REFERENCES resource.source_datasets (institution_id, id) ON DELETE RESTRICT
+);
