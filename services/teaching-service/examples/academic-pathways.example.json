@@ -1,0 +1,27 @@
+{
+  "reference": "user-approved:source-preserving-year1-sem1-foundation-preview",
+  "interpretation": "SOURCE_MODULE_APPLICABILITY_NOT_ENROLLMENT_START",
+  "rules": [
+    {
+      "academic_year": 1, "semester": 1,
+      "track_id": "COMMON_FOUNDATION", "label": "Common Foundation",
+      "source_specializations": ["IT", "SE", "CYBER", "DS", "IM", "ISE"],
+      "kind": "COMMON_FOUNDATION",
+      "evidence_reference": "Modules_183 rows 84,86,88,90; user-approved pooling of source-identical provisional populations"
+    },
+    {
+      "academic_year": 1, "semester": 1,
+      "track_id": "FOUNDATION_CSNE_VARIANT", "label": "Foundation - CSNE curriculum variant",
+      "source_specializations": ["CSNE"],
+      "kind": "FOUNDATION_CURRICULUM_VARIANT",
+      "evidence_reference": "Modules_183 rows 84,86,90; IT1060 row 88 excludes CSNE; no enrollment start inferred"
+    },
+    {
+      "academic_year": 1, "semester": 1,
+      "track_id": "COMPUTER_SCIENCE", "label": "Computer Science",
+      "source_specializations": ["COMPUTER_SCIENCE"],
+      "kind": "SPECIALIZATION",
+      "evidence_reference": "Modules_183 rows 2,4,6,8,134,136; distinct Year 1 Semester 1 curriculum"
+    }
+  ]
+}
