@@ -24,6 +24,7 @@ Create Date: 2026-10-15
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.sql.elements import conv
 from alembic import context, op
 
 revision: str = "0005"
@@ -32,7 +33,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SCHEMA = "examinations"
-EXAM_CAPACITY_HALF = op.f("ck_seed_venues_exam_capacity_half")
+EXAM_CAPACITY_HALF = conv("ck_seed_venues_exam_capacity_half")
 SCOPE_VALID = "(scope = 'default' AND venue_id IS NULL) OR (scope = 'venue' AND venue_id IS NOT NULL)"
 INITIAL_DEFAULT = 50
 INITIAL_REASON = "Initial default: 50 percent of full capacity (migration 0005)"

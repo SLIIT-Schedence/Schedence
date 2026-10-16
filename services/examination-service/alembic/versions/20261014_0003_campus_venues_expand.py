@@ -18,6 +18,7 @@ Create Date: 2026-10-14
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.sql.elements import conv
 from alembic import op
 
 revision: str = "0003"
@@ -26,9 +27,9 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SCHEMA = "examinations"
-VENUE_TYPE_CHECK = op.f("ck_seed_venues_venue_type_valid")
-SOURCE_CHECK = op.f("ck_seed_venue_blocks_source_valid")
-SOURCE_REF_UNIQUE = op.f("uq_seed_venue_blocks_source_source_ref")
+VENUE_TYPE_CHECK = conv("ck_seed_venues_venue_type_valid")
+SOURCE_CHECK = conv("ck_seed_venue_blocks_source_valid")
+SOURCE_REF_UNIQUE = conv("uq_seed_venue_blocks_source_source_ref")
 
 OLD_VENUE_TYPES = "venue_type IN ('auditorium', 'exam_hall', 'lecture_hall', 'computer_lab')"
 EXPANDED_VENUE_TYPES = (

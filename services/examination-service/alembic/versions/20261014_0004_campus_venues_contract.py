@@ -20,6 +20,7 @@ Create Date: 2026-10-14
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.sql.elements import conv
 from alembic import op
 
 revision: str = "0004"
@@ -28,10 +29,10 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 SCHEMA = "examinations"
-VENUE_TYPE_CHECK = op.f("ck_seed_venues_venue_type_valid")
-EXAM_CAPACITY_HALF = op.f("ck_seed_venues_exam_capacity_half")
-OLD_BLOCK_KEY = op.f("uq_seed_venue_blocks_venue_id_block_date_start_time")
-NEW_BLOCK_KEY = op.f("uq_seed_venue_blocks_source_venue_id_block_date_start_time")
+VENUE_TYPE_CHECK = conv("ck_seed_venues_venue_type_valid")
+EXAM_CAPACITY_HALF = conv("ck_seed_venues_exam_capacity_half")
+OLD_BLOCK_KEY = conv("uq_seed_venue_blocks_venue_id_block_date_start_time")
+NEW_BLOCK_KEY = conv("uq_seed_venue_blocks_source_venue_id_block_date_start_time")
 
 EXPANDED_VENUE_TYPES = (
     "venue_type IN ('auditorium', 'exam_hall', 'lecture_hall', 'smart_classroom', 'computer_lab', 'byod_lab')"
