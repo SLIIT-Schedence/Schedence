@@ -135,13 +135,25 @@ Open the **Runner**, select the collection, and **untick the M1–M4 folders**. 
 | **00 Setup** | Picks a new random suffix. Always run it first, so a second run doesn't collide with the first |
 | **01 Health** | Both services are alive and Neon answers `SELECT 1` (no token needed) |
 | **02 Current user** | Your token resolves to the bootstrapped Super Admin with SLIIT-scoped permissions |
-| **03 Roles, permissions, audit** | 6 system roles (no HOD/Dean/Coordinator), 25 permissions, the bootstrap audit entry |
+| **03 Roles, permissions, audit** | 6 system roles (no HOD/Dean/Coordinator), 27 permissions, the bootstrap audit entry |
 | **04 User management** | Create Lecturer + Academic Admin (real invitation e-mails), list/search/filter, view, status, provisioning history, resend invitation, rename (synced to Cognito), assign and revoke roles, disable/enable (Cognito too), audit trail |
 | **05 Identity validation and security** | 401 without/with a bad token, duplicate e-mail, HOD is not a login role, extra fields rejected, other institution, cannot disable yourself or change your own roles, 404/422 paths, non-retryable/non-cancellable onboarding |
 | **06 Positions** | HOD / Program Coordinator / Dean created with configurable hours, details, update, new hours **version** (history kept), disable/enable |
 | **07 Staff** | One staff member linked to the test Lecturer's login, one with **no** Schedence login |
 | **08 Appointments and workload** | Assign HOD + Program Coordinator, hours override, audit trail, update, end, history, the workload contract (combined total only when the policy is resolved) |
 | **09 Academic validation and conflicts** | Duplicate codes, other institution, CAPPED without cap, back-dated policy, a second HOD for one department, duplicate appointment, missing unit, reversed dates, no policy yet, unknown staff, editing/ending an ended appointment, disabling a position in use |
+
+The 27-permission expectation includes `examinations:read` and
+`examinations:manage`. Existing databases can still contain 25 permissions until
+a separately approved RBAC data update is applied. Do not deploy the new
+Examination permission checks or expect the collection's count check to pass
+against that database before the update. Editing code does not update Neon.
+
+`EXAMINATION_ADMIN` retains `examinations:generate`, `examinations:approve`,
+`academic:staff:read`, `academic:workload:read` and `venues:read`, and receives
+the two new permissions. Other roles receive no examination permissions.
+Examination GET routes require `examinations:read`; seating PUT/DELETE routes,
+including dry runs, require `examinations:manage`. Health routes stay public.
 
 > Folders 05 and 09 contain **negative** tests. A green check there means the API correctly **refused** the request with the documented status and error code.
 >
@@ -217,7 +229,7 @@ Errors always look like:
 | 16 | `POST /api/v1/identity/provisioning/{id}/retry` | `identity:users:create` | 200 | 409 `PROVISIONING_NOT_RETRYABLE` |
 | 17 | `POST /api/v1/identity/provisioning/{id}/cancel` | `identity:users:create` | 200 | 409 `PROVISIONING_NOT_CANCELLABLE` |
 | 18 | `GET /api/v1/identity/roles` | `identity:roles:read` | 200 (6) | |
-| 19 | `GET /api/v1/identity/permissions` | `identity:permissions:read` | 200 (25) | |
+| 19 | `GET /api/v1/identity/permissions` | `identity:permissions:read` | 200 (27) | |
 | 20 | `GET /api/v1/identity/audit-logs` | `identity:audit:read` | 200 page (`action`, `actor_user_id`, `target_user_id`, `occurred_from`, `occurred_to`) | |
 
 ### Academic Data Service: http://localhost:8002

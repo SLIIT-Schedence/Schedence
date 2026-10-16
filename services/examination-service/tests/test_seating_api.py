@@ -19,7 +19,14 @@ from app.seating.memory import MemorySeatingStore
 from app.seating.service import SeatingService
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
-from auth_support import INSTITUTION, OTHER_INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context
+from auth_support import (
+    EXAMINATION_PERMISSION_SETS,
+    INSTITUTION,
+    OTHER_INSTITUTION,
+    ROLE_PERMISSIONS,
+    FakeIdentityService,
+    make_auth_context,
+)
 from schedence_auth.testing import TokenFactory
 
 API = "/api/v1"
@@ -129,17 +136,33 @@ def test_bad_input_without_token_is_401_not_422(client) -> None:
     assert client.put(f"{SETTINGS}/default", json={"percentage": "x"}).status_code == 401
 
 
+@pytest.mark.parametrize("role", sorted(ROLE_PERMISSIONS))
+@pytest.mark.parametrize("permissions", EXAMINATION_PERMISSION_SETS)
+@pytest.mark.parametrize("dry_run", [False, True])
 @pytest.mark.parametrize(("method", "url", "kwargs"), WRITES)
-def test_generate_permission_can_read_but_not_change(tokens, identity, client, store, method, url, kwargs) -> None:
-    headers = _headers(tokens, identity, permissions=["examinations:generate"])
-    assert client.get(SETTINGS, headers=headers).status_code == 200
-    assert client.request(method, url, headers=headers, **kwargs).status_code == 403
-    assert store.commits == 0 and len(store.committed_history) == 1
-
-
-def test_approve_permission_alone_can_change(tokens, identity, client) -> None:
-    headers = _headers(tokens, identity, permissions=["examinations:approve"])
-    assert client.put(f"{SETTINGS}/default", headers=headers, json=_default()).status_code == 200
+def test_seating_writes_require_manage_for_every_role_and_permission_set(
+    tokens, identity, client, store, role, permissions, dry_run, method, url, kwargs
+) -> None:
+    if method == "DELETE":
+        # Give DELETE an existing override so an allowed call can succeed.
+        setup = _headers(tokens, identity, "EXAMINATION_ADMIN")
+        assert client.put(url, headers=setup, json={
+            "percentage": 40, "reason": REASON, "expected_version": None,
+        }).status_code == 200
+    headers = _headers(tokens, identity, role, permissions=permissions)
+    rules_before = list(store.committed_rules)
+    history_before = list(store.committed_history)
+    commits_before = store.commits
+    params = {**kwargs.get("params", {}), "dry_run": dry_run}
+    response = client.request(method, url, headers=headers, **{**kwargs, "params": params})
+    allowed = "examinations:manage" in permissions
+    assert response.status_code == (200 if allowed else 403)
+    if not allowed or dry_run:
+        assert store.commits == commits_before
+        assert store.committed_rules == rules_before
+        assert store.committed_history == history_before
+    else:
+        assert store.commits == commits_before + 1
 
 
 @pytest.mark.parametrize("role", ["SUPER_ADMIN", "ACADEMIC_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"])
@@ -150,15 +173,36 @@ def test_other_roles_cannot_read_or_change(tokens, identity, client, store, role
     assert store.commits == 0
 
 
-def test_approve_in_another_institution_does_not_count(tokens, identity, client, store) -> None:
+@pytest.mark.parametrize(("method", "url", "kwargs"), WRITES)
+def test_manage_in_another_institution_does_not_count(tokens, identity, client, store, method, url, kwargs) -> None:
     headers = _headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
-    assert client.put(f"{SETTINGS}/default", headers=headers, json=_default()).status_code == 403
+    assert client.request(method, url, headers=headers, **kwargs).status_code == 403
+    assert store.commits == 0
+
+
+@pytest.mark.parametrize(("method", "url", "kwargs"), WRITES)
+def test_manage_permission_cannot_be_borrowed_from_another_institution(
+    tokens, identity, client, store, method, url, kwargs
+) -> None:
+    sub = identity.register({
+        INSTITUTION: (["EXAMINATION_ADMIN"], ["examinations:read"]),
+        OTHER_INSTITUTION: (["EXAMINATION_ADMIN"], ["examinations:manage"]),
+    })
+    headers = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
+    assert client.request(method, url, headers=headers, **kwargs).status_code == 403
+    assert store.commits == 0
+
+
+@pytest.mark.parametrize(("method", "url", "kwargs"), WRITES)
+def test_expired_token_cannot_change_seating(tokens, client, store, method, url, kwargs) -> None:
+    headers = {"Authorization": f"Bearer {tokens.access_token(expires_in=-120)}"}
+    assert client.request(method, url, headers=headers, **kwargs).status_code == 401
     assert store.commits == 0
 
 
 def test_role_headers_are_ignored(tokens, identity, client, store) -> None:
     headers = _headers(tokens, identity, "LECTURER")
-    headers |= {"X-Role": "EXAMINATION_ADMIN", "X-Permissions": "examinations:approve"}
+    headers |= {"X-Role": "EXAMINATION_ADMIN", "X-Permissions": "examinations:manage"}
     assert client.put(f"{SETTINGS}/default", headers=headers, json=_default()).status_code == 403
 
 
@@ -167,6 +211,16 @@ def test_writes_always_recheck_permissions(client, identity, admin) -> None:
     client.put(f"{SETTINGS}/default", headers=admin, json=_default(60, 1))
     client.put(f"{SETTINGS}/default", headers=admin, json=_default(70, 2))
     assert len(identity.requests) == 3  # the read may be cached; each write asks the Identity Service
+
+
+def test_revoked_manage_permission_is_not_reused_from_read_cache(client, identity, admin, store) -> None:
+    assert client.get(SETTINGS, headers=admin).status_code == 200
+    account = next(iter(identity.accounts.values()))
+    roles, permissions = account["institutions"][INSTITUTION]
+    account["institutions"][INSTITUTION] = (roles, [p for p in permissions if p != "examinations:manage"])
+    assert client.put(f"{SETTINGS}/default", headers=admin, json=_default()).status_code == 403
+    assert len(identity.requests) == 2
+    assert store.commits == 0 and len(store.committed_history) == 1
 
 
 def test_identity_service_down_fails_closed(client, identity, admin, store) -> None:

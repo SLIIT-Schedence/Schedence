@@ -1,8 +1,8 @@
 """Examination settings: configurable seating capacity.
 
-Reading needs ``examinations:generate`` or ``examinations:approve`` (like every
-``/api/v1`` route). Changing needs ``examinations:approve``. Every change needs
-the version last read (409 if it changed), a reason, and is kept in the history.
+Reading needs ``examinations:read``. Changing needs ``examinations:manage``.
+Every change needs the version last read (409 if it changed), a reason,
+and is kept in the history.
 ``dry_run=true`` returns the same preview and saves nothing.
 """
 
@@ -24,7 +24,7 @@ from app.api.schemas import (
     SetDefaultSeatingIn,
     SetVenueSeatingIn,
 )
-from app.auth.dependencies import require_exam_settings_admin
+from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin
 from app.auth.principal import Principal
 from app.seating.service import SeatingChange
 
@@ -39,7 +39,7 @@ def _change_out(change: SeatingChange) -> SeatingChangeOut:
     return SeatingChangeOut.model_validate(change)
 
 
-@router.get("", response_model=ExamSeatingSettingsOut)
+@router.get("", response_model=ExamSeatingSettingsOut, dependencies=[Depends(require_exam_data_access)])
 async def get_exam_seating(
     service: SeatingReaderDep,
     history_limit: Annotated[int, Query(ge=0, le=500, description="Newest history rows to return")] = 20,

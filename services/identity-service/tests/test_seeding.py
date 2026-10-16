@@ -10,6 +10,9 @@ from app.services.seeding import RbacSeeder
 from tests.fakes import FakeStore, FakeUnitOfWork
 
 EXPECTED_ROLES = {"SUPER_ADMIN", "ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"}
+EXAMINATION_PERMISSIONS = frozenset({
+    "examinations:read", "examinations:manage", "examinations:generate", "examinations:approve",
+})
 
 
 async def test_default_roles_are_seeded_correctly() -> None:
@@ -40,6 +43,44 @@ async def test_role_seeding_is_idempotent() -> None:
     assert not second.changed
     assert (len(store.roles), len(store.permissions), len(store.role_permissions)) == counts
     assert store.commits == commits  # nothing to write, nothing committed
+
+
+async def test_examination_permissions_are_granted_only_to_examination_admin() -> None:
+    store = FakeStore()
+    await RbacSeeder(FakeUnitOfWork(store)).seed()
+    grants = await FakeUnitOfWork(store).roles.role_permission_codes()
+
+    assert len(PERMISSIONS) == 27
+    assert {p for p in PERMISSIONS if p.startswith("examinations:")} == EXAMINATION_PERMISSIONS
+    assert grants["EXAMINATION_ADMIN"] == EXAMINATION_PERMISSIONS | {
+        "academic:staff:read", "academic:workload:read", "venues:read",
+    }
+    for role in EXPECTED_ROLES - {"EXAMINATION_ADMIN"}:
+        assert not any(p.startswith("examinations:") for p in grants[role])
+
+
+async def test_existing_catalog_receives_only_two_new_permissions_and_grants() -> None:
+    store = FakeStore()
+    await RbacSeeder(FakeUnitOfWork(store)).seed()
+    added_codes = {"examinations:read", "examinations:manage"}
+    # Recreate the previous catalog in fake storage, without touching a database.
+    removed_ids = {key for key, permission in store.permissions.items() if permission.code in added_codes}
+    store.permissions = {key: value for key, value in store.permissions.items() if key not in removed_ids}
+    store.role_permissions = {(role, permission) for role, permission in store.role_permissions
+                              if permission not in removed_ids}
+    store.snapshot()
+    before = await FakeUnitOfWork(store).roles.role_permission_codes()
+
+    report = await RbacSeeder(FakeUnitOfWork(store)).seed()
+    after = await FakeUnitOfWork(store).roles.role_permission_codes()
+
+    assert set(report.permissions_created) == added_codes
+    assert set(report.grants_added) == {f"EXAMINATION_ADMIN -> {code}" for code in added_codes}
+    assert not report.roles_created and not report.roles_updated and not report.permissions_updated
+    assert not report.grants_removed and not report.extra_grants_kept
+    assert after["EXAMINATION_ADMIN"] == before["EXAMINATION_ADMIN"] | added_codes
+    for role in EXPECTED_ROLES - {"EXAMINATION_ADMIN"}:
+        assert after[role] == before[role]
 
 
 async def test_seeding_restores_drifted_definitions_without_duplicates() -> None:

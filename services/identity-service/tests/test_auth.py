@@ -6,12 +6,14 @@ import time
 import uuid
 
 import httpx
+import pytest
 from fastapi import Depends, FastAPI
 
 from app.api.dependencies import get_current_user, require_institution_scope, require_permissions, require_roles
 from app.core.errors import install_exception_handlers
 from app.core.principal import Grant, Principal
 from app.models import ACCOUNT_DISABLED
+from app.rbac.catalog import ROLE_CODES
 from tests.conftest import INSTITUTION, OTHER_INSTITUTION
 
 
@@ -95,6 +97,30 @@ async def test_me_permissions_lists_effective_permissions_per_institution(client
     assert "teaching:generate" in by_institution[str(INSTITUTION)]["permissions"]
     assert by_institution[str(OTHER_INSTITUTION)]["permissions"] == []
     assert body["cognito_sub"] == user.user.cognito_sub
+
+
+@pytest.mark.parametrize("role", sorted(ROLE_CODES))
+async def test_examination_permission_contract_for_each_role(client: httpx.AsyncClient, make_account, role) -> None:
+    user = make_account("role@sliit.example", role)
+    response = await client.get("/api/v1/identity/me/permissions", headers=user.headers)
+    assert response.status_code == 200
+    institution = next(i for i in response.json()["institutions"] if i["institution_id"] == str(INSTITUTION))
+    expected = {"examinations:read", "examinations:manage", "examinations:generate", "examinations:approve"}
+    assert {p for p in institution["permissions"] if p.startswith("examinations:")} == (
+        expected if role == "EXAMINATION_ADMIN" else set()
+    )
+
+
+async def test_examination_permissions_do_not_cross_institutions(client: httpx.AsyncClient, make_account) -> None:
+    user = make_account("exam@sliit.example", ("EXAMINATION_ADMIN", INSTITUTION), ("LECTURER", OTHER_INSTITUTION))
+    response = await client.get("/api/v1/identity/me/permissions", headers=user.headers)
+    assert response.status_code == 200
+    permissions = {i["institution_id"]: set(i["permissions"]) for i in response.json()["institutions"]}
+    assert permissions[str(INSTITUTION)] == {
+        "examinations:read", "examinations:manage", "examinations:generate", "examinations:approve",
+        "academic:staff:read", "academic:workload:read", "venues:read",
+    }
+    assert permissions[str(OTHER_INSTITUTION)] == set()
 
 
 def _app_with(principal: Principal) -> FastAPI:

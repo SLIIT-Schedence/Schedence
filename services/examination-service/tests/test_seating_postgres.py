@@ -30,7 +30,7 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin  # noqa: E402
+from app.auth.dependencies import get_current_user, require_exam_data_access, require_exam_settings_admin  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.seating.errors import SeatingConflictError  # noqa: E402
 from app.seating.memory import MemorySeatingStore  # noqa: E402
@@ -369,6 +369,7 @@ def _api_client() -> TestClient:
     app = create_app(make_auth_context())
     app.dependency_overrides[require_exam_data_access] = lambda: EXAM_ADMIN
     app.dependency_overrides[require_exam_settings_admin] = lambda: EXAM_ADMIN
+    app.dependency_overrides[get_current_user] = lambda: EXAM_ADMIN
     return TestClient(app, backend_options={"loop_factory": asyncio.SelectorEventLoop})
 
 

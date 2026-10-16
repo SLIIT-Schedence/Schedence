@@ -8,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.api.deps import get_seating_store, get_source
 from app.api.errors import DATABASE_UNAVAILABLE
-from app.auth.dependencies import require_exam_data_access
+from app.auth.dependencies import get_current_user, require_exam_data_access
 from app.main import create_app
 from app.seating.memory import MemorySeatingStore
 from app.seed.generator import generate_dataset
@@ -25,6 +25,7 @@ def _app(source=SOURCE):
     app.dependency_overrides[get_source] = lambda: source
     app.dependency_overrides[get_seating_store] = MemorySeatingStore
     app.dependency_overrides[require_exam_data_access] = lambda: EXAM_ADMIN
+    app.dependency_overrides[get_current_user] = lambda: EXAM_ADMIN
     return app
 
 
