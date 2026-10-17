@@ -10,9 +10,11 @@ from app.models.base import Base, created_at_column, updated_at_column, uuid_pk
 
 
 class Role(Base):
-    """A system access role (SUPER_ADMIN, LECTURER, ...).
+    """A system access role (SYSTEM_ADMIN, INSTITUTION_ADMIN, LECTURER, ...).
 
     These are application access roles, not academic ranks or appointments.
+    Whether a role is granted per institution or platform-wide is defined by
+    :mod:`app.rbac.catalog`.
     """
 
     __tablename__ = "roles"
@@ -47,12 +49,11 @@ class RolePermission(Base):
 
 
 class UserRole(Base):
-    """A role granted to a user within one institution.
+    """An institution role granted to a user within one institution.
 
     Revocation is a soft delete (``revoked_at``) so the assignment history is
     kept. At most one *active* assignment exists per (user, role, institution).
-    ``institution_id`` is an opaque identifier; the institution registry
-    belongs to the Academic Data Service, so there is no foreign key.
+    Other services treat ``institution_id`` as an opaque identifier.
     """
 
     __tablename__ = "user_roles"
@@ -72,7 +73,30 @@ class UserRole(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.users.id", ondelete="RESTRICT"), nullable=False, index=True)
     role_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.roles.id", ondelete="RESTRICT"), nullable=False)
-    institution_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    institution_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.institutions.id", ondelete="RESTRICT"), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    assigned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("identity.users.id", ondelete="RESTRICT"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("identity.users.id", ondelete="RESTRICT"))
+
+
+class PlatformRoleAssignment(Base):
+    """A platform role (SYSTEM_ADMIN) granted to a user, outside any institution.
+
+    Granted only by the operator bootstrap command. Revocation is a soft delete,
+    and at most one *active* assignment exists per (user, role).
+    """
+
+    __tablename__ = "platform_role_assignments"
+    __table_args__ = (
+        Index("uq_platform_role_assignments_active_assignment", "user_id", "role_id", unique=True,
+              postgresql_where=text("revoked_at IS NULL")),
+        CheckConstraint("revoked_at IS NULL OR revoked_at >= assigned_at", name="revoked_after_assigned"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.roles.id", ondelete="RESTRICT"), nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     assigned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("identity.users.id", ondelete="RESTRICT"))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

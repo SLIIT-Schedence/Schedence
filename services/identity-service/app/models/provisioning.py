@@ -45,7 +45,7 @@ class UserProvisioning(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     requested_role_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.roles.id", ondelete="RESTRICT"), nullable=False)
-    institution_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    institution_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("identity.institutions.id", ondelete="RESTRICT"), nullable=False)
     cognito_sub: Mapped[str | None] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     error_category: Mapped[str | None] = mapped_column(String(50))
