@@ -9,12 +9,15 @@ from sqlalchemy import Select, delete, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.principal import Grant
+from app.core.principal import Grant, PlatformGrant
 from app.models import (
     ACCOUNT_ACTIVE,
+    INSTITUTION_ACTIVE,
     OPEN_PROVISIONING_STATUSES,
     IdentityAuditLog,
+    Institution,
     Permission,
+    PlatformRoleAssignment,
     Role,
     RolePermission,
     User,
@@ -24,14 +27,16 @@ from app.models import (
 from app.repositories.base import (
     AssignmentView,
     AuditQuery,
+    InstitutionSearch,
     PersistenceConflictError,
     PersistenceError,
+    PlatformAuditQuery,
     ProvisioningQuery,
     UserSearch,
 )
 from schedence_db import describe_db_error
 
-#: Arbitrary fixed 64-bit key for pg_advisory_xact_lock around SUPER_ADMIN-affecting changes.
+#: Arbitrary fixed 64-bit key for pg_advisory_xact_lock around INSTITUTION_ADMIN-affecting changes and bootstraps.
 PRIVILEGED_CHANGES_LOCK_KEY = 7_311_004_211_000_001
 
 
@@ -140,9 +145,10 @@ class SqlRoleRepository:
             select(Role.code, UserRole.institution_id, Permission.code)
             .select_from(UserRole)
             .join(Role, Role.id == UserRole.role_id)
+            .join(Institution, Institution.id == UserRole.institution_id)
             .outerjoin(RolePermission, RolePermission.role_id == Role.id)
             .outerjoin(Permission, Permission.id == RolePermission.permission_id)
-            .where(UserRole.user_id == user_id, UserRole.revoked_at.is_(None))
+            .where(UserRole.user_id == user_id, UserRole.revoked_at.is_(None), Institution.status == INSTITUTION_ACTIVE)
         )
         grouped: dict[tuple[str, UUID], set[str]] = {}
         for role_code, institution_id, permission_code in rows:
@@ -150,6 +156,22 @@ class SqlRoleRepository:
             if permission_code:
                 perms.add(permission_code)
         return [Grant(role, institution, frozenset(perms)) for (role, institution), perms in grouped.items()]
+
+    async def get_platform_grants(self, user_id: UUID) -> list[PlatformGrant]:
+        rows = await self.session.execute(
+            select(Role.code, Permission.code)
+            .select_from(PlatformRoleAssignment)
+            .join(Role, Role.id == PlatformRoleAssignment.role_id)
+            .outerjoin(RolePermission, RolePermission.role_id == Role.id)
+            .outerjoin(Permission, Permission.id == RolePermission.permission_id)
+            .where(PlatformRoleAssignment.user_id == user_id, PlatformRoleAssignment.revoked_at.is_(None))
+        )
+        grouped: dict[str, set[str]] = {}
+        for role_code, permission_code in rows:
+            perms = grouped.setdefault(role_code, set())
+            if permission_code:
+                perms.add(permission_code)
+        return [PlatformGrant(role, frozenset(perms)) for role, perms in grouped.items()]
 
     async def list_assignments(self, user_ids: Iterable[UUID], *, active_only: bool = True) -> dict[UUID, list[AssignmentView]]:
         ids = list(set(user_ids))
@@ -201,15 +223,6 @@ class SqlRoleRepository:
         )
         return int(count or 0)
 
-    async def list_active_holders(self, role_code: str) -> list[tuple[User, UUID]]:
-        rows = await self.session.execute(
-            select(User, UserRole.institution_id)
-            .join(UserRole, UserRole.user_id == User.id)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(Role.code == role_code, UserRole.revoked_at.is_(None))
-        )
-        return [(u, i) for u, i in rows]
-
     async def active_role_institutions(self, user_id: UUID, role_code: str) -> list[UUID]:
         rows = await self.session.execute(
             select(UserRole.institution_id)
@@ -217,6 +230,47 @@ class SqlRoleRepository:
             .where(UserRole.user_id == user_id, Role.code == role_code, UserRole.revoked_at.is_(None))
         )
         return list(rows.scalars())
+
+    async def active_platform_assignments(self, user_id: UUID) -> list[tuple[PlatformRoleAssignment, Role]]:
+        rows = await self.session.execute(
+            select(PlatformRoleAssignment, Role)
+            .join(Role, Role.id == PlatformRoleAssignment.role_id)
+            .where(PlatformRoleAssignment.user_id == user_id, PlatformRoleAssignment.revoked_at.is_(None))
+        )
+        return [(a, r) for a, r in rows]
+
+    async def add_platform_assignment(self, assignment: PlatformRoleAssignment) -> None:
+        self.session.add(assignment)
+
+
+class SqlInstitutionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, institution_id: UUID) -> Institution | None:
+        return await self.session.get(Institution, institution_id)
+
+    async def get_by_code(self, code: str) -> Institution | None:
+        return await self.session.scalar(select(Institution).where(Institution.code == code.upper()))
+
+    async def get_many(self, institution_ids: Iterable[UUID]) -> dict[UUID, Institution]:
+        ids = list(set(institution_ids))
+        if not ids:
+            return {}
+        rows = (await self.session.execute(select(Institution).where(Institution.id.in_(ids)))).scalars()
+        return {i.id: i for i in rows}
+
+    async def add(self, institution: Institution) -> None:
+        self.session.add(institution)
+
+    async def search(self, criteria: InstitutionSearch) -> tuple[list[Institution], int]:
+        stmt = select(Institution)
+        if criteria.status:
+            stmt = stmt.where(Institution.status == criteria.status)
+        if criteria.query:
+            pattern = f"%{_escape_like(criteria.query.strip())}%"
+            stmt = stmt.where(or_(Institution.code.ilike(pattern, escape="\\"), Institution.name.ilike(pattern, escape="\\")))
+        return await _page(self.session, stmt, criteria.offset, criteria.limit, Institution.name, Institution.id)
 
 
 class SqlProvisioningRepository:
@@ -272,6 +326,22 @@ class SqlAuditRepository:
             stmt = stmt.where(IdentityAuditLog.occurred_at < query.occurred_to)
         return await _page(self.session, stmt, query.offset, query.limit, IdentityAuditLog.occurred_at.desc(), IdentityAuditLog.id)
 
+    async def list_platform(self, query: PlatformAuditQuery) -> tuple[list[IdentityAuditLog], int]:
+        stmt = select(IdentityAuditLog).where(IdentityAuditLog.action.like("platform.%"))
+        if query.institution_id:
+            stmt = stmt.where(IdentityAuditLog.institution_id == query.institution_id)
+        if query.action:
+            stmt = stmt.where(IdentityAuditLog.action == query.action)
+        if query.actor_user_id:
+            stmt = stmt.where(IdentityAuditLog.actor_user_id == query.actor_user_id)
+        if query.target_user_id:
+            stmt = stmt.where(IdentityAuditLog.target_user_id == query.target_user_id)
+        if query.occurred_from:
+            stmt = stmt.where(IdentityAuditLog.occurred_at >= query.occurred_from)
+        if query.occurred_to:
+            stmt = stmt.where(IdentityAuditLog.occurred_at < query.occurred_to)
+        return await _page(self.session, stmt, query.offset, query.limit, IdentityAuditLog.occurred_at.desc(), IdentityAuditLog.id)
+
 
 class SqlIdentityUnitOfWork:
     """One database transaction per unit of work.
@@ -285,6 +355,7 @@ class SqlIdentityUnitOfWork:
         session.sync_session.autoflush = False
         self.users = SqlUserRepository(session)
         self.roles = SqlRoleRepository(session)
+        self.institutions = SqlInstitutionRepository(session)
         self.provisioning = SqlProvisioningRepository(session)
         self.audit = SqlAuditRepository(session)
 
