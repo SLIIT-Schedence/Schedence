@@ -16,7 +16,8 @@ from app.core.container import IdentityContainer
 from app.core.principal import Principal
 from app.core.rate_limit import RateLimiter
 from app.main import create_app
-from app.models import ACCOUNT_ACTIVE, User, UserRole
+from app.models import ACCOUNT_ACTIVE, PlatformRoleAssignment, User, UserRole
+from app.rbac.catalog import PLATFORM_ROLE_CODES
 from app.services.principals import resolve_principal
 from app.services.seeding import RbacSeeder
 from schedence_auth.testing import TEST_CLIENT_ID, TEST_POOL_ID, TEST_REGION, TokenFactory
@@ -52,6 +53,9 @@ def settings() -> IdentitySettings:
 async def store() -> FakeStore:
     store = FakeStore()
     await RbacSeeder(FakeUnitOfWork(store)).seed()
+    store.add_institution(INSTITUTION, "SLIIT")
+    store.add_institution(OTHER_INSTITUTION, "OTHER")
+    store.snapshot()
     return store
 
 
@@ -89,7 +93,10 @@ class Account:
 
 @pytest.fixture
 def make_account(store: FakeStore, cognito: FakeCognito, tokens: TokenFactory):
-    """Create a local user (+ Cognito identity) with roles directly in the store, and a valid token for it."""
+    """Create a local user (+ Cognito identity) with roles directly in the store, and a valid token for it.
+
+    Institution roles default to ``INSTITUTION``; platform roles (SYSTEM_ADMIN) are granted platform-wide.
+    """
 
     def make(email: str, *roles: tuple[str, uuid.UUID] | str, status: str = ACCOUNT_ACTIVE, full_name: str | None = None) -> Account:
         identity = cognito.add_user(email)
@@ -99,6 +106,10 @@ def make_account(store: FakeStore, cognito: FakeCognito, tokens: TokenFactory):
         store.users[user.id] = user
         for item in roles:
             code, institution = (item, INSTITUTION) if isinstance(item, str) else item
+            if code in PLATFORM_ROLE_CODES:
+                platform = PlatformRoleAssignment(id=uuid.uuid4(), user_id=user.id, role_id=store.role(code).id, assigned_at=now)
+                store.platform_assignments[platform.id] = platform
+                continue
             assignment = UserRole(id=uuid.uuid4(), user_id=user.id, role_id=store.role(code).id, institution_id=institution, assigned_at=now)
             store.user_roles[assignment.id] = assignment
         store.snapshot()

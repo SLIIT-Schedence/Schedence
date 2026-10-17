@@ -16,12 +16,12 @@ from tests.conftest import INSTITUTION, OTHER_INSTITUTION
 
 
 async def test_valid_access_token_resolves_current_user(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.get("/api/v1/identity/me", headers=admin.headers)
     assert response.status_code == 200
     body = response.json()
     assert body["email"] == "admin@sliit.example"
-    assert [r["role_code"] for r in body["roles"]] == ["SUPER_ADMIN"]
+    assert [r["role_code"] for r in body["roles"]] == ["INSTITUTION_ADMIN"]
 
 
 async def test_missing_token_is_401(client: httpx.AsyncClient) -> None:
@@ -38,7 +38,7 @@ async def test_invalid_token_is_rejected(client: httpx.AsyncClient) -> None:
 
 
 async def test_expired_token_is_rejected(client: httpx.AsyncClient, make_account, tokens) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     expired = tokens.access_token(admin.user.cognito_sub, iat=int(time.time()) - 7200, exp=int(time.time()) - 3600)
     response = await client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {expired}"})
     assert response.status_code == 401
@@ -46,21 +46,21 @@ async def test_expired_token_is_rejected(client: httpx.AsyncClient, make_account
 
 
 async def test_wrong_issuer_is_rejected(client: httpx.AsyncClient, make_account, tokens) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     forged = tokens.access_token(admin.user.cognito_sub, iss="https://cognito-idp.ap-south-1.amazonaws.com/ap-south-1_Other")
     response = await client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {forged}"})
     assert response.status_code == 401
 
 
 async def test_wrong_app_client_is_rejected(client: httpx.AsyncClient, make_account, tokens) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     other_client = tokens.access_token(admin.user.cognito_sub, client_id="anotherappclient0000000000")
     response = await client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {other_client}"})
     assert response.status_code == 401
 
 
 async def test_id_token_is_rejected_for_api_calls(client: httpx.AsyncClient, make_account, tokens) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {tokens.id_token(admin.user.cognito_sub)}"})
     assert response.status_code == 401
     assert "access token is required" in response.json()["error"]["message"]
@@ -81,7 +81,7 @@ async def test_valid_token_without_local_account_is_rejected(client: httpx.Async
 
 async def test_role_headers_from_the_client_are_ignored(client: httpx.AsyncClient, make_account) -> None:
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
-    spoofed = {**lecturer.headers, "X-Role": "SUPER_ADMIN", "X-Roles": "SUPER_ADMIN", "X-Permissions": "identity:users:create"}
+    spoofed = {**lecturer.headers, "X-Role": "INSTITUTION_ADMIN", "X-Roles": "INSTITUTION_ADMIN", "X-Permissions": "identity:users:create"}
     response = await client.post("/api/v1/identity/users", headers=spoofed, json={
         "email": "new@sliit.example", "full_name": "New User", "role_code": "STUDENT", "institution_id": str(INSTITUTION)})
     assert response.status_code == 403
@@ -105,7 +105,7 @@ def _app_with(principal: Principal) -> FastAPI:
     async def scoped(institution_id: uuid.UUID) -> dict:
         return {"ok": True}
 
-    @app.get("/roles-only", dependencies=[Depends(require_roles("VENUE_MANAGER", "SUPER_ADMIN"))])
+    @app.get("/roles-only", dependencies=[Depends(require_roles("VENUE_MANAGER", "INSTITUTION_ADMIN"))])
     async def roles_only() -> dict:
         return {"ok": True}
 
@@ -135,7 +135,7 @@ async def test_require_dependencies_are_deny_by_default() -> None:
 
 def test_principal_permission_evaluation() -> None:
     principal = Principal.from_grants(user_id=uuid.uuid4(), cognito_sub="s", email="e", full_name="n", grants=[
-        Grant("SUPER_ADMIN", INSTITUTION, frozenset({"identity:users:create"})),
+        Grant("INSTITUTION_ADMIN", INSTITUTION, frozenset({"identity:users:create"})),
         Grant("LECTURER", OTHER_INSTITUTION, frozenset()),
     ])
     assert principal.has_permission("identity:users:create")

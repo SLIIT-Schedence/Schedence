@@ -5,11 +5,11 @@ from __future__ import annotations
 import uuid
 
 from app.models import Permission
-from app.rbac.catalog import PERMISSIONS, ROLE_CODES, ROLES
+from app.rbac.catalog import PERMISSIONS, PLATFORM_ROLE_CODES, ROLE_CODES, ROLES
 from app.services.seeding import RbacSeeder
 from tests.fakes import FakeStore, FakeUnitOfWork
 
-EXPECTED_ROLES = {"SUPER_ADMIN", "ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"}
+EXPECTED_ROLES = {"SYSTEM_ADMIN", "INSTITUTION_ADMIN", "ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"}
 
 
 async def test_default_roles_are_seeded_correctly() -> None:
@@ -22,8 +22,9 @@ async def test_default_roles_are_seeded_correctly() -> None:
     assert {p.code for p in store.permissions.values()} == set(PERMISSIONS)
 
     grants = await FakeUnitOfWork(store).roles.role_permission_codes()
-    assert {p for p in grants["SUPER_ADMIN"] if p.startswith("identity:")} == {p for p in PERMISSIONS if p.startswith("identity:")}
-    assert "academic:positions:create" in grants["SUPER_ADMIN"]
+    assert {p for p in grants["INSTITUTION_ADMIN"] if p.startswith("identity:")} == {p for p in PERMISSIONS if p.startswith("identity:")}
+    assert "academic:positions:create" in grants["INSTITUTION_ADMIN"]
+    assert grants["SYSTEM_ADMIN"] == {p for p in PERMISSIONS if p.startswith("platform:")}
     assert grants["LECTURER"] == frozenset() and grants["STUDENT"] == frozenset()
     assert not any(p.startswith("identity:") for p in grants["ACADEMIC_ADMIN"])
     assert {"venues:read", "venues:manage"} == grants["VENUE_MANAGER"]
@@ -69,6 +70,17 @@ async def test_extra_grants_are_kept_unless_pruned() -> None:
 
     pruned = await RbacSeeder(FakeUnitOfWork(store)).seed(prune=True)
     assert pruned.grants_removed == ["STUDENT -> legacy:thing:do"]
+
+
+def test_platform_and_institution_permissions_never_mix() -> None:
+    """SYSTEM_ADMIN holds only platform permissions, and no institution role holds any."""
+    for role in ROLES:
+        platform = {p for p in role.permissions if p.startswith("platform:")}
+        if role.code in PLATFORM_ROLE_CODES:
+            assert platform == role.permissions, role.code
+        else:
+            assert not platform, role.code
+    assert PLATFORM_ROLE_CODES == {"SYSTEM_ADMIN"}
 
 
 def test_catalog_has_no_academic_appointment_roles() -> None:

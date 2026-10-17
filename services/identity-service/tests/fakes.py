@@ -11,12 +11,13 @@ import dataclasses
 import uuid
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import inspect as sa_inspect
 
-from app.core.principal import Grant
+from app.core.principal import Grant, PlatformGrant
 from app.integrations.cognito import (
     STATUS_CONFIRMED,
     STATUS_FORCE_CHANGE_PASSWORD,
@@ -27,9 +28,12 @@ from app.integrations.cognito import (
 )
 from app.models import (
     ACCOUNT_ACTIVE,
+    INSTITUTION_ACTIVE,
     OPEN_PROVISIONING_STATUSES,
     IdentityAuditLog,
+    Institution,
     Permission,
+    PlatformRoleAssignment,
     Role,
     User,
     UserProvisioning,
@@ -38,13 +42,15 @@ from app.models import (
 from app.repositories.base import (
     AssignmentView,
     AuditQuery,
+    InstitutionSearch,
     PersistenceConflictError,
     PersistenceError,
+    PlatformAuditQuery,
     ProvisioningQuery,
     UserSearch,
 )
 
-_ENTITY_STORES = ("users", "roles", "permissions", "user_roles", "provisioning")
+_ENTITY_STORES = ("users", "roles", "permissions", "institutions", "user_roles", "platform_assignments", "provisioning")
 
 
 def _columns(obj: Any) -> dict[str, Any]:
@@ -56,8 +62,10 @@ class FakeStore:
         self.users: dict[UUID, User] = {}
         self.roles: dict[UUID, Role] = {}
         self.permissions: dict[UUID, Permission] = {}
+        self.institutions: dict[UUID, Institution] = {}
         self.role_permissions: set[tuple[UUID, UUID]] = set()
         self.user_roles: dict[UUID, UserRole] = {}
+        self.platform_assignments: dict[UUID, PlatformRoleAssignment] = {}
         self.provisioning: dict[UUID, UserProvisioning] = {}
         self.audit: list[IdentityAuditLog] = []
         self.fail_next_commits: list[PersistenceError] = []
@@ -90,6 +98,7 @@ class FakeStore:
         self._flushed_users = set(self.users)
         self._flushed_roles = set(self.roles)
         self._flushed_permissions = set(self.permissions)
+        self._flushed_institutions = set(self.institutions)
 
     def flush(self) -> None:
         """Emulate the worst case of SQLAlchemy's unit of work.
@@ -99,19 +108,29 @@ class FakeStore:
         A row may therefore only reference parents that were flushed *earlier*.
         """
         users, roles, permissions = self._flushed_users, self._flushed_roles, self._flushed_permissions
+        institutions = self._flushed_institutions
 
         def require(value: UUID | None, known: set[UUID], constraint: str) -> None:
             if value is not None and value not in known:
                 raise PersistenceConflictError(constraint)
 
+        for i in self.institutions.values():
+            require(i.created_by_user_id, users, "fk_institutions_created_by_user_id_users")
         for a in self.user_roles.values():
             require(a.user_id, users, "fk_user_roles_user_id_users")
             require(a.role_id, roles, "fk_user_roles_role_id_roles")
+            require(a.institution_id, institutions, "fk_user_roles_institution_id_institutions")
             require(a.assigned_by_user_id, users, "fk_user_roles_assigned_by_user_id_users")
             require(a.revoked_by_user_id, users, "fk_user_roles_revoked_by_user_id_users")
+        for a in self.platform_assignments.values():
+            require(a.user_id, users, "fk_platform_role_assignments_user_id_users")
+            require(a.role_id, roles, "fk_platform_role_assignments_role_id_roles")
+            require(a.assigned_by_user_id, users, "fk_platform_role_assignments_assigned_by_user_id_users")
+            require(a.revoked_by_user_id, users, "fk_platform_role_assignments_revoked_by_user_id_users")
         for p in self.provisioning.values():
             require(p.user_id, users, "fk_user_provisioning_user_id_users")
             require(p.requested_role_id, roles, "fk_user_provisioning_requested_role_id_roles")
+            require(p.institution_id, institutions, "fk_user_provisioning_institution_id_institutions")
             require(p.requested_by_user_id, users, "fk_user_provisioning_requested_by_user_id_users")
         for e in self.audit:
             require(e.actor_user_id, users, "fk_identity_audit_logs_actor_user_id_users")
@@ -135,6 +154,9 @@ class FakeStore:
         unique((p.email for p in self.provisioning.values() if p.status in OPEN_PROVISIONING_STATUSES), "uq_user_provisioning_open_email")
         unique(((a.user_id, a.role_id, a.institution_id) for a in self.user_roles.values() if a.revoked_at is None),
                "uq_user_roles_active_assignment")
+        unique(((a.user_id, a.role_id) for a in self.platform_assignments.values() if a.revoked_at is None),
+               "uq_platform_role_assignments_active_assignment")
+        unique((i.code for i in self.institutions.values()), "uq_institutions_code")
 
     # -- helpers for tests
     def role(self, code: str) -> Role:
@@ -143,6 +165,15 @@ class FakeStore:
     def active_role_codes(self, user_id: UUID, institution_id: UUID | None = None) -> set[str]:
         return {self.roles[a.role_id].code for a in self.user_roles.values()
                 if a.user_id == user_id and a.revoked_at is None and (institution_id is None or a.institution_id == institution_id)}
+
+    def platform_role_codes(self, user_id: UUID) -> set[str]:
+        return {self.roles[a.role_id].code for a in self.platform_assignments.values() if a.user_id == user_id and a.revoked_at is None}
+
+    def add_institution(self, institution_id: UUID, code: str, *, status: str = INSTITUTION_ACTIVE) -> Institution:
+        now = datetime.now(UTC)
+        institution = Institution(id=institution_id, code=code, name=f"{code} Institution", status=status, created_at=now, updated_at=now)
+        self.institutions[institution.id] = institution
+        return institution
 
     def actions(self) -> list[str]:
         return [e.action for e in self.audit]
@@ -222,7 +253,12 @@ class FakeRoleRepository:
 
     async def get_grants(self, user_id: UUID) -> list[Grant]:
         return [Grant(self.s.roles[a.role_id].code, a.institution_id, self._role_permissions(a.role_id))
-                for a in self.s.user_roles.values() if a.user_id == user_id and a.revoked_at is None]
+                for a in self.s.user_roles.values() if a.user_id == user_id and a.revoked_at is None
+                and self.s.institutions[a.institution_id].status == INSTITUTION_ACTIVE]
+
+    async def get_platform_grants(self, user_id: UUID) -> list[PlatformGrant]:
+        return [PlatformGrant(self.s.roles[a.role_id].code, self._role_permissions(a.role_id))
+                for a in self.s.platform_assignments.values() if a.user_id == user_id and a.revoked_at is None]
 
     async def list_assignments(self, user_ids: Iterable[UUID], *, active_only: bool = True) -> dict[UUID, list[AssignmentView]]:
         ids = set(user_ids)
@@ -246,13 +282,40 @@ class FakeRoleRepository:
                     if self.s.roles[a.role_id].code == role_code and a.institution_id == institution_id and a.revoked_at is None
                     and self.s.users[a.user_id].account_status == ACCOUNT_ACTIVE})
 
-    async def list_active_holders(self, role_code: str) -> list[tuple[User, UUID]]:
-        return [(self.s.users[a.user_id], a.institution_id) for a in self.s.user_roles.values()
-                if self.s.roles[a.role_id].code == role_code and a.revoked_at is None]
-
     async def active_role_institutions(self, user_id: UUID, role_code: str) -> list[UUID]:
         return [a.institution_id for a in self.s.user_roles.values()
                 if a.user_id == user_id and a.revoked_at is None and self.s.roles[a.role_id].code == role_code]
+
+    async def active_platform_assignments(self, user_id: UUID) -> list[tuple[PlatformRoleAssignment, Role]]:
+        return [(a, self.s.roles[a.role_id]) for a in self.s.platform_assignments.values() if a.user_id == user_id and a.revoked_at is None]
+
+    async def add_platform_assignment(self, assignment: PlatformRoleAssignment) -> None:
+        self.s.platform_assignments[assignment.id] = assignment
+
+
+class FakeInstitutionRepository:
+    def __init__(self, store: FakeStore) -> None:
+        self.s = store
+
+    async def get(self, institution_id: UUID) -> Institution | None:
+        return self.s.institutions.get(institution_id)
+
+    async def get_by_code(self, code: str) -> Institution | None:
+        return next((i for i in self.s.institutions.values() if i.code == code.upper()), None)
+
+    async def get_many(self, institution_ids: Iterable[UUID]) -> dict[UUID, Institution]:
+        return {i: self.s.institutions[i] for i in set(institution_ids) if i in self.s.institutions}
+
+    async def add(self, institution: Institution) -> None:
+        self.s.institutions[institution.id] = institution
+
+    async def search(self, criteria: InstitutionSearch) -> tuple[list[Institution], int]:
+        rows = [i for i in self.s.institutions.values() if criteria.status is None or i.status == criteria.status]
+        if criteria.query:
+            q = criteria.query.strip().lower()
+            rows = [i for i in rows if q in i.code.lower() or q in i.name.lower()]
+        rows.sort(key=lambda i: (i.name, str(i.id)))
+        return rows[criteria.offset: criteria.offset + criteria.limit], len(rows)
 
 
 class FakeProvisioningRepository:
@@ -293,12 +356,22 @@ class FakeAuditRepository:
         rows.sort(key=lambda e: e.occurred_at, reverse=True)
         return rows[query.offset: query.offset + query.limit], len(rows)
 
+    async def list_platform(self, query: PlatformAuditQuery) -> tuple[list[IdentityAuditLog], int]:
+        rows = [e for e in self.s.audit if e.action.startswith("platform.")
+                and (query.institution_id is None or e.institution_id == query.institution_id)
+                and (query.action is None or e.action == query.action)
+                and (query.target_user_id is None or e.target_user_id == query.target_user_id)
+                and (query.actor_user_id is None or e.actor_user_id == query.actor_user_id)]
+        rows.sort(key=lambda e: e.occurred_at, reverse=True)
+        return rows[query.offset: query.offset + query.limit], len(rows)
+
 
 class FakeUnitOfWork:
     def __init__(self, store: FakeStore) -> None:
         self.store = store
         self.users = FakeUserRepository(store)
         self.roles = FakeRoleRepository(store)
+        self.institutions = FakeInstitutionRepository(store)
         self.provisioning = FakeProvisioningRepository(store)
         self.audit = FakeAuditRepository(store)
 

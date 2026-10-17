@@ -28,8 +28,8 @@ def new_user(email: str = "lecturer1@sliit.example", role: str = "LECTURER", ins
 
 
 @pytest.mark.parametrize("role", ["ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"])
-async def test_super_admin_creates_users_for_every_role(client: httpx.AsyncClient, make_account, store, cognito, role: str) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+async def test_institution_admin_creates_users_for_every_role(client: httpx.AsyncClient, make_account, store, cognito, role: str) -> None:
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.post(USERS, headers=admin.headers, json=new_user(f"{role.lower()}@sliit.example", role))
 
     assert response.status_code == 201, response.text
@@ -45,7 +45,7 @@ async def test_super_admin_creates_users_for_every_role(client: httpx.AsyncClien
 
 
 async def test_email_is_normalised_and_duplicates_are_rejected(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     first = await client.post(USERS, headers=admin.headers, json=new_user("  Lecturer1@SLIIT.example "))
     assert first.status_code == 201
     assert first.json()["user"]["email"] == "lecturer1@sliit.example"
@@ -63,23 +63,23 @@ async def test_users_without_permission_cannot_create_accounts(client: httpx.Asy
     assert cognito.count("create_user") == 0
 
 
-async def test_super_admin_cannot_create_users_in_another_institution(client: httpx.AsyncClient, make_account, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+async def test_institution_admin_cannot_create_users_in_another_institution(client: httpx.AsyncClient, make_account, cognito) -> None:
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.post(USERS, headers=admin.headers, json=new_user(institution=OTHER_INSTITUTION))
     assert response.status_code == 403
     assert cognito.count("create_user") == 0
 
 
 async def test_unknown_role_is_rejected(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.post(USERS, headers=admin.headers, json=new_user(role="HEAD_OF_DEPARTMENT"))
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "UNKNOWN_ROLE"
 
 
 async def test_request_cannot_set_status_or_extra_fields(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
-    response = await client.post(USERS, headers=admin.headers, json={**new_user(), "account_status": "ACTIVE", "roles": ["SUPER_ADMIN"]})
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
+    response = await client.post(USERS, headers=admin.headers, json={**new_user(), "account_status": "ACTIVE", "roles": ["INSTITUTION_ADMIN"]})
     assert response.status_code == 422
 
 
@@ -87,7 +87,7 @@ async def test_request_cannot_set_status_or_extra_fields(client: httpx.AsyncClie
 
 
 async def test_cognito_outage_marks_provisioning_failed_and_retry_succeeds(client: httpx.AsyncClient, make_account, store, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     cognito.fail("create_user", CognitoUnavailableError("EndpointConnectionError"))
 
     failed = await client.post(USERS, headers=admin.headers, json=new_user())
@@ -107,7 +107,7 @@ async def test_cognito_outage_marks_provisioning_failed_and_retry_succeeds(clien
 async def test_database_failure_after_cognito_create_is_recoverable_without_duplicate(
     client: httpx.AsyncClient, make_account, store, cognito
 ) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     # commit 1: provisioning row; commit 2: COGNITO_CREATED; commit 3 (local account) fails.
     original_commit = FakeUnitOfWork.commit
     calls = {"n": 0}
@@ -141,7 +141,7 @@ async def test_database_failure_after_cognito_create_is_recoverable_without_dupl
 
 
 async def test_existing_cognito_identity_is_linked_not_duplicated(client: httpx.AsyncClient, make_account, store, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     orphan = cognito.add_user("lecturer1@sliit.example", status="FORCE_CHANGE_PASSWORD")
 
     response = await client.post(USERS, headers=admin.headers, json=new_user())
@@ -152,7 +152,7 @@ async def test_existing_cognito_identity_is_linked_not_duplicated(client: httpx.
 
 
 async def test_different_request_for_in_progress_email_conflicts(client: httpx.AsyncClient, make_account, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     cognito.fail("create_user", CognitoUnavailableError("timeout"))
     await client.post(USERS, headers=admin.headers, json=new_user(role="LECTURER"))
 
@@ -162,7 +162,7 @@ async def test_different_request_for_in_progress_email_conflicts(client: httpx.A
 
 
 async def test_misconfigured_aws_credentials_are_reported_without_details(client: httpx.AsyncClient, make_account, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     cognito.fail("create_user", CognitoPermissionError("ExpiredTokenException"))
     response = await client.post(USERS, headers=admin.headers, json=new_user())
     assert response.status_code == 503
@@ -171,7 +171,7 @@ async def test_misconfigured_aws_credentials_are_reported_without_details(client
 
 
 async def test_cancel_is_refused_once_a_cognito_identity_exists(client: httpx.AsyncClient, make_account, store, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     cognito.fail("create_user", CognitoUnavailableError("timeout"))
     failed = await client.post(USERS, headers=admin.headers, json=new_user())
     provisioning_id = failed.json()["error"]["details"]["provisioning_id"]
@@ -190,7 +190,7 @@ async def test_cancel_is_refused_once_a_cognito_identity_exists(client: httpx.As
 
 
 async def test_list_and_search_are_scoped_to_institution(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     make_account("alice@sliit.example", "LECTURER", full_name="Alice Perera")
     make_account("bob@sliit.example", "STUDENT", full_name="Bob Silva")
     outsider = make_account("carol@other.example", ("LECTURER", OTHER_INSTITUTION))
@@ -208,7 +208,7 @@ async def test_list_and_search_are_scoped_to_institution(client: httpx.AsyncClie
 
 
 async def test_update_profile_syncs_name_to_cognito(client: httpx.AsyncClient, make_account, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     response = await client.patch(f"{USERS}/{lecturer.id}", headers=admin.headers, json={"full_name": "  Dr.  Example   Lecturer "})
     assert response.status_code == 200
@@ -224,7 +224,7 @@ async def test_update_profile_syncs_name_to_cognito(client: httpx.AsyncClient, m
 
 
 async def test_disable_blocks_api_access_immediately_and_enable_restores_it(client: httpx.AsyncClient, make_account, cognito) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     assert (await client.get("/api/v1/identity/me", headers=lecturer.headers)).status_code == 200
 
@@ -245,7 +245,7 @@ async def test_disable_blocks_api_access_immediately_and_enable_restores_it(clie
 
 
 async def test_disable_succeeds_locally_even_if_cognito_is_down(client: httpx.AsyncClient, make_account, cognito, store) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     cognito.fail("disable_user", CognitoUnavailableError("timeout"))
     response = await client.post(f"{USERS}/{lecturer.id}/disable", headers=admin.headers)
@@ -259,23 +259,23 @@ async def test_disable_succeeds_locally_even_if_cognito_is_down(client: httpx.As
 
 
 async def test_cannot_disable_own_account(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     response = await client.post(f"{USERS}/{admin.id}/disable", headers=admin.headers)
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "CANNOT_DISABLE_SELF"
 
 
-async def test_last_super_admin_cannot_be_removed_even_with_stale_permissions(make_account, store, cognito, principal_of) -> None:
-    """Two Super Admins try to disable each other. The second request was authorised before the first committed."""
-    first = make_account("first@sliit.example", "SUPER_ADMIN")
-    second = make_account("second@sliit.example", "SUPER_ADMIN")
+async def test_last_institution_admin_cannot_be_removed_even_with_stale_permissions(make_account, store, cognito, principal_of) -> None:
+    """Two Institution Admins try to disable each other. The second request was authorised before the first committed."""
+    first = make_account("first@sliit.example", "INSTITUTION_ADMIN")
+    second = make_account("second@sliit.example", "INSTITUTION_ADMIN")
     first_principal, second_principal = await principal_of(first), await principal_of(second)
 
     await UserManagementService(FakeUnitOfWork(store), cognito).disable_user(first_principal, second.user.id)
 
     with pytest.raises(ConflictError) as info:
         await UserManagementService(FakeUnitOfWork(store), cognito).disable_user(second_principal, first.user.id)
-    assert info.value.code == "LAST_SUPER_ADMIN"
+    assert info.value.code == "LAST_INSTITUTION_ADMIN"
     assert store.users[first.user.id].account_status == ACCOUNT_ACTIVE
     assert store.locks >= 2
 
@@ -288,7 +288,7 @@ async def test_last_super_admin_cannot_be_removed_even_with_stale_permissions(ma
 
 
 async def test_assign_and_revoke_roles_keeps_history(client: httpx.AsyncClient, make_account, store) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
 
     granted = await client.put(f"{USERS}/{lecturer.id}/roles", headers=admin.headers,
@@ -307,7 +307,7 @@ async def test_assign_and_revoke_roles_keeps_history(client: httpx.AsyncClient, 
 
 
 async def test_role_assignment_validation(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     url = f"{USERS}/{lecturer.id}/roles"
 
@@ -325,18 +325,18 @@ async def test_role_assignment_validation(client: httpx.AsyncClient, make_accoun
 async def test_users_cannot_elevate_their_own_permissions(client: httpx.AsyncClient, make_account) -> None:
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     response = await client.put(f"{USERS}/{lecturer.id}/roles", headers=lecturer.headers,
-                                json={"institution_id": str(INSTITUTION), "role_codes": ["LECTURER", "SUPER_ADMIN"]})
+                                json={"institution_id": str(INSTITUTION), "role_codes": ["LECTURER", "INSTITUTION_ADMIN"]})
     assert response.status_code == 403
 
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     self_change = await client.put(f"{USERS}/{admin.id}/roles", headers=admin.headers,
-                                   json={"institution_id": str(INSTITUTION), "role_codes": ["SUPER_ADMIN", "VENUE_MANAGER"]})
+                                   json={"institution_id": str(INSTITUTION), "role_codes": ["INSTITUTION_ADMIN", "VENUE_MANAGER"]})
     assert self_change.status_code == 403
     assert self_change.json()["error"]["code"] == "SELF_ROLE_CHANGE_FORBIDDEN"
 
 
-async def test_only_super_admins_grant_super_admin(client: httpx.AsyncClient, make_account, store) -> None:
-    """A (hypothetical) delegated user-admin role with identity permissions still cannot grant SUPER_ADMIN."""
+async def test_only_institution_admins_grant_institution_admin(client: httpx.AsyncClient, make_account, store) -> None:
+    """A (hypothetical) delegated user-admin role with identity permissions still cannot grant INSTITUTION_ADMIN."""
     delegated = Role(id=uuid.uuid4(), code="USER_ADMIN", name="User admin", description="", is_system_role=False,
                      created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
     store.roles[delegated.id] = delegated
@@ -349,23 +349,23 @@ async def test_only_super_admins_grant_super_admin(client: httpx.AsyncClient, ma
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
 
     escalate = await client.put(f"{USERS}/{lecturer.id}/roles", headers=user_admin.headers,
-                                json={"institution_id": str(INSTITUTION), "role_codes": ["LECTURER", "SUPER_ADMIN"]})
+                                json={"institution_id": str(INSTITUTION), "role_codes": ["LECTURER", "INSTITUTION_ADMIN"]})
     assert escalate.status_code == 403 and escalate.json()["error"]["code"] == "PRIVILEGED_ROLE_REQUIRED"
 
-    create_admin = await client.post(USERS, headers=user_admin.headers, json=new_user("x@sliit.example", "SUPER_ADMIN"))
+    create_admin = await client.post(USERS, headers=user_admin.headers, json=new_user("x@sliit.example", "INSTITUTION_ADMIN"))
     assert create_admin.status_code == 403
 
     ordinary = await client.put(f"{USERS}/{lecturer.id}/roles", headers=user_admin.headers,
                                 json={"institution_id": str(INSTITUTION), "role_codes": ["LECTURER", "VENUE_MANAGER"]})
     assert ordinary.status_code == 200
 
-    super_admin = make_account("admin@sliit.example", "SUPER_ADMIN")
-    touch_admin = await client.patch(f"{USERS}/{super_admin.id}", headers=user_admin.headers, json={"full_name": "Hacked"})
+    institution_admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
+    touch_admin = await client.patch(f"{USERS}/{institution_admin.id}", headers=user_admin.headers, json={"full_name": "Hacked"})
     assert touch_admin.status_code == 403 and touch_admin.json()["error"]["code"] == "PRIVILEGED_TARGET"
 
 
-async def test_audit_log_is_readable_by_super_admin_only(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+async def test_audit_log_is_readable_by_institution_admin_only(client: httpx.AsyncClient, make_account) -> None:
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     await client.post(USERS, headers=admin.headers, json=new_user("new@sliit.example"))
 
@@ -377,7 +377,7 @@ async def test_audit_log_is_readable_by_super_admin_only(client: httpx.AsyncClie
 
 
 async def test_every_user_event_is_visible_in_the_institution_audit_log(client: httpx.AsyncClient, make_account, store) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     lecturer = make_account("lecturer@sliit.example", "LECTURER")
     await client.patch(f"{USERS}/{lecturer.id}", headers=admin.headers, json={"full_name": "Renamed"})
     await client.post(f"{USERS}/{lecturer.id}/disable", headers=admin.headers, json={"reason": "test"})
@@ -390,11 +390,12 @@ async def test_every_user_event_is_visible_in_the_institution_audit_log(client: 
 
 
 async def test_roles_and_permissions_catalogue(client: httpx.AsyncClient, make_account) -> None:
-    admin = make_account("admin@sliit.example", "SUPER_ADMIN")
+    """Only roles and permissions that can be granted within an institution are listed (no SYSTEM_ADMIN, no platform:*)."""
+    admin = make_account("admin@sliit.example", "INSTITUTION_ADMIN")
     roles = (await client.get("/api/v1/identity/roles", headers=admin.headers)).json()
-    assert {r["code"] for r in roles} == {"SUPER_ADMIN", "ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"}
+    assert {r["code"] for r in roles} == {"INSTITUTION_ADMIN", "ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER", "STUDENT"}
     permissions = (await client.get("/api/v1/identity/permissions", headers=admin.headers)).json()
-    assert {p["code"] for p in permissions} == set(PERMISSIONS)
+    assert {p["code"] for p in permissions} == {p for p in PERMISSIONS if not p.startswith("platform:")}
 
 
 async def test_health_endpoints(client: httpx.AsyncClient) -> None:
