@@ -2,11 +2,146 @@
 
 Examination timetabling and cognitive load optimization for Schedence.
 
-**Current phase: data, secured API and seating settings.** This service has a
+**Current phase: data, secured API, seating settings and an offline draft scheduler.** This service has a
 synthetic, reproducible dataset, the tables to store it, and a FastAPI backend
 for examination administrators (Cognito login + Identity Service permissions).
 The data routes are read-only; the only writes are the configurable exam
-seating rules. It has no scheduler or UI yet.
+seating rules. Phase 1 CP-SAT generation runs offline on synthetic data; there
+are no timetable-generation APIs, background workers, saved results or scheduler UI.
+
+## Offline Phase 1 examination scheduler
+
+The offline runner uses `DatasetSource(generate_dataset())`, `MemorySeatingStore`
+and the existing frozen capacity snapshot. It does not read `.env`, connect to
+Neon, contact Cognito, or write files. Students and registrations are synthetic;
+venue teaching/maintenance blocks are labelled simulations, not institutional
+bookings. Module and venue catalogue data remain the existing prototype inputs.
+
+With the repository virtual environment active:
+
+```powershell
+# Optional solver dependency, also declared in pyproject.toml's [solver] extra:
+python -m pip install ortools==9.15.6755
+cd services/examination-service
+python -m app.scheduling
+python -m app.scheduling --include-draft
+python -m app.scheduling --starts 09:00 14:00 --minimum-break 30 --time-limit 20
+python -m app.scheduling --module IT1010 --module IT1100 --seating-percentage 40
+python -m app.scheduling --module IT1010 --module-venues IT1010=computer_lab --max-rooms 6
+python -m pytest tests/test_scheduling_inputs.py tests/test_scheduling_constraints.py tests/test_scheduling_validation.py tests/test_scheduling_integration.py tests/test_scheduling_hardening.py
+```
+
+Without `--include-draft`, stdout contains status, settings, policy, fingerprints,
+diagnostics and summary counts. With it, stdout also contains every session,
+room and numbered logical seat. Exit codes: 0 = independently validated draft,
+1 = invalid inputs/no draft, 2 = command-line usage or missing dependency.
+All responses use standard JSON on stdout, including usage errors, missing-solver
+errors, and `--help` (a JSON object containing the help text). Solver time limits
+must be finite and positive; NaN and Infinity are rejected before scheduling.
+Error responses contain a status and structured violations or an error code/message.
+
+### Approved configurable prototype policy
+
+These are development settings approved for this prototype, not university policy:
+
+| Setting | Initial value | Configuration |
+| --- | --- | --- |
+| Start times | 08:30, 13:30 | `--starts` / `SchedulingPolicy.permitted_start_times` |
+| Student break | 60 minutes after the preceding exam, including reading time | `--minimum-break` |
+| Written rooms | lecture hall, smart classroom | `--compatibility written=lecture_hall,smart_classroom` |
+| Computer-based rooms | computer lab | `--compatibility computer_based=computer_lab` |
+| Hybrid rooms | all four existing venue types | `--compatibility hybrid=...` |
+| Per-module room types | inherit the exam-type rule | `--module-venues MODULE=type,type` |
+| Maximum rooms | unlimited; split rooms share one session/time | `--max-rooms` |
+| Seating | existing snapshot rules; CLI starts with an in-memory 50% default | `--seating-percentage` |
+| Solver time | 60 seconds of CP-SAT search | `--time-limit` |
+| Random seed / workers | 20261019 / 1 | `--seed`, `--workers` |
+
+The student break is a **hard constraint**, with a configurable default of 60
+minutes. Change it for the next run without editing source code:
+
+```powershell
+python -m app.scheduling --minimum-break 0
+python -m app.scheduling --minimum-break 30
+python -m app.scheduling --minimum-break 60
+python -m app.scheduling --minimum-break 90
+```
+
+Each invocation uses its supplied value in a new frozen input snapshot. Values
+are per run and are not saved; omitting the option uses the 60-minute default.
+Python callers can supply `SchedulingPolicy(minimum_break_minutes=30)` when
+loading the next snapshot. An existing snapshot keeps its original policy.
+Breaks start after the full exam duration plus reading time. With a zero-minute
+break, one exam may start exactly when the previous exam ends; overlapping exams
+for the same student are always forbidden, including repeat examinations.
+
+All dates and times use the source period's local calendar without timezone
+conversion. Start times and period/block hours must have whole-minute precision.
+Use one worker and the pinned solver for reproducible settings; a wall-clock
+cutoff or multiple workers can still change search outcomes.
+
+This is a feasibility-only model with no objective. A maximum of one exam per
+student per day remains a future soft preference: multiple daily exams are
+allowed when the hard constraints and minimum breaks permit them. No cognitive
+load or other soft-constraint optimization is implemented. `OPTIMAL` for this
+model means the satisfaction problem was solved; it is not a timetable-quality score.
+
+### Hard constraints and validation
+
+| Rule | Enforcement |
+| --- | --- |
+| H1 | Student no-overlap intervals include the configurable break; repeat registrations are included |
+| H2 | Per-room candidate counts and logical seat numbers obey effective frozen capacity; zero-seat venues cannot be selected |
+| H3 | Room types obey exam-type rules and optional module overrides |
+| H4 | All source blocks are respected; overlapping blocks are merged for modelling |
+| H5 | Optional room intervals cannot overlap another exam or a fixed block |
+| H6 | Every exam belongs to the selected period and its date range |
+| H7 | Starts obey policy and the full sitting fits within daily examination hours |
+| H8 | Weekends and excluded dates obey the selected period's calendar |
+| H9 | Every room and student interval reserves duration plus reading time |
+| H10 | Each selected module has one sitting; each registered candidate gets exactly one room and logical seat |
+| H11 | Input/output references, counts, session IDs, rooms and logical seats are checked for consistency |
+
+Logical seats are numbered within each room/session; these are not physical seat
+maps. All students taking a module sit at the same time across its allocated
+rooms. Touching room intervals are allowed; student breaks are checked separately.
+Room sharing by different exams at the same time is not supported.
+
+`load_snapshot(source, store, period_code=..., policy=..., module_codes=...)`
+freezes all inputs and checks relationships. `module_codes=None` selects all
+offered modules; selected modules need at least one registration. Select codes
+explicitly when an input source contains several offerings/periods: current
+registrations have no period foreign key.
+
+For a future database-backed caller, `load_database_snapshot(engine, ...)` reads
+through `DatabaseSource` and `DatabaseSeatingStore` in one existing
+`snapshot_session` (REPEATABLE READ, READ ONLY), then rolls back/closes before
+solving. The CLI does not expose this adapter. Other source adapters must provide
+a coherent source view. Fingerprints cover all selected data and policy, excluding
+the capacity snapshot clock; seating ruleset version is retained.
+
+`generate_timetable(snapshot, SolverSettings(...))` imports OR-Tools only when
+needed. Existing FastAPI startup and the independent validator do not require it.
+The solver returns `FEASIBLE`, `OPTIMAL`, `INFEASIBLE`, `UNKNOWN`, or `MODEL_INVALID`.
+`UNKNOWN` means no solution or proof was obtained within search limits, not that
+the schedule is impossible. Invalid inputs are reported as `MODEL_INVALID`.
+Infeasible results currently give a general diagnostic, not a minimal conflict set.
+
+`validate_timetable(snapshot, draft)` recomputes H1-H11 from the output and raw
+snapshot, without CP-SAT or model helpers. Every successful solver result goes
+through it; rejected output is withheld and reported as `MODEL_INVALID`.
+Session, room and seat collections accept ordered iterables, including lists
+and generators, and are materialized once into tuples during construction.
+Text, mappings, unordered sets and records of the wrong type are rejected.
+Caller-owned lists cannot change an already constructed result. Malformed field
+types are checked before hashing/sorting identifiers or comparing times.
+Construction errors expose `SchedulingValidationError.violations`; source-loader
+errors expose `SnapshotError.violations`. Both contain constraint/message records.
+
+Implementation lives in `app/scheduling/`: `policy.py`, `types.py`, `inputs.py`,
+`availability.py`, `cp_sat.py`, `validation.py`, `service.py`, and `__main__.py`.
+No result storage, publishing/booking guarantee, invigilator allocation or real
+institutional policy is provided in Phase 1.
 
 ## Layout
 
