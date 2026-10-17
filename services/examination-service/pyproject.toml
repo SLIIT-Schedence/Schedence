@@ -21,6 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+solver = [
+    "ortools==9.15.6755",  # offline CP-SAT; deliberately separate from API runtime
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=1.4",
