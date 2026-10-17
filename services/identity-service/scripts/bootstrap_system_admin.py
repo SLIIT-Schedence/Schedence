@@ -1,18 +1,18 @@
-"""Bootstrap the first Super Admin. Operator-only; there is no HTTP equivalent.
+"""Grant SYSTEM_ADMIN to a Schedence product owner. Operator-only; there is no HTTP equivalent.
 
 Requires: database access (DIRECT_DATABASE_URL or DATABASE_URL), AWS credentials
 allowed to call AdminGetUser on the pool (AWS_PROFILE), seeded roles, and a
-Cognito user for the person that has completed first sign-in.
+Cognito user for the person that has completed first sign-in. The account must
+be dedicated to platform administration (no institution roles).
 
 Usage (PowerShell, from services/identity-service):
-    python -m scripts.bootstrap_superadmin --email admin@example.edu --institution-id <UUID>
-    python -m scripts.bootstrap_superadmin --email admin@example.edu --institution-id <UUID> --provision --full-name "First Admin"
+    python -m scripts.bootstrap_system_admin --email owner@example.com
+    python -m scripts.bootstrap_system_admin --email owner@example.com --provision --full-name "Product Owner"
 """
 
 from __future__ import annotations
 
 import argparse
-import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -20,7 +20,7 @@ from app.core.config import load_identity_settings
 from app.integrations.cognito import CognitoError
 from app.integrations.cognito.boto3_client import Boto3CognitoAdminClient
 from app.repositories.base import PersistenceError
-from app.services.bootstrap import BootstrapError, BootstrapResult, SuperAdminBootstrapService
+from app.services.bootstrap import BootstrapError, BootstrapResult, SystemAdminBootstrapService
 from schedence_auth import ConfigurationError
 from schedence_db import DatabaseConfigurationError
 from schedence_db.runtime import run
@@ -41,16 +41,14 @@ async def _bootstrap(args: argparse.Namespace) -> BootstrapResult:
     cognito = Boto3CognitoAdminClient(region=settings.aws_region, user_pool_id=settings.cognito_user_pool_id,
                                       profile=settings.aws_profile, timeout_seconds=settings.cognito_admin_timeout_seconds)
     async with operator_unit_of_work() as uow:
-        return await SuperAdminBootstrapService(uow, cognito).bootstrap(
-            email=args.email, institution_id=args.institution_id, operator=operator_label(), provision=args.provision,
-            full_name=args.full_name,
+        return await SystemAdminBootstrapService(uow, cognito).bootstrap(
+            email=args.email, operator=operator_label(), provision=args.provision, full_name=args.full_name,
         )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m scripts.bootstrap_superadmin", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="python -m scripts.bootstrap_system_admin", description=__doc__.splitlines()[0])
     parser.add_argument("--email", required=True)
-    parser.add_argument("--institution-id", required=True, type=uuid.UUID, help="UUID that identifies the institution (e.g. SLIIT)")
     parser.add_argument("--full-name", default=None)
     parser.add_argument("--provision", action="store_true", help="Send the Cognito invitation if the user does not exist yet")
     parser.add_argument("--yes", action="store_true", help="Skip the interactive confirmation")
@@ -58,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.yes:
-        print(f"About to grant SUPER_ADMIN for institution {args.institution_id} to {args.email.strip().lower()}.")
+        print(f"About to grant SYSTEM_ADMIN (platform-wide) to {args.email.strip().lower()}.")
         if input("Type the e-mail address again to confirm: ").strip().lower() != args.email.strip().lower():
             return fail("Confirmation did not match. Nothing changed.")
 

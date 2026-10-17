@@ -1,13 +1,17 @@
-"""Operator-only creation of the first Super Admin.
+"""Operator-only granting of SYSTEM_ADMIN to a Schedence product owner.
 
-Never reachable over HTTP. The operator must hold database credentials *and*
-AWS credentials allowed to read the user pool, and the Cognito identity must
-already be genuine: enabled, e-mail verified, and past first sign-in
-(CONFIRMED). With ``provision=True`` the command can instead send the Cognito
-invitation; the operator then re-runs it after the person has signed in.
+Never reachable over HTTP, and there is no API that grants a platform role. The
+operator must hold database credentials *and* AWS credentials allowed to read
+the user pool, and the Cognito identity must already be genuine: enabled,
+e-mail verified, and past first sign-in (CONFIRMED). With ``provision=True``
+the command can instead send the Cognito invitation; the operator then re-runs
+it after the person has signed in.
 
-Safe to retry: re-running for the person who is already Super Admin is a
-no-op, and any *other* existing Super Admin blocks a second bootstrap.
+A System Admin needs a dedicated account: an account that holds roles in an
+institution is refused, so platform and institution access never mix.
+
+Safe to retry: re-running for someone who is already a System Admin is a no-op.
+Each product owner is bootstrapped the same way.
 """
 
 from __future__ import annotations
@@ -18,8 +22,8 @@ from uuid import UUID
 
 from app.core.clock import Clock, utcnow
 from app.integrations.cognito import STATUS_CONFIRMED, CognitoAdminClient, CognitoUserExistsError
-from app.models import ACCOUNT_ACTIVE, ACTOR_OPERATOR, User, UserRole
-from app.rbac.catalog import SUPER_ADMIN
+from app.models import ACCOUNT_ACTIVE, ACTOR_OPERATOR, PlatformRoleAssignment, User
+from app.rbac.catalog import SYSTEM_ADMIN
 from app.repositories.base import IdentityUnitOfWork
 from app.services.audit import AuditRecorder
 from app.services.users import clean_name, normalize_email
@@ -44,26 +48,22 @@ class BootstrapResult:
     message: str = ""
 
 
-class SuperAdminBootstrapService:
+class SystemAdminBootstrapService:
     def __init__(self, uow: IdentityUnitOfWork, cognito: CognitoAdminClient, *, clock: Clock = utcnow) -> None:
         self.uow = uow
         self.cognito = cognito
         self.clock = clock
 
-    async def bootstrap(self, *, email: str, institution_id: UUID, operator: str, provision: bool = False,
-                        full_name: str | None = None) -> BootstrapResult:
+    async def bootstrap(self, *, email: str, operator: str, provision: bool = False, full_name: str | None = None) -> BootstrapResult:
         email = normalize_email(email)
-        role = (await self.uow.roles.get_roles_by_codes([SUPER_ADMIN])).get(SUPER_ADMIN)
+        role = (await self.uow.roles.get_roles_by_codes([SYSTEM_ADMIN])).get(SYSTEM_ADMIN)
         if role is None:
-            raise BootstrapError("ROLES_NOT_SEEDED", "The SUPER_ADMIN role does not exist. Run scripts.seed_roles first.")
+            raise BootstrapError("ROLES_NOT_SEEDED", "The SYSTEM_ADMIN role does not exist. Run scripts.seed_roles first.")
 
         await self.uow.lock_privileged_changes()  # serialises concurrent bootstrap attempts
-        holders = await self.uow.roles.list_active_holders(SUPER_ADMIN)
 
         identity = await self.cognito.get_user(email)
         if identity is None:
-            if holders:
-                raise self._already_bootstrapped()
             if not provision:
                 raise BootstrapError(
                     "IDENTITY_NOT_FOUND",
@@ -75,8 +75,7 @@ class SuperAdminBootstrapService:
             except CognitoUserExistsError:
                 pass
             await AuditRecorder(self.uow, clock=self.clock).record(
-                "superadmin.bootstrap_invited", actor_type=ACTOR_OPERATOR, institution_id=institution_id,
-                metadata={"operator": operator},
+                "platform.system_admin_invited", actor_type=ACTOR_OPERATOR, metadata={"operator": operator},
             )
             await self.uow.commit()
             return BootstrapResult(INVITATION_SENT, message=(
@@ -95,12 +94,6 @@ class SuperAdminBootstrapService:
                 f"The Cognito user has not completed first sign-in (status {identity.status}). Sign in once, then re-run.",
             )
 
-        if holders:
-            if any(user.cognito_sub == identity.sub for user, _ in holders):
-                existing = next(user for user, _ in holders if user.cognito_sub == identity.sub)
-                return BootstrapResult(ALREADY_BOOTSTRAPPED, existing.id, "This person is already a Super Admin. Nothing changed.")
-            raise self._already_bootstrapped()
-
         now = self.clock()
         user = await self.uow.users.get_by_cognito_sub(identity.sub)
         if user is None:
@@ -111,21 +104,22 @@ class SuperAdminBootstrapService:
                         account_status=ACCOUNT_ACTIVE, created_at=now, updated_at=now)
             await self.uow.users.add(user)
             await self.uow.flush()  # the user row must exist before the role assignment and audit entry reference it
-        elif user.account_status != ACCOUNT_ACTIVE:
-            raise BootstrapError("ACCOUNT_DISABLED", "The existing Schedence account for this person is disabled.")
+        else:
+            if user.account_status != ACCOUNT_ACTIVE:
+                raise BootstrapError("ACCOUNT_DISABLED", "The existing Schedence account for this person is disabled.")
+            if any(r.code == SYSTEM_ADMIN for _, r in await self.uow.roles.active_platform_assignments(user.id)):
+                return BootstrapResult(ALREADY_BOOTSTRAPPED, user.id, "This person is already a System Admin. Nothing changed.")
+            if (await self.uow.roles.list_assignments([user.id]))[user.id]:
+                raise BootstrapError(
+                    "INSTITUTION_ACCOUNT",
+                    "This account holds roles in an institution. A System Admin needs a dedicated account: use another e-mail address.",
+                )
 
-        await self.uow.roles.add_assignment(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id,
-                                                     institution_id=institution_id, assigned_at=now, assigned_by_user_id=None))
+        await self.uow.roles.add_platform_assignment(PlatformRoleAssignment(id=uuid.uuid4(), user_id=user.id, role_id=role.id,
+                                                                            assigned_at=now, assigned_by_user_id=None))
         await AuditRecorder(self.uow, clock=self.clock).record(
-            "superadmin.bootstrapped", actor_type=ACTOR_OPERATOR, target_user_id=user.id, institution_id=institution_id,
-            metadata={"operator": operator, "role_code": SUPER_ADMIN},
+            "platform.system_admin_bootstrapped", actor_type=ACTOR_OPERATOR, target_user_id=user.id,
+            metadata={"operator": operator, "role_code": SYSTEM_ADMIN},
         )
         await self.uow.commit()
-        return BootstrapResult(BOOTSTRAPPED, user.id, "Super Admin bootstrapped.")
-
-    @staticmethod
-    def _already_bootstrapped() -> BootstrapError:
-        return BootstrapError(
-            "ALREADY_BOOTSTRAPPED",
-            "A Super Admin already exists. Additional Super Admins must be granted by an existing Super Admin through the API.",
-        )
+        return BootstrapResult(BOOTSTRAPPED, user.id, "System Admin bootstrapped.")
