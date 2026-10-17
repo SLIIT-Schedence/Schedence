@@ -8,9 +8,9 @@ from pydantic import ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.common import ApiModel, RequestModel
 
-ROLE_CODES_HELP = ("A system role code (not an ID): SUPER_ADMIN, ACADEMIC_ADMIN, EXAMINATION_ADMIN, VENUE_MANAGER, LECTURER "
+ROLE_CODES_HELP = ("A system role code (not an ID): INSTITUTION_ADMIN, ACADEMIC_ADMIN, EXAMINATION_ADMIN, VENUE_MANAGER, LECTURER "
                    "or STUDENT. GET /api/v1/identity/roles lists them. Roles are built in; there is no endpoint to create them.")
-INSTITUTION_HELP = "Your institution's ID (for SLIIT: the SLIIT_INSTITUTION_ID value you created at bootstrap)."
+INSTITUTION_HELP = "Your institution's ID (GET /api/v1/identity/me lists your institutions)."
 EXAMPLE_INSTITUTION = "00000000-0000-4000-8000-000000000000"
 RoleCode = Field(min_length=2, max_length=50, pattern=r"^[A-Za-z][A-Za-z0-9_]*$", description=ROLE_CODES_HELP)
 
