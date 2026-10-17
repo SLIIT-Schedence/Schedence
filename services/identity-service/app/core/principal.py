@@ -1,4 +1,9 @@
-"""The authenticated caller, with permissions resolved from the Identity database."""
+"""The authenticated caller, with permissions resolved from the Identity database.
+
+Institution permissions and platform permissions are kept apart on purpose:
+``has_permission`` only ever answers for institutions, so a platform role such
+as SYSTEM_ADMIN can never satisfy an institution check, and vice versa.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,14 @@ class Grant:
     permissions: frozenset[str]
 
 
+@dataclass(frozen=True, slots=True)
+class PlatformGrant:
+    """One active platform role assignment (outside any institution) and its permissions."""
+
+    role_code: str
+    permissions: frozenset[str]
+
+
 @dataclass(frozen=True)
 class Principal:
     user_id: UUID
@@ -31,10 +44,13 @@ class Principal:
     full_name: str
     roles: frozenset[RoleGrant]
     permissions_by_institution: Mapping[UUID, frozenset[str]] = field(default_factory=dict)
+    platform_roles: frozenset[str] = frozenset()
+    platform_permissions: frozenset[str] = frozenset()
 
     @classmethod
-    def from_grants(cls, *, user_id: UUID, cognito_sub: str, email: str, full_name: str, grants: Iterable[Grant]) -> Principal:
-        grants = list(grants)
+    def from_grants(cls, *, user_id: UUID, cognito_sub: str, email: str, full_name: str, grants: Iterable[Grant],
+                    platform_grants: Iterable[PlatformGrant] = ()) -> Principal:
+        grants, platform_grants = list(grants), list(platform_grants)
         by_institution: dict[UUID, set[str]] = {}
         for grant in grants:
             by_institution.setdefault(grant.institution_id, set()).update(grant.permissions)
@@ -45,6 +61,8 @@ class Principal:
             full_name=full_name,
             roles=frozenset(RoleGrant(g.role_code, g.institution_id) for g in grants),
             permissions_by_institution=MappingProxyType({k: frozenset(v) for k, v in by_institution.items()}),
+            platform_roles=frozenset(g.role_code for g in platform_grants),
+            platform_permissions=frozenset().union(*(g.permissions for g in platform_grants)),
         )
 
     @property
@@ -66,3 +84,6 @@ class Principal:
 
     def has_role(self, role_code: str, institution_id: UUID | None = None) -> bool:
         return any(g.role_code == role_code and (institution_id is None or g.institution_id == institution_id) for g in self.roles)
+
+    def has_platform_permission(self, code: str) -> bool:
+        return code in self.platform_permissions
