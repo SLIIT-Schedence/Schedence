@@ -64,6 +64,13 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
     common = dict(settings=settings, policy=policy, configuration_fingerprint=policy.fingerprint,
                   fairness_policy=fairness, fairness_configuration_fingerprint=fairness.fingerprint)
     solver_time = 0.0
+    deadline = began + settings.time_limit_seconds
+    diagnostics = []
+
+    def remaining_time() -> float:
+        # Reported solver time and real elapsed time (model building included) both count; the stricter wins.
+        return max(0.0, min(settings.time_limit_seconds - solver_time, deadline - time.perf_counter()))
+
     if baseline is not None:
         errors = validate_timetable(snapshot, baseline)
         if errors:
@@ -72,6 +79,14 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
         baseline_result = generate_timetable(snapshot, replace(settings,
             time_limit_seconds=settings.time_limit_seconds * policy.baseline_budget_percent / 100))
         solver_time = baseline_result.wall_time_seconds
+        retry_limit = remaining_time()
+        if baseline_result.status == SolveStatus.UNKNOWN and retry_limit > 0:
+            # Feasibility search stops at its first valid timetable, so the retry only uses the time it needs.
+            # Without a baseline, short limits often return no timetable at all.
+            baseline_result = generate_timetable(snapshot, replace(settings, time_limit_seconds=retry_limit))
+            solver_time += baseline_result.wall_time_seconds
+            if baseline_result.timetable is not None:
+                diagnostics.append("Baseline needed more than its reserved budget; it used part of the optimization time.")
         baseline = baseline_result.timetable
         if baseline is None and baseline_result.status != SolveStatus.UNKNOWN:
             return OptimizationResult(baseline_result.status, violations=baseline_result.violations,
@@ -82,14 +97,12 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             diagnostics=("Fairness requires a validated baseline. No protected optimization was attempted and no limits were relaxed.",),
             solver_time_seconds=solver_time, total_time_seconds=time.perf_counter() - began, **common)
     baseline_evaluation = evaluate_timetable(snapshot, baseline, policy) if baseline else None
-    remaining = max(0.0, settings.time_limit_seconds - solver_time)
     selected, selected_evaluation = baseline, baseline_evaluation
     attempt_status = SolveStatus.UNKNOWN
     improved = False
     bound = relative_gap = None
-    diagnostics = []
     violations = ()
-    if remaining > 0:
+    if remaining_time() > 0:
         try:
             # Preserve the optional dependency boundary used by Phase 1 and the API.
             from ortools.sat.python import cp_model
@@ -117,34 +130,37 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             attempt_status = SolveStatus.MODEL_INVALID
             violations = exc.violations
         else:
-            solver = cp_model.CpSolver()
-            solver.parameters.max_time_in_seconds = remaining
-            solver.parameters.random_seed = settings.random_seed
-            solver.parameters.num_search_workers = settings.num_search_workers
-            attempt_status = SolveStatus(solver.status_name(solver.solve(model)))
-            solver_time += solver.wall_time
-            if attempt_status in (SolveStatus.FEASIBLE, SolveStatus.OPTIMAL):
-                candidate = decode_draft(snapshot, solver, starts, allocated)
-                violations = validate_timetable(snapshot, candidate)
-                if not violations:
-                    measured = evaluate_timetable(snapshot, candidate, policy)
-                    if measured.objective_units != solver.value(objective):
-                        violations = (Violation("OPTIMIZATION", "Independent score does not match the solver objective."),)
-                    elif fairness.enabled:
-                        try:
-                            violations = compare_fairness(baseline_evaluation, measured, policy, fairness).violations
-                        except SchedulingValidationError as exc:
-                            violations = exc.violations
+            # Building the objective model takes real time; skip the search if nothing is left.
+            remaining = remaining_time()
+            if remaining > 0:
+                solver = cp_model.CpSolver()
+                solver.parameters.max_time_in_seconds = remaining
+                solver.parameters.random_seed = settings.random_seed
+                solver.parameters.num_search_workers = settings.num_search_workers
+                attempt_status = SolveStatus(solver.status_name(solver.solve(model)))
+                solver_time += solver.wall_time
+                if attempt_status in (SolveStatus.FEASIBLE, SolveStatus.OPTIMAL):
+                    candidate = decode_draft(snapshot, solver, starts, allocated)
+                    violations = validate_timetable(snapshot, candidate)
                     if not violations:
-                        bound = solver.best_objective_bound
-                        if baseline_evaluation is None or measured.objective_units < baseline_evaluation.objective_units:
-                            selected, selected_evaluation = candidate, measured
-                            improved = baseline_evaluation is not None
-                if violations:
+                        measured = evaluate_timetable(snapshot, candidate, policy)
+                        if measured.objective_units != solver.value(objective):
+                            violations = (Violation("OPTIMIZATION", "Independent score does not match the solver objective."),)
+                        elif fairness.enabled:
+                            try:
+                                violations = compare_fairness(baseline_evaluation, measured, policy, fairness).violations
+                            except SchedulingValidationError as exc:
+                                violations = exc.violations
+                        if not violations:
+                            bound = solver.best_objective_bound
+                            if baseline_evaluation is None or measured.objective_units < baseline_evaluation.objective_units:
+                                selected, selected_evaluation = candidate, measured
+                                improved = baseline_evaluation is not None
+                    if violations:
+                        attempt_status = SolveStatus.MODEL_INVALID
+                elif attempt_status == SolveStatus.INFEASIBLE and baseline is not None:
+                    violations = (Violation("OPTIMIZATION", "Optimizer rejected a known valid baseline; model consistency failure."),)
                     attempt_status = SolveStatus.MODEL_INVALID
-            elif attempt_status == SolveStatus.INFEASIBLE and baseline is not None:
-                violations = (Violation("OPTIMIZATION", "Optimizer rejected a known valid baseline; model consistency failure."),)
-                attempt_status = SolveStatus.MODEL_INVALID
     if selected_evaluation and bound is not None:
         relative_gap = max(0.0, selected_evaluation.objective_units - bound) / max(1, abs(selected_evaluation.objective_units))
     if selected is baseline and baseline is not None:

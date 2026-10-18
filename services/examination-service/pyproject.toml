@@ -41,4 +41,5 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra"
 markers = [
     "live: talks to the real configured database (opt-in: pytest --live)",
+    "slow: long full-dataset solver runs; included by default, skip with -m \"not slow\"",
 ]
