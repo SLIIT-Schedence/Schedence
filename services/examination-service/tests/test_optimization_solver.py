@@ -159,6 +159,61 @@ async def test_shared_budget_subtracts_actual_baseline_search_time(monkeypatch):
     assert r.solver_time_seconds>=9 and r.timetable is baseline
 
 
+def baseline_after_retry(baseline,first_wall_time):
+    observed=[]
+    def baseline_solver(snapshot,settings):
+        observed.append(settings.time_limit_seconds)
+        if len(observed)==1:
+            return SolveResult(SolveStatus.UNKNOWN,wall_time_seconds=first_wall_time)
+        return SolveResult(SolveStatus.OPTIMAL,timetable=baseline,wall_time_seconds=.5)
+    return observed,baseline_solver
+
+
+@pytest.mark.parametrize("fairness",[False,True])
+async def test_baseline_timeout_retries_with_the_rest_of_the_budget(monkeypatch,fairness):
+    from app.scheduling import FairnessPolicy
+    import app.scheduling.optimization as service
+    x=await optimization_case(1,difficulties=(5,))
+    baseline=timed_draft(x,starts_on(0))
+    observed,baseline_solver=baseline_after_retry(baseline,1)
+    monkeypatch.setattr(service,"generate_timetable",baseline_solver)
+    r=optimize_timetable(x,SolverSettings(time_limit_seconds=10),fairness=FairnessPolicy(enabled=fairness))
+    assert observed[0]==1 and 8<observed[1]<=9
+    assert r.baseline is baseline and r.timetable is baseline and not validate_timetable(x,r.timetable)
+    assert any("reserved budget" in d for d in r.diagnostics)
+    assert r.fairness_comparison.limits_satisfied is (True if fairness else None)
+
+
+async def test_baseline_retry_is_skipped_when_no_time_is_left(monkeypatch):
+    import app.scheduling.optimization as service
+    x=await optimization_case(1,difficulties=(5,))
+    observed,baseline_solver=baseline_after_retry(timed_draft(x,starts_on(0)),10)
+    monkeypatch.setattr(service,"generate_timetable",baseline_solver)
+    r=optimize_timetable(x,SolverSettings(time_limit_seconds=10))
+    assert observed==[1]
+    assert r.status==SolveStatus.UNKNOWN and r.timetable is None
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("fairness",[False,True])
+@pytest.mark.parametrize("limit",[5,10,20,60])
+async def test_full_dataset_short_limits_still_return_a_valid_timetable(limit,fairness):
+    # Regression: the 42-module baseline needs ~2 s, more than 10% of a 5-20 s limit.
+    from app.scheduling import FairnessPolicy, load_snapshot
+    from app.seating.memory import MemorySeatingStore
+    from app.seed.generator import generate_dataset
+    from app.sources import DatasetSource
+    x=await load_snapshot(DatasetSource(generate_dataset()),MemorySeatingStore(),period_code="PP1-2026-S2-FINAL")
+    r=optimize_timetable(x,SolverSettings(time_limit_seconds=limit),fairness=FairnessPolicy(enabled=fairness))
+    assert r.status in (SolveStatus.FEASIBLE,SolveStatus.OPTIMAL),r.diagnostics
+    assert r.baseline is not None and r.timetable is not None and not r.violations
+    assert not validate_timetable(x,r.timetable)
+    assert r.selected_evaluation.objective_units<=r.baseline_evaluation.objective_units
+    if fairness:
+        assert r.fairness_comparison.limits_satisfied
+    assert r.total_time_seconds<=limit+3
+
+
 async def test_insufficient_capacity_and_empty_inputs_are_reported():
     x,_,_=await make_case(candidates=(("A","B","C","D","E"),))
     r=optimize_timetable(x,SolverSettings(time_limit_seconds=2))

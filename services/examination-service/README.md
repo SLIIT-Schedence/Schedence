@@ -852,6 +852,7 @@ RBAC/API tests use fake Identity responses and in-memory data, without AWS or Ne
 ```powershell
 cd services/examination-service
 python -m pytest            # unit tests; no database or credentials needed
+python -m pytest -m "not slow"   # quick run: skips the long full-dataset solver tests (~3 min)
 python -m pytest --live tests/test_live_api.py   # read-only checks against the real database
 python -m pytest --live     # all live tests; the seed test writes inside a transaction, then ROLLS BACK
 ```
