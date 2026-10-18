@@ -2,13 +2,14 @@
 
 from collections import Counter, defaultdict
 from itertools import combinations
+from fractions import Fraction
 
 from app.scheduling.availability import allowed_starts, minute_offset
 from app.scheduling.contracts import SchedulingValidationError, Violation
 from app.scheduling.optimization_policy import workload_units
 
 
-def add_objective(model, starts, snapshot, policy, baseline=None):
+def add_objective(model, starts, snapshot, policy, baseline=None, *, fairness=None, baseline_evaluation=None):
     modules = {m.module_code: m for m in snapshot.modules}
     candidates = {code: allowed_starts(snapshot, m) for code, m in modules.items()}
     by_student = defaultdict(list)
@@ -16,6 +17,27 @@ def add_objective(model, starts, snapshot, policy, baseline=None):
         by_student[r.student_id].append(r.module_code)
     patterns = Counter(tuple(sorted(codes)) for codes in by_student.values())
     scale = policy.score_scale
+    protected = fairness is not None and fairness.enabled
+    baseline_units = {}
+    if protected:
+        if baseline is None or baseline_evaluation is None:
+            raise SchedulingValidationError((Violation("FAIRNESS", "Fairness protection requires a validated baseline."),))
+        if (baseline.input_fingerprint != snapshot.fingerprint
+                or baseline_evaluation.input_fingerprint != snapshot.fingerprint
+                or baseline_evaluation.configuration_fingerprint != policy.fingerprint):
+            raise SchedulingValidationError((Violation("FAIRNESS", "Baseline must use the same frozen input and scoring configuration."),))
+        baseline_units = {s.student_id: s.objective_units for s in baseline_evaluation.student_penalties}
+        if baseline_units.keys() != by_student.keys():
+            raise SchedulingValidationError((Violation("FAIRNESS", "Baseline student penalties do not match the frozen registrations."),))
+        denominator = scale * sum(policy.weights)
+        individual_allowance = (Fraction(str(fairness.max_individual_increase_points)) * denominator / 100).__floor__()
+        worst_allowance = (Fraction(str(fairness.max_worst_increase_points)) * denominator / 100).__floor__()
+        worst_limit = max(baseline_units.values()) + worst_allowance
+        baseline_by_pattern = {}
+        for student, codes in by_student.items():
+            key = tuple(sorted(codes))
+            limit = baseline_units[student] + individual_allowance
+            baseline_by_pattern[key] = min(limit, baseline_by_pattern.get(key, limit))
     # Validate the largest possible weighted objective before CP-SAT int arithmetic.
     max_pairs = max(len(codes) * (len(codes) - 1) // 2 for codes in patterns)
     if (len(by_student) * scale * sum(policy.weights) > 2**60
@@ -81,6 +103,7 @@ def add_objective(model, starts, snapshot, policy, baseline=None):
     objective_terms = []
     # All normalized values are exact floor divisions, independently recomputed later.
     for index, (codes, multiplicity) in enumerate(sorted(patterns.items())):
+        student_terms = []
         n = len(codes)
         pair_bound = n * (n - 1) // 2 * scale
         total_load = sum(loads[c] for c in codes)
@@ -113,6 +136,13 @@ def add_objective(model, starts, snapshot, policy, baseline=None):
                 model.add(numerator == value * scale)
                 model.add_division_equality(normalized, numerator, bound)
                 objective_terms.append(weight * multiplicity * normalized)
+                student_terms.append(weight * normalized)
+        if protected:
+            # Apply limits to ONE student, not the pattern's population total.
+            student_objective = sum(student_terms)
+            model.add(student_objective <= baseline_by_pattern[codes])
+            if fairness.protect_worst_student:
+                model.add(student_objective <= worst_limit)
     objective = sum(objective_terms)
     model.minimize(objective)
     if baseline is not None:

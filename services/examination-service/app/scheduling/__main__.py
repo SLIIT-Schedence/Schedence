@@ -7,7 +7,7 @@ import asyncio
 import datetime as dt
 import json
 import math
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from app.scheduling import SchedulingPolicy, SolverSettings, generate_timetable, load_snapshot
@@ -17,6 +17,7 @@ from app.scheduling.contracts import SchedulingValidationError
 from app.scheduling.optimization_policy import OptimizationPolicy
 from app.scheduling.optimization import optimize_timetable
 from app.scheduling.validation import validate_timetable
+from app.scheduling.fairness_policy import FairnessPolicy
 from app.seating.memory import MemorySeatingStore
 from app.seating.rules import INITIAL_DEFAULT_PERCENTAGE, check_percentage
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS
@@ -78,6 +79,9 @@ def seating_percentage(text: str) -> int:
 
 async def run(args: argparse.Namespace) -> tuple[dict, bool]:
     optimization_policy = read_optimization_policy(args.optimization_config) if args.optimize else None
+    fairness_policy = read_fairness_policy(args.fairness_config) if args.optimize else FairnessPolicy()
+    if args.fairness is not None:
+        fairness_policy = replace(fairness_policy, enabled=args.fairness)
     compatibility = dict(SchedulingPolicy().venue_compatibility)
     compatibility.update(args.compatibility)
     policy = SchedulingPolicy(
@@ -96,7 +100,7 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
         result = SolveResult(SolveStatus.MODEL_INVALID, violations=exc.violations, settings=settings)
         snapshot = None
     else:
-        result = (optimize_timetable(snapshot, settings, optimization_policy) if args.optimize
+        result = (optimize_timetable(snapshot, settings, optimization_policy, fairness=fairness_policy) if args.optimize
                   else generate_timetable(snapshot, settings))
     payload = asdict(result)
     if args.optimize:
@@ -104,6 +108,9 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
     if not args.include_draft:
         payload.pop("timetable")
         payload.pop("baseline", None)
+        for name in ("baseline_evaluation", "selected_evaluation"):
+            if payload.get(name) is not None:
+                payload[name].pop("student_penalties", None)
     draft = result.timetable
     payload.update(
         prototype=True,
@@ -128,14 +135,22 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
 
 
 def read_optimization_policy(path: str | None) -> OptimizationPolicy:
+    return read_policy(path, OptimizationPolicy, "OPTIMIZATION")
+
+
+def read_fairness_policy(path: str | None) -> FairnessPolicy:
+    return read_policy(path, FairnessPolicy, "FAIRNESS")
+
+
+def read_policy(path, policy_type, code):
     if path is None:
-        return OptimizationPolicy()
+        return policy_type()
 
     def pairs(rows):
         result = {}
         for key, value in rows:
             if key in result:
-                raise ValueError("Duplicate optimization setting: " + key)
+                raise ValueError("Duplicate configuration setting: " + key)
             result[key] = value
         return result
 
@@ -144,12 +159,12 @@ def read_optimization_policy(path: str | None) -> OptimizationPolicy:
 
     try:
         content = Path(path).read_text(encoding="utf-8")
-        return OptimizationPolicy.from_mapping(json.loads(content, object_pairs_hook=pairs, parse_constant=reject_constant))
+        return policy_type.from_mapping(json.loads(content, object_pairs_hook=pairs, parse_constant=reject_constant))
     except (OSError, UnicodeError, ValueError) as exc:
         if isinstance(exc, SchedulingValidationError):
             raise
         from app.scheduling.contracts import Violation
-        raise SchedulingValidationError((Violation("OPTIMIZATION", "Cannot load optimization configuration: " + str(exc)),)) from exc
+        raise SchedulingValidationError((Violation(code, "Cannot load " + code.lower() + " configuration: " + str(exc)),)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -171,9 +186,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--include-draft", action="store_true", help="Include every session and logical seat in stdout JSON.")
     parser.add_argument("--optimize", action="store_true", help="Enable optional S1-S5 estimated workload optimization.")
     parser.add_argument("--optimization-config", help="Read prototype optimization settings from a JSON object.")
+    parser.add_argument("--fairness", action=argparse.BooleanOptionalAction, default=None,
+                        help="Enable/disable optional baseline-relative workload protection; default is off.")
+    parser.add_argument("--fairness-config", help="Read optional fairness settings from a JSON object.")
     args = parser.parse_args(argv)
     if args.optimization_config and not args.optimize:
         parser.error("--optimization-config requires --optimize")
+    if (args.fairness is not None or args.fairness_config) and not args.optimize:
+        parser.error("--fairness/--fairness-config requires --optimize")
     try:
         payload, success = asyncio.run(run(args))
     except SchedulingValidationError as exc:
