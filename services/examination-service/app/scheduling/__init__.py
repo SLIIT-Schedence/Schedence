@@ -6,8 +6,12 @@ from app.scheduling.policy import SchedulingPolicy, SolverSettings
 from app.scheduling.service import generate_timetable
 from app.scheduling.types import DraftTimetable, InputSnapshot, SolveResult, SolveStatus
 from app.scheduling.validation import validate_timetable
+from app.scheduling.optimization_policy import OptimizationPolicy
+from app.scheduling.evaluation import evaluate_timetable
+from app.scheduling.optimization import OptimizationResult, optimize_timetable
 
 __all__ = [
     "DraftTimetable", "InputSnapshot", "SchedulingPolicy", "SolveResult", "SolveStatus",
     "SolverSettings", "SchedulingValidationError", "generate_timetable", "load_database_snapshot", "load_snapshot", "validate_timetable",
+    "OptimizationPolicy", "OptimizationResult", "evaluate_timetable", "optimize_timetable",
 ]
