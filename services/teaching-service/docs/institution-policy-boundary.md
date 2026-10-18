@@ -89,37 +89,6 @@ Online delivery permits the configured `allowed_session_types` when its
 permissions require a resolved seal before solving. Venue suitability/capacity
 remains enforced for physical deliveries and no physical room is booked online.
 
-### Batch online lecture day (opt-in)
-
-`SolverConfig.batch_online_days` (`BatchOnlineDayPolicy`) lets CP-SAT choose the
-online lecture day for each batch. A batch is (academic year, semester, stream)
-within the one institution of the snapshot. Specialization is not part of the
-key, and group names are never parsed.
-
-- **One day per batch.** Each batch with lectures gets exactly one candidate
-  weekday (Monday to Friday) from `candidate_days[stream]`. Batches may share a
-  day.
-- **Fully online day.** On its selected day a batch has only online lectures:
-  no physical lectures, labs, tutorials or workshops, and no online
-  non-lectures. The same calendar day remains physical for every other batch.
-- **No empty day.** At least one lecture runs online on the selected day.
-- **Physical elsewhere.** A lecture on any other day is physical and needs a
-  venue.
-- **Fixed online rows.** An `ONLINE` calendar row must be a candidate day. It can
-  host a batch only as that batch's selected day.
-- **No quotas.** There are no online percentages or physical-lecture quotas.
-- **Infeasible stays infeasible.** Combinations that cannot be satisfied are
-  reported as INFEASIBLE.
-- **Sealed policy required.** The policy needs a resolved institution seal whose
-  `policy_reference` matches the approved revision. Combined deliveries are
-  not supported.
-- **Validation.** The independent validator re-derives each batch's online day
-  from stored booking modes. Persistence stores each booking's own mode.
-- **Unsupported tools.** The pilot main-group PDF and calendar placement
-  diagnostics refuse this policy rather than misreport modes.
-- **Compatibility.** The field is omitted from serialized configs when unset, so
-  historical snapshots and policy digests are unchanged.
-
 Unbound historical lunch and delivery contracts retain their original initial-campus
 validation rules. Their newly added optional fields are omitted when absent, so
 old snapshot JSON/hashes retain their meaning. This compatibility path is explicit;

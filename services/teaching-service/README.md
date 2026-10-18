@@ -55,11 +55,8 @@ From the repository root, using the existing virtual environment:
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".\services\teaching-service[dev]"
 .\.venv\Scripts\python.exe -m pytest services/teaching-service/tests -q
-.\.venv\Scripts\python.exe -m uvicorn schedence_teaching.main:app --app-dir services/teaching-service/src --host 127.0.0.1 --port 8004 --loop asyncio:SelectorEventLoop
+.\.venv\Scripts\python.exe -m uvicorn schedence_teaching.main:app --app-dir services/teaching-service/src --host 127.0.0.1 --port 8003 --loop asyncio:SelectorEventLoop
 ```
-
-Or start it with the other services: `python scripts\run_services.py --only teaching` (add
-`--teaching-local-preview <manifest>` to opt in to the development-only local preview store).
 
 Test records are synthetic examples and do not assert authoritative module hours.
 
@@ -3609,7 +3606,7 @@ role headers are trusted, and no roles or permissions are seeded by Teaching.
 
 Existing Identity grants `teaching:generate`/`teaching:approve` authorize the
 Academic Admin read workflow; explicit Teaching read permissions have compatible
-extension contracts. Institution Admin, System Admin, Examination Admin and Venue Manager get no
+extension contracts. Super Admin, Examination Admin and Venue Manager get no
 automatic private Teaching access. Lecturer/student reads require trusted
 Academic account/scope bindings; missing bindings fail closed. Students cannot
 see the current unpublished experimental drafts. HOD/Professor/coordinator
@@ -3648,8 +3645,8 @@ commit through the existing persistence boundary in one transaction. Production
 execution remains disabled, and the additive queue migration/grants are prepared
 for review without being applied to Neon.
 
-Teaching runs separately from Identity (8001), Academic (8002) and Examination (8003) on local
-port **8004**, with Swagger at **http://localhost:8004/docs**. Both route prefixes are
+Teaching runs separately from Identity (8001) and Academic (8002) on local port
+**8003**, with Swagger at **http://localhost:8003/docs**. Both route prefixes are
 visible. `python -m schedence_teaching.api.inspect_permissions` safely inspects
 your own effective Identity Teaching grants using a hidden Cognito-token prompt.
 No real grants are changed by Teaching. See the [durable jobs and Swagger guide](docs/step-12c2-1-durable-jobs-swagger.md)
