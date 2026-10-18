@@ -66,7 +66,8 @@ class ExamSchedulingSettingsHistory(Base):
     version: Mapped[int] = mapped_column(Integer)  # settings version after the change
     format: Mapped[str] = mapped_column(String(40))
     old_format: Mapped[str | None] = mapped_column(String(40))
-    old_settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # none_as_null: store Python None as SQL NULL (not JSON 'null'), as ck_..._action_values requires for 'create'.
+    old_settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     new_settings: Mapped[dict[str, Any]] = mapped_column(JSONB)
     changed_fields: Mapped[list[str]] = mapped_column(JSONB)
     changed_by: Mapped[uuid.UUID] = mapped_column(Uuid)

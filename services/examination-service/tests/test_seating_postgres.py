@@ -239,9 +239,12 @@ async def test_one_override_per_venue_and_venue_with_override_cannot_be_deleted(
     _query(migrated, insert)
     with pytest.raises(psycopg.errors.UniqueViolation):
         _query(migrated, insert)
-    with pytest.raises(psycopg.errors.ForeignKeyViolation):  # e.g. a seed replacement
+    # ON DELETE RESTRICT raises restrict_violation (23001), not foreign_key_violation (23503). E.g. a seed replacement.
+    with pytest.raises(psycopg.errors.RestrictViolation) as blocked:
         _query(migrated, "DELETE FROM examinations.seed_venue_blocks WHERE venue_id = 'F303'; "
                          "DELETE FROM examinations.seed_venues WHERE venue_id = 'F303' RETURNING 1")
+    assert blocked.value.diag.constraint_name == "fk_exam_seating_rules_venue_id_seed_venues"
+    assert _query(migrated, "SELECT count(*) FROM examinations.seed_venues WHERE venue_id = 'F303'") == [(1,)]
 
 
 # --- Service on PostgreSQL ------------------------------------------------------------------------------------------
@@ -780,3 +783,25 @@ async def test_0006_invalid_stored_settings_are_reported_and_repaired(settings_e
                   "examinations.exam_scheduling_settings_history WHERE version = 2")
     assert (action, old_settings, old_format) == ("repair", broken, "scheduling-settings-v1")
     assert changed == list(change.changed_fields)
+
+
+def test_0006_settings_survive_a_service_restart(migrated: str) -> None:
+    _alembic("upgrade", "0006")
+    url = "/api/v1/settings/scheduling"
+    with _api_client() as client:
+        assert (client.get(url).json()["source"], client.get(url).json()["version"]) == ("defaults", 0)
+        first = client.put(url, json={"settings": _settings_document(90), "reason": REASON, "expected_version": 0})
+        assert first.status_code == 200 and (first.json()["action"], first.json()["version"]) == ("create", 1)
+        second = client.put(url, json={"settings": _settings_document(30), "reason": REASON, "expected_version": 1})
+        assert second.status_code == 200 and (second.json()["action"], second.json()["version"]) == ("update", 2)
+    # A new app has its own engine and connection pool, as after a restart of the service.
+    with _api_client() as client:
+        view = client.get(url).json()
+        assert (view["source"], view["status"], view["version"]) == ("saved", "valid", 2)
+        assert view["settings"] == _settings_document(30) and view["fingerprint"] == second.json()["fingerprint"]
+        assert [(h["action"], h["version"]) for h in view["history"]] == [("update", 2), ("create", 1)]
+        stale = client.put(url, json={"settings": _settings_document(60), "reason": REASON, "expected_version": 1})
+        assert stale.status_code == 409
+    assert _query(migrated, "SELECT action, version, old_settings IS NULL FROM "
+                            "examinations.exam_scheduling_settings_history ORDER BY history_id") == [
+        ("create", 1, True), ("update", 2, False)]
