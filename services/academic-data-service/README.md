@@ -17,7 +17,7 @@ Academic appointment:    Program Coordinator, BSC_IT   (stored here: responsibil
 Schedence login role:    LECTURER                      (Identity Service only)
 ```
 
-- Appointing someone HOD does **not** grant SUPER_ADMIN.
+- Appointing someone HOD does **not** grant INSTITUTION_ADMIN.
 - Appointing someone Program Coordinator does **not** grant ACADEMIC_ADMIN.
 - This service never writes to the Identity Service and stores no system roles.
 - A staff member may have **no Schedence login at all**: `identity_user_id` is optional.
@@ -113,7 +113,7 @@ Base path `/api/v1/academic`.
 | `GET /staff/{staff_id}/administrative-workload` | `academic:workload:read` |
 | `GET /health`, `GET /health/db` | none |
 
-SUPER_ADMIN holds all of these. ACADEMIC_ADMIN and EXAMINATION_ADMIN can read workload.
+INSTITUTION_ADMIN holds all of these. ACADEMIC_ADMIN and EXAMINATION_ADMIN can read workload. SYSTEM_ADMIN (platform) holds none: it has no access here.
 
 ## Running (PowerShell)
 
@@ -152,7 +152,7 @@ No database or AWS is touched. Coverage:
 - date validation
 - termination and history
 - institution scope
-- HOD ≠ SUPER_ADMIN and PC ≠ ACADEMIC_ADMIN
+- HOD ≠ INSTITUTION_ADMIN and PC ≠ ACADEMIC_ADMIN
 - staff without logins
 - workload retrieval and aggregation rules
 - Identity Service outage, disabled accounts, permission caching
