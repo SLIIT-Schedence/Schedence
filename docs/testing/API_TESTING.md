@@ -1,18 +1,18 @@
 # Testing every Schedence API endpoint
 
-This guide tests **all 39 API operations**: 20 in the Identity Service and 19 in the Academic Data Service. It uses real Cognito sign-in against your local services and your Neon database.
+This guide tests **all 52 API operations**: 33 in the Identity Service (13 of them System Admin endpoints) and 19 in the Academic Data Service. It uses real Cognito sign-in against your local services and your Neon database.
 
 | What | Where |
 |---|---|
-| Postman collection: 104 requests with automatic checks | [`schedence.postman_collection.json`](schedence.postman_collection.json) |
+| Postman collection: 119 requests with automatic checks | [`schedence.postman_collection.json`](schedence.postman_collection.json) |
 | Quick manual testing in the browser | Swagger UI: http://localhost:8001/docs and http://localhost:8002/docs |
 | Automated unit tests (mocked, no AWS/DB) | `python -m pytest` in each service folder |
 
 > **This writes real data.** These tests create real Cognito users, which receive real invitation e-mails, and real rows in your Neon `identity` and `academic` schemas.
 >
 > - **Test data is clearly marked.** Everything is named `TEST_…` / `Test …` with a random run suffix.
-> - **There are no delete endpoints, by design.** Test accounts are disabled, not deleted, and appointments are ended, not deleted.
-> - **E-mail quota.** Each new test user counts toward Cognito's **50 e-mails per day**: one full Postman run creates 2 users, and the optional M4 folder creates 2 more.
+> - **There are no delete endpoints, by design.** Test accounts are disabled, not deleted, appointments are ended, not deleted, and test institutions are disabled, not deleted.
+> - **E-mail quota.** Each new test user counts toward Cognito's **50 e-mails per day**: one full Postman run creates 2 users, the optional M4 folder creates 2 more, and M5 creates 1.
 
 ---
 
@@ -52,6 +52,7 @@ Tokens from this client are accepted only while `APP_ENV` is not `production`.
 Gmail delivers `yourname+anything@gmail.com` to `yourname@gmail.com`, and Cognito treats each `+tag` as a different e-mail. The collection uses this:
 - the test Lecturer is `yourname+lect<suffix>@gmail.com`
 - the test Academic Admin is `yourname+acad<suffix>@gmail.com`
+- the test Institution Admin (M5) is `yourname+ia<suffix>@gmail.com`
 
 Every invitation lands in your own inbox.
 
@@ -77,7 +78,7 @@ Wait for `All services are running`. Both services must report `database: health
    - Leave `client_secret` empty.
    - Tick **openid, email, profile**.
    - Click **Authorize**.
-3. A Cognito sign-in pop-up opens. Allow pop-ups for `localhost` if your browser blocks it. Sign in with your Super Admin e-mail, password and authenticator code. The pop-up closes and Swagger shows *Authorized*. Click **Close**.
+3. A Cognito sign-in pop-up opens. Allow pop-ups for `localhost` if your browser blocks it. Sign in with your Institution Admin e-mail (the SLIIT admin account, formerly Super Admin), password and authenticator code. The pop-up closes and Swagger shows *Authorized*. Click **Close**.
 4. Open any endpoint, then **Try it out → Execute**. Start with `GET /api/v1/identity/me`.
 5. For the Academic service, open http://localhost:8002/docs and click **Authorize** again. Cognito remembers you, so it won't ask for the password a second time.
 
@@ -106,10 +107,10 @@ Wait for `All services are running`. Both services must report `database: health
    Leave the other variables empty. The requests fill them in as they run.
 3. Click **Save** (Ctrl+S).
 
-### 3.2 Get a Super Admin access token
+### 3.2 Get an Institution Admin access token
 1. Open the collection's **Authorization** tab. OAuth 2.0 with *Authorization Code (With PKCE)* is already configured. If any field is empty, re-type it from the table below.
 2. Scroll down, then click **Get New Access Token**.
-3. In Postman's sign-in window, sign in as the **Super Admin**: your e-mail, password and authenticator code.
+3. In Postman's sign-in window, sign in as the **Institution Admin** (the SLIIT admin account): your e-mail, password and authenticator code.
 4. Click **Proceed**, then **Use Token**.
 
 Every request in the collection now sends this access token, except those that deliberately use no token or another token.
@@ -134,8 +135,8 @@ Open the **Runner**, select the collection, and **untick the M1–M4 folders**. 
 |---|---|
 | **00 Setup** | Picks a new random suffix. Always run it first, so a second run doesn't collide with the first |
 | **01 Health** | Both services are alive and Neon answers `SELECT 1` (no token needed) |
-| **02 Current user** | Your token resolves to the bootstrapped Super Admin with SLIIT-scoped permissions |
-| **03 Roles, permissions, audit** | 6 system roles (no HOD/Dean/Coordinator), 25 permissions, the bootstrap audit entry |
+| **02 Current user** | Your token resolves to the SLIIT Institution Admin with SLIIT-scoped permissions and no platform role |
+| **03 Roles, permissions, audit** | 6 institution roles (no HOD/Dean/Coordinator, no SYSTEM_ADMIN), 25 permissions (no `platform:*`), the audit entry that created your account |
 | **04 User management** | Create Lecturer + Academic Admin (real invitation e-mails), list/search/filter, view, status, provisioning history, resend invitation, rename (synced to Cognito), assign and revoke roles, disable/enable (Cognito too), audit trail |
 | **05 Identity validation and security** | 401 without/with a bad token, duplicate e-mail, HOD is not a login role, extra fields rejected, other institution, cannot disable yourself or change your own roles, 404/422 paths, non-retryable/non-cancellable onboarding |
 | **06 Positions** | HOD / Program Coordinator / Dean created with configurable hours, details, update, new hours **version** (history kept), disable/enable |
@@ -158,14 +159,14 @@ Open the **Runner**, select the collection, and **untick the M1–M4 folders**. 
    3. Scan the QR code into your authenticator app as a new entry.
    4. Enter the code.
 3. In the token window, **copy the access token**. Don't click *Use Token*. Paste it into the collection variable `lecturerToken`, then **Save**.
-4. In **Current Token**, make sure the **Super Admin** token is still selected.
+4. In **Current Token**, make sure the **Institution Admin** token is still selected.
 5. Run M1. You should see:
    - `/me` shows only LECTURER.
-   - Creating users is 403, even with spoofed `X-Role: SUPER_ADMIN` headers.
+   - Creating users is 403, even with spoofed `X-Role: INSTITUTION_ADMIN` headers.
    - Every Academic endpoint is 403. Being an HOD gives no admin access.
 
 **M2: disabled account blocked immediately.** Run M2 in order:
-1. The Super Admin disables the Lecturer.
+1. The Institution Admin disables the Lecturer.
 2. The Lecturer's still-valid token gets `403 ACCOUNT_DISABLED` from both services.
 3. The account is enabled again and works.
 
@@ -185,6 +186,23 @@ Open the **Runner**, select the collection, and **untick the M1–M4 folders**. 
    - **retry** completes it (attempt 2, no duplicate Cognito user);
    - **cancel** works on the other one, which never reached Cognito.
 
+**M5: as the System Admin (institutions and their admins)**
+
+This proves the chain *System Admin → Institution Admin → users* and that a System Admin has no access inside institutions.
+
+1. Bootstrap a System Admin once, with a **dedicated** e-mail (e.g. `yourname+owner@gmail.com`), following *Bootstrapping a System Admin* in [`services/identity-service/README.md`](../../services/identity-service/README.md#bootstrapping-a-system-admin). An account that already has institution roles is refused.
+2. In the collection's **Authorization** tab, click **Get New Access Token**, click **Clear cookies** in the sign-in window, and sign in as the System Admin.
+3. **Copy the access token** (don't click *Use Token*), paste it into the collection variable `systemAdminToken`, then **Save**. Keep the **Institution Admin** token selected in **Current Token**.
+4. Run M5 in order. You should see:
+   - `/me` shows the SYSTEM_ADMIN platform role and no institution roles; `/me/permissions` lists no institutions.
+   - A `TEST_<suffix>` institution is created (a duplicate code is 409) and renamed.
+   - Its Institution Admin is created (one real invitation e-mail to `yourname+ia<suffix>@gmail.com`) and listed.
+   - The System Admin gets 403 from `/users` and from the Academic service.
+   - The Institution Admin gets 403 from the platform endpoints and 422 `PLATFORM_ROLE_NOT_ASSIGNABLE` when granting SYSTEM_ADMIN.
+   - The TEST_ institution is disabled (adding another admin is then 409 `INSTITUTION_DISABLED`), and the platform audit log lists only `platform.*` events.
+
+The TEST_ institution stays in the registry, disabled.
+
 ---
 
 ## 4. Endpoint reference
@@ -201,24 +219,42 @@ Errors always look like:
 |---|---|---|---|---|
 | 1 | `GET /health` | none | 200 `{"status":"ok"}` | |
 | 2 | `GET /health/db` | none | 200 `{"status":"healthy"}` | 503 database unreachable |
-| 3 | `GET /api/v1/identity/me` | signed in | 200 profile + roles | 401 token, 403 `ACCOUNT_DISABLED` / `ACCOUNT_NOT_PROVISIONED` |
-| 4 | `GET /api/v1/identity/me/permissions` | signed in | 200 permissions per institution | as above |
-| 5 | `POST /api/v1/identity/users` | `identity:users:create` + `identity:roles:assign` | 201 user + provisioning | 409 `EMAIL_ALREADY_REGISTERED` / `PROVISIONING_IN_PROGRESS`; 422 `UNKNOWN_ROLE`; 403 other institution or `PRIVILEGED_ROLE_REQUIRED`; 503 Cognito |
+| 3 | `GET /api/v1/identity/me` | signed in | 200 profile + roles + `platform_roles` + `institutions` | 401 token, 403 `ACCOUNT_DISABLED` / `ACCOUNT_NOT_PROVISIONED` |
+| 4 | `GET /api/v1/identity/me/permissions` | signed in | 200 permissions per institution + `platform` | as above |
+| 5 | `POST /api/v1/identity/users` | `identity:users:create` + `identity:roles:assign` | 201 user + provisioning | 409 `EMAIL_ALREADY_REGISTERED` / `PROVISIONING_IN_PROGRESS`; 422 `UNKNOWN_ROLE` / `PLATFORM_ROLE_NOT_ASSIGNABLE`; 403 other institution or `PRIVILEGED_ROLE_REQUIRED`; 503 Cognito |
 | 6 | `GET /api/v1/identity/users` | `identity:users:read` | 200 page (`search`, `status`, `role_code`, `page`, `page_size`) | |
 | 7 | `GET /api/v1/identity/users/{id}` | `identity:users:read` | 200 | 404 |
 | 8 | `PATCH /api/v1/identity/users/{id}` | `identity:users:update` | 200 + `cognito_sync` | 422 other fields; 403 `PRIVILEGED_TARGET` |
-| 9 | `POST /api/v1/identity/users/{id}/disable` | `identity:users:disable` | 200 + `cognito_sync` | 403 `CANNOT_DISABLE_SELF`; 409 `LAST_SUPER_ADMIN` |
+| 9 | `POST /api/v1/identity/users/{id}/disable` | `identity:users:disable` | 200 + `cognito_sync` | 403 `CANNOT_DISABLE_SELF`; 409 `LAST_INSTITUTION_ADMIN` |
 | 10 | `POST /api/v1/identity/users/{id}/enable` | `identity:users:disable` | 200 | 503 Cognito |
 | 11 | `GET /api/v1/identity/users/{id}/status` | `identity:users:read` | 200 local + live Cognito status | |
 | 12 | `GET /api/v1/identity/users/{id}/provisioning` | `identity:users:read` | 200 history | |
 | 13 | `POST /api/v1/identity/users/{id}/resend-invitation` | `identity:users:create` | 204 | 409 `INVITATION_NOT_APPLICABLE` (already signed in) |
-| 14 | `PUT /api/v1/identity/users/{id}/roles` | `identity:roles:assign` | 200 | 403 `SELF_ROLE_CHANGE_FORBIDDEN` / `PRIVILEGED_ROLE_REQUIRED`; 422 `UNKNOWN_ROLE`; 409 `LAST_SUPER_ADMIN` |
+| 14 | `PUT /api/v1/identity/users/{id}/roles` | `identity:roles:assign` | 200 | 403 `SELF_ROLE_CHANGE_FORBIDDEN` / `PRIVILEGED_ROLE_REQUIRED` / `PLATFORM_ACCOUNT`; 422 `UNKNOWN_ROLE` / `PLATFORM_ROLE_NOT_ASSIGNABLE`; 409 `LAST_INSTITUTION_ADMIN` |
 | 15 | `GET /api/v1/identity/provisioning` | `identity:users:create` | 200 page (`status` filter) | |
 | 16 | `POST /api/v1/identity/provisioning/{id}/retry` | `identity:users:create` | 200 | 409 `PROVISIONING_NOT_RETRYABLE` |
 | 17 | `POST /api/v1/identity/provisioning/{id}/cancel` | `identity:users:create` | 200 | 409 `PROVISIONING_NOT_CANCELLABLE` |
 | 18 | `GET /api/v1/identity/roles` | `identity:roles:read` | 200 (6) | |
 | 19 | `GET /api/v1/identity/permissions` | `identity:permissions:read` | 200 (25) | |
 | 20 | `GET /api/v1/identity/audit-logs` | `identity:audit:read` | 200 page (`action`, `actor_user_id`, `target_user_id`, `occurred_from`, `occurred_to`) | |
+
+System Admin endpoints (only SYSTEM_ADMIN holds `platform:*`; everyone else gets 403):
+
+| # | Method & path | Permission | Success | Typical errors |
+|---|---|---|---|---|
+| 21 | `POST /api/v1/identity/platform/institutions` | `platform:institutions:create` | 201 | 409 `INSTITUTION_CODE_TAKEN`; 422 code format |
+| 22 | `GET /api/v1/identity/platform/institutions` | `platform:institutions:read` | 200 page (`search`, `status`) | |
+| 23 | `GET /api/v1/identity/platform/institutions/{id}` | `platform:institutions:read` | 200 | 404 |
+| 24 | `PATCH /api/v1/identity/platform/institutions/{id}` | `platform:institutions:update` | 200 | 409 `INSTITUTION_CODE_TAKEN`; 422 nothing to change |
+| 25 | `POST /api/v1/identity/platform/institutions/{id}/disable` | `platform:institutions:disable` | 200 (roles there stop granting permissions) | 404 |
+| 26 | `POST /api/v1/identity/platform/institutions/{id}/enable` | `platform:institutions:disable` | 200 | 404 |
+| 27 | `GET /api/v1/identity/platform/institutions/{id}/admins` | `platform:institution_admins:read` | 200 page | 404 |
+| 28 | `POST /api/v1/identity/platform/institutions/{id}/admins` | `platform:institution_admins:create` | 201 user + provisioning | 409 `INSTITUTION_DISABLED` / `EMAIL_ALREADY_REGISTERED` / `PROVISIONING_IN_PROGRESS`; 503 Cognito (send again to resume) |
+| 29 | `POST /api/v1/identity/platform/institutions/{id}/admins/{user_id}/resend-invitation` | `platform:institution_admins:create` | 204 | 404 not an admin there; 409 `INVITATION_NOT_APPLICABLE` |
+| 30 | `DELETE /api/v1/identity/platform/institutions/{id}/admins/{user_id}` | `platform:institution_admins:revoke` | 204 | 404 not an admin there |
+| 31 | `POST /api/v1/identity/platform/institutions/{id}/admins/{user_id}/disable` | `platform:institution_admins:disable` | 200 + `cognito_sync` | 404 not an admin there |
+| 32 | `POST /api/v1/identity/platform/institutions/{id}/admins/{user_id}/enable` | `platform:institution_admins:disable` | 200 | 404; 503 Cognito |
+| 33 | `GET /api/v1/identity/platform/audit-logs` | `platform:audit:read` | 200 page of `platform.*` events (`institution_id`, `action`, ...) | |
 
 ### Academic Data Service: http://localhost:8002
 
@@ -255,7 +291,8 @@ Errors always look like:
 | 401 `INVALID_TOKEN` "An access token is required" | You sent the **id_token**. Use the access token |
 | 401 "issued to an unrecognised app client" | `COGNITO_DEVTOOLS_CLIENT_ID` is missing from `.env` (restart the launcher after adding it), or `APP_ENV=production` |
 | 401 "has expired" | Get a new token (it lasts 60 min) |
-| 403 `ACCOUNT_NOT_PROVISIONED` | Signed in as a Cognito user that has no Schedence account. Create it via `POST /users`, or sign in as the Super Admin |
+| 403 `ACCOUNT_NOT_PROVISIONED` | Signed in as a Cognito user that has no Schedence account. Create it via `POST /users` or `POST /platform/institutions/{id}/admins`, or sign in as the Institution Admin |
+| 403 on every institution endpoint, but `/me` works | You are signed in as the System Admin (it has no access inside institutions), or the institution is disabled (`/me` shows its status) |
 | 503 `IDENTITY_PROVIDER_MISCONFIGURED` | AWS credentials problem: check `AWS_PROFILE=schedence-identity` and run `python -m scripts.verify_cognito` |
 | 503 `IDENTITY_SERVICE_UNAVAILABLE` (Academic) | The Identity Service isn't running on `IDENTITY_SERVICE_URL` (the launcher sets it automatically) |
 | First request after a break is slow or times out | Neon was asleep; retry. Add `DB_CONNECT_TIMEOUT=30` to `.env` if it happens often |
