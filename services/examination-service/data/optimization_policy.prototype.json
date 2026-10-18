@@ -1,0 +1,22 @@
+{
+  "s1_weight": 25,
+  "s2_weight": 20,
+  "s3_weight": 30,
+  "s4_weight": 15,
+  "s5_weight": 10,
+  "short_gap_minutes": 720,
+  "preparation_target_minutes": 2880,
+  "difficult_target_minutes": 4320,
+  "high_difficulty_minimum": 4,
+  "window_days": 3,
+  "preferred_window_exams": 2,
+  "difficulty_weight": 50,
+  "credits_weight": 25,
+  "duration_weight": 25,
+  "reference_difficulty": 3,
+  "reference_credits": 4,
+  "reference_duration_minutes": 120,
+  "score_scale": 1000,
+  "load_scale": 1000,
+  "baseline_budget_percent": 10
+}

@@ -2,7 +2,7 @@
 
 Examination timetabling and cognitive load optimization for Schedence.
 
-**Current phase: data, secured API, seating settings and an offline draft scheduler.** This service has a
+**Current phase: data, secured API, seating settings and optional offline workload optimization.** This service has a
 synthetic, reproducible dataset, the tables to store it, and a FastAPI backend
 for examination administrators (Cognito login + Identity Service permissions).
 The data routes are read-only; the only writes are the configurable exam
@@ -142,6 +142,168 @@ Implementation lives in `app/scheduling/`: `policy.py`, `types.py`, `inputs.py`,
 `availability.py`, `cp_sat.py`, `validation.py`, `service.py`, and `__main__.py`.
 No result storage, publishing/booking guarantee, invigilator allocation or real
 institutional policy is provided in Phase 1.
+
+## Offline Phase 2: estimated workload optimization
+
+Phase 2 is **optional**. The existing `generate_timetable()` and CLI without
+`--optimize` retain feasibility-only behavior. Both modes build the same H1-H11
+constraints in `app/scheduling/model.py`; soft weights cannot relax them.
+The configured minimum student break remains hard, including when it is zero.
+There are no new APIs, database writes, workers, UI features or dependencies.
+
+**Cognitive load here is an estimated workload score, not a scientifically
+validated stress measurement, medical assessment or prediction of individual
+wellbeing.** All defaults are approved prototype assumptions, not university
+policy. Existing synthetic registrations and simulated blocks keep their labels.
+
+From this service directory, with the existing `[solver]` extra installed:
+
+```powershell
+python -m app.scheduling --optimize
+python -m app.scheduling --optimize --optimization-config data/optimization_policy.prototype.json --time-limit 60
+python -m app.scheduling --optimize --minimum-break 90 --include-draft
+python -m pytest tests/test_optimization_scoring.py tests/test_optimization_solver.py
+```
+
+The JSON configuration is read afresh on each run. It may contain a subset of
+the settings shown in `data/optimization_policy.prototype.json`; omitted settings
+use defaults. Unknown/duplicate keys, non-finite JSON constants, wrong types and
+inconsistent settings are rejected with structured JSON errors. Settings use
+integer minutes, days, coefficients and weights; booleans are not integers here.
+The CLI never saves settings or results. A future Admin UI can serialize these
+same fields through `OptimizationPolicy.from_mapping()` / `dataclasses.asdict()`;
+authentication, settings endpoints and persistence are deliberately outside this
+phase. Supplied settings are copied into an immutable policy for that run.
+
+### Workload formula and normalization
+
+For each module, estimated load points are:
+
+```text
+100 * (0.50 * difficulty/3 + 0.25 * credits/4
+       + 0.25 * (duration_minutes + reading_time_minutes)/120)
+```
+
+Difficulty, credits and duration coefficients, their reference values, and
+fixed-point precision are configurable. The coefficients are normalized by their
+sum. Reference values stay fixed across datasets, rather than changing when a
+module is added. Exact rational arithmetic is rounded half up once to
+`load_scale` units per point (default 1000). Difficulty must be 1..5 and credits
+must be positive signed 32-bit integers in optimization mode, matching the source
+storage type; feasibility-only input rules are unchanged.
+
+Each student is scored from their actual selected module registrations, including
+repeats. Repeat status adds no multiplier. Unregistered students do not affect the
+score. Identical registration patterns share model terms but retain their full
+student multiplicity. For each student, each raw penalty is divided by a fixed
+upper bound derived from those registrations and floored to `score_scale` units
+(default 1000). A zero bound gives zero penalty. This rounding is part of the
+versioned objective and can hide tiny improvements; increase precision if needed,
+subject to safe integer bounds.
+
+Reported `penalty_points` are the equal-student mean on a 0..100 scale.
+`weighted_points = weight * penalty_points / 100`; their sum is
+`total_weighted_penalty`. Default weights sum to 100; other non-negative integer
+weights are supported, and zero disables that objective's contribution. Exact
+integer `objective_units`, not rounded display values, determine improvement.
+Participating students with one exam contribute zero penalties and remain in
+the equal-student mean.
+
+### Five soft constraints
+
+Preparation gap `g` is measured in minutes from the earlier exam's complete end
+to the later start, including reading time. Weekends and excluded dates count as
+elapsed preparation time; this does not claim students have all that time free.
+
+| Rule | Raw penalty and default settings |
+| --- | --- |
+| S1, weight 25 | For pairs with both difficulties >=4: `(4320 - clamp(g, 2880, 4320)) / 1440` |
+| S2, weight 20 | For all registered pairs: `(2880 - clamp(g, 720, 2880)) / 2160` |
+| S3, weight 30 | Maximum of the same-calendar-day indicator and `max(0, 720-g)/720`; never add both |
+| S4, weight 15 | Peak count-adjusted demanding-exam concentration in a three-calendar-day window, as defined below |
+| S5, weight 10 | Peak excess above two exams in any three-calendar-day window |
+
+S1 and S2 use different missing-gap bands. Their penalties saturate below their
+lower thresholds: the same missing minute is not charged in both bands. S3 covers
+short gaps and the distinct calendar-day preference. A close difficult pair can
+still receive multiple *different* layers of penalty; this is intentional. Larger
+gaps beyond the targets earn no extra reward. Pair scores are normalized by the
+student's total unordered exam-pair count, including non-difficult pairs for S1.
+Pairs with another exam between them still count. Consecutive gap metrics are
+reported separately.
+
+For S4, let `n` be the student's exam count and `T` the sum of their module load
+units. Define `delta[m] = n * load[m] - T`. This subtracts the expected load for
+the number of exams in a window. Subtract the unavoidable single-exam excess
+`B = max(0, max(delta))`, then take:
+
+```text
+raw S4 = max(0, max_over_windows(sum(delta[m] in window) - B))
+S4 bound = sum(max(0, delta[m])) - B
+```
+
+An isolated difficult exam is therefore not penalized, and equal-load exams have
+zero S4 penalty. S4 balances the mix of demanding and lighter exams; S5 measures
+exam count. S5's bound is `max(0, n - preferred_window_exams)`. Both use a peak,
+so a cluster is not charged repeatedly through overlapping windows. Calendar
+windows include partial windows at period edges and count empty/excluded dates;
+large configured windows are reduced to distinct intersections with the period.
+The objectives remain correlated, and their individual results are always shown.
+
+### Solver orchestration, validation and comparison
+
+Python callers can use:
+
+```python
+from app.scheduling import OptimizationPolicy, SolverSettings, optimize_timetable
+
+result = optimize_timetable(snapshot, SolverSettings(time_limit_seconds=60),
+                            OptimizationPolicy(), baseline=existing_valid_draft)
+```
+
+Omit `baseline` to generate one first. The default baseline search receives 10%
+of the shared solver budget (`baseline_budget_percent` is configurable).
+Optimization receives the remaining budget after actual baseline solver time.
+A baseline `UNKNOWN` does not imply infeasibility; the objective search can still
+find the first valid draft. If that happens, the report has no baseline comparison
+and does not claim a measured improvement. A supplied baseline must pass hard
+validation against the exact snapshot before use.
+
+The optimizer hints baseline starts, bounds the objective by the baseline score,
+and validates each returned candidate with the existing independent H1-H11
+validator. `evaluation.py` independently recomputes the integer objective without
+OR-Tools or importing objective/model helpers. Mismatches or hard violations
+reject the candidate. A candidate must strictly improve the integer score to
+replace a valid baseline; ties, timeouts and invalid candidates preserve it.
+
+`status` describes the selected result. `optimization_status` describes the
+optimization attempt. A valid fallback is `FEASIBLE` when search was `UNKNOWN`
+or its candidate was invalid; it is never falsely marked infeasible or optimal.
+If an optimum equal to the baseline is proved, the original baseline is kept and
+the overall status may be `OPTIMAL`. Diagnostics/violations describe failed
+attempts separately; the CLI independently checks selected-draft validity.
+
+The limit is a CP-SAT search limit shared by both stages, not an end-to-end wall
+clock guarantee. Model construction, validation and scoring add overhead, and
+solver termination can slightly exceed its requested limit. Results report both
+solver and total elapsed seconds, settings, solver version, objective bound and
+relative gap where available. Single-worker settings improve repeatability;
+wall-clock cutoffs and hardware load can still change results.
+
+The data snapshot fingerprint is unchanged by optimization. Results additionally
+record a configuration fingerprint and scoring version. The independent report
+includes S1-S5 scores, same-day pairs/student-days, short-gap pairs, difficult-pair
+counts, minimum/median/lower-decile consecutive gaps, peak window count and load,
+worst-student penalty and the mean for students with any selected repeat exam.
+
+Optimization minimizes an equal-student **mean**, not the worst student's score.
+Some individual penalties, minimum gaps, or student outcomes can worsen while
+the weighted total improves. Hard minimum breaks and other H rules still hold.
+No clinical benefit, improvement of every metric, or proof of global optimality
+under a finite time limit is promised. Model size grows with shared module pairs,
+student registration patterns, available starts and calendar windows; larger
+datasets may need longer limits. Extreme fixed-point configurations that exceed
+safe integer bounds produce structured errors, retaining a valid baseline.
 
 ## Layout
 

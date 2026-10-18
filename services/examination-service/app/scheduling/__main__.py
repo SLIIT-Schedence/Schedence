@@ -8,11 +8,15 @@ import datetime as dt
 import json
 import math
 from dataclasses import asdict
+from pathlib import Path
 
 from app.scheduling import SchedulingPolicy, SolverSettings, generate_timetable, load_snapshot
 from app.scheduling.inputs import SnapshotError
 from app.scheduling.types import SolveResult, SolveStatus
 from app.scheduling.contracts import SchedulingValidationError
+from app.scheduling.optimization_policy import OptimizationPolicy
+from app.scheduling.optimization import optimize_timetable
+from app.scheduling.validation import validate_timetable
 from app.seating.memory import MemorySeatingStore
 from app.seating.rules import INITIAL_DEFAULT_PERCENTAGE, check_percentage
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS
@@ -73,6 +77,7 @@ def seating_percentage(text: str) -> int:
 
 
 async def run(args: argparse.Namespace) -> tuple[dict, bool]:
+    optimization_policy = read_optimization_policy(args.optimization_config) if args.optimize else None
     compatibility = dict(SchedulingPolicy().venue_compatibility)
     compatibility.update(args.compatibility)
     policy = SchedulingPolicy(
@@ -91,17 +96,22 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
         result = SolveResult(SolveStatus.MODEL_INVALID, violations=exc.violations, settings=settings)
         snapshot = None
     else:
-        result = generate_timetable(snapshot, settings)
+        result = (optimize_timetable(snapshot, settings, optimization_policy) if args.optimize
+                  else generate_timetable(snapshot, settings))
     payload = asdict(result)
+    if args.optimize:
+        payload["optimization_policy"] = asdict(optimization_policy)
     if not args.include_draft:
         payload.pop("timetable")
+        payload.pop("baseline", None)
     draft = result.timetable
     payload.update(
         prototype=True,
         data_notice="Synthetic students/registrations. Simulated blocks are test inputs, not institutional bookings.",
         policy=asdict(policy),
         times="Local calendar times, as supplied by the examination period; logical seats only.",
-        objective="Feasibility only. One exam per student per day is a future soft preference, not enforced or optimized.",
+        objective=("Estimated workload optimization S1-S5. Not a scientifically validated stress measurement."
+                   if args.optimize else "Feasibility only. One exam per student per day is a future soft preference, not enforced or optimized."),
         input_fingerprint=snapshot.fingerprint if snapshot else None,
         capacity_ruleset_version=snapshot.capacities.ruleset_version if snapshot else None,
         summary={
@@ -111,10 +121,35 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
             "room_allocations": sum(len(s.rooms) for s in draft.sessions) if draft else 0,
             "seat_allocations": sum(len(r.seats) for s in draft.sessions for r in s.rooms) if draft else 0,
             "multi_room_exams": sum(len(s.rooms) > 1 for s in draft.sessions) if draft else 0,
-            "independent_validation_passed": draft is not None and not result.violations,
+            "independent_validation_passed": draft is not None and not validate_timetable(snapshot, draft),
         },
     )
     return payload, draft is not None
+
+
+def read_optimization_policy(path: str | None) -> OptimizationPolicy:
+    if path is None:
+        return OptimizationPolicy()
+
+    def pairs(rows):
+        result = {}
+        for key, value in rows:
+            if key in result:
+                raise ValueError("Duplicate optimization setting: " + key)
+            result[key] = value
+        return result
+
+    def reject_constant(value):
+        raise ValueError("Non-finite JSON value is not permitted: " + value)
+
+    try:
+        content = Path(path).read_text(encoding="utf-8")
+        return OptimizationPolicy.from_mapping(json.loads(content, object_pairs_hook=pairs, parse_constant=reject_constant))
+    except (OSError, UnicodeError, ValueError) as exc:
+        if isinstance(exc, SchedulingValidationError):
+            raise
+        from app.scheduling.contracts import Violation
+        raise SchedulingValidationError((Violation("OPTIMIZATION", "Cannot load optimization configuration: " + str(exc)),)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -134,7 +169,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compatibility", type=venue_mapping, action="append", default=[], metavar="EXAM_TYPE=TYPES")
     parser.add_argument("--module-venues", type=venue_mapping, action="append", default=[], metavar="MODULE_CODE=TYPES")
     parser.add_argument("--include-draft", action="store_true", help="Include every session and logical seat in stdout JSON.")
+    parser.add_argument("--optimize", action="store_true", help="Enable optional S1-S5 estimated workload optimization.")
+    parser.add_argument("--optimization-config", help="Read prototype optimization settings from a JSON object.")
     args = parser.parse_args(argv)
+    if args.optimization_config and not args.optimize:
+        parser.error("--optimization-config requires --optimize")
     try:
         payload, success = asyncio.run(run(args))
     except SchedulingValidationError as exc:
