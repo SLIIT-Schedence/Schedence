@@ -14,6 +14,8 @@ from app.scheduling.policy import SolverSettings
 from app.scheduling.service import generate_timetable
 from app.scheduling.types import DraftTimetable, InputSnapshot, SolveStatus
 from app.scheduling.validation import validate_timetable
+from app.scheduling.fairness_policy import FairnessPolicy
+from app.scheduling.fairness import FairnessComparison, compare_fairness
 
 
 @dataclass(frozen=True)
@@ -36,11 +38,15 @@ class OptimizationResult:
     policy: OptimizationPolicy = OptimizationPolicy()
     configuration_fingerprint: str = ""
     scoring_version: str = SCORING_VERSION
+    fairness_policy: FairnessPolicy = FairnessPolicy()
+    fairness_comparison: FairnessComparison | None = None
+    fairness_configuration_fingerprint: str = ""
 
 
 def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = SolverSettings(),
                        policy: OptimizationPolicy = OptimizationPolicy(), *,
-                       baseline: DraftTimetable | None = None) -> OptimizationResult:
+                       baseline: DraftTimetable | None = None,
+                       fairness: FairnessPolicy = FairnessPolicy()) -> OptimizationResult:
     began = time.perf_counter()
     errors = validate_inputs(snapshot)
     if type(settings) is not SolverSettings:
@@ -49,11 +55,14 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
         errors += tuple(Violation("OPTIMIZATION", message) for message in settings.errors())
     if type(policy) is not OptimizationPolicy:
         errors += (Violation("OPTIMIZATION", "policy must be OptimizationPolicy."),)
+    if type(fairness) is not FairnessPolicy:
+        errors += (Violation("FAIRNESS", "fairness must be FairnessPolicy."),)
     if not errors:
         errors += optimization_input_errors(snapshot)
     if errors:
         return OptimizationResult(SolveStatus.MODEL_INVALID, violations=errors)
-    common = dict(settings=settings, policy=policy, configuration_fingerprint=policy.fingerprint)
+    common = dict(settings=settings, policy=policy, configuration_fingerprint=policy.fingerprint,
+                  fairness_policy=fairness, fairness_configuration_fingerprint=fairness.fingerprint)
     solver_time = 0.0
     if baseline is not None:
         errors = validate_timetable(snapshot, baseline)
@@ -68,6 +77,10 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             return OptimizationResult(baseline_result.status, violations=baseline_result.violations,
                 diagnostics=baseline_result.diagnostics, solver_time_seconds=solver_time,
                 total_time_seconds=time.perf_counter() - began, **common)
+    if fairness.enabled and baseline is None:
+        return OptimizationResult(SolveStatus.UNKNOWN, optimization_status=SolveStatus.UNKNOWN,
+            diagnostics=("Fairness requires a validated baseline. No protected optimization was attempted and no limits were relaxed.",),
+            solver_time_seconds=solver_time, total_time_seconds=time.perf_counter() - began, **common)
     baseline_evaluation = evaluate_timetable(snapshot, baseline, policy) if baseline else None
     remaining = max(0.0, settings.time_limit_seconds - solver_time)
     selected, selected_evaluation = baseline, baseline_evaluation
@@ -88,7 +101,12 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             raise
         model, starts, allocated = build_hard_model(snapshot)
         try:
-            objective = add_objective(model, starts, snapshot, policy, baseline)
+            if fairness.enabled:
+                objective = add_objective(model, starts, snapshot, policy, baseline,
+                                          fairness=fairness, baseline_evaluation=baseline_evaluation)
+            else:
+                # Preserve the original objective/model path when fairness is off.
+                objective = add_objective(model, starts, snapshot, policy, baseline)
             # The known valid baseline remains a feasible objective bound.
             if baseline_evaluation:
                 model.add(objective <= baseline_evaluation.objective_units)
@@ -112,6 +130,11 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
                     measured = evaluate_timetable(snapshot, candidate, policy)
                     if measured.objective_units != solver.value(objective):
                         violations = (Violation("OPTIMIZATION", "Independent score does not match the solver objective."),)
+                    elif fairness.enabled:
+                        try:
+                            violations = compare_fairness(baseline_evaluation, measured, policy, fairness).violations
+                        except SchedulingValidationError as exc:
+                            violations = exc.violations
                     if not violations:
                         bound = solver.best_objective_bound
                         if baseline_evaluation is None or measured.objective_units < baseline_evaluation.objective_units:
@@ -136,6 +159,11 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
         status = SolveStatus.OPTIMAL if attempt_status == SolveStatus.OPTIMAL and not violations else SolveStatus.FEASIBLE
     else:
         status = attempt_status
-    return OptimizationResult(status, selected, baseline, baseline_evaluation, selected_evaluation, improved,
-        attempt_status, violations, tuple(diagnostics), solver_time, time.perf_counter() - began,
-        bound, relative_gap, version("ortools"), **common)
+    comparison = (compare_fairness(baseline_evaluation, selected_evaluation, policy, fairness)
+                  if baseline_evaluation is not None and selected_evaluation is not None else None)
+    return OptimizationResult(status=status, timetable=selected, baseline=baseline,
+        baseline_evaluation=baseline_evaluation, selected_evaluation=selected_evaluation,
+        improved=improved, optimization_status=attempt_status, violations=violations,
+        diagnostics=tuple(diagnostics), solver_time_seconds=solver_time,
+        total_time_seconds=time.perf_counter() - began, objective_bound_units=bound,
+        relative_gap=relative_gap, solver_version=version("ortools"), fairness_comparison=comparison, **common)

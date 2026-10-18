@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "max_individual_increase_points": 5.0,
+  "protect_worst_student": true,
+  "max_worst_increase_points": 0.0,
+  "automatic_relaxation": false
+}

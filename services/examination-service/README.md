@@ -305,6 +305,109 @@ student registration patterns, available starts and calendar windows; larger
 datasets may need longer limits. Extreme fixed-point configurations that exceed
 safe integer bounds produce structured errors, retaining a valid baseline.
 
+### Optional baseline-relative fairness protection
+
+Fairness is **off by default**. Enabling it adds the approved prototype quality
+guards below while retaining the existing total weighted objective and all
+S1-S5 formulas. H1-H11 are unchanged. These optional guards are not institutional
+scheduling rules or clinically validated stress limits. They protect estimated
+workload scores relative to a particular baseline.
+
+```powershell
+python -m app.scheduling --optimize --fairness
+python -m app.scheduling --optimize --fairness --fairness-config data/fairness_policy.prototype.json
+python -m app.scheduling --optimize --no-fairness
+python -m pytest tests/test_fairness.py
+```
+
+`--fairness` / `--no-fairness` override the file's `enabled` value. Without either
+flag, the JSON file determines enablement, or the default is off. Both options
+and `--fairness-config` require `--optimize`. The fairness file is separate from
+the existing optimization settings and is read afresh on each run. It supports:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | false | Apply optional fairness protection |
+| `max_individual_increase_points` | 5.0 | Maximum increase above each student's baseline normalized score |
+| `protect_worst_student` | true | When enabled, also guard the population's worst score |
+| `max_worst_increase_points` | 0.0 | Maximum increase above the baseline population maximum |
+| `automatic_relaxation` | false | Only false is supported; true is rejected explicitly |
+
+Point allowances may be fractional, finite numbers in 0..100. Boolean settings
+require actual booleans. Unknown/duplicate fields and non-finite JSON numbers are
+rejected. `FairnessPolicy.from_mapping()` and `dataclasses.asdict()` provide the
+same immutable, serializable contract for future Admin settings; no UI, API or
+persistence is added here.
+
+For student `s`, let `U[s]` be their existing integer weighted penalty, `S` the
+fixed-point score scale and `W` the sum of S1-S5 weights. Define:
+
+```text
+F[s] = 100 * U[s] / (S * W)       # 0..100 normalized workload points
+F[s] = 0 when all weights are zero
+
+F_new[s] <= F_baseline[s] + max_individual_increase_points
+max(F_new) <= max(F_baseline) + max_worst_increase_points
+             # second guard applies only when protect_worst_student is true
+```
+
+This is an absolute point increase, not a percentage of the student's baseline.
+Normalizing by `W` keeps the guards equivalent when all weights are scaled
+together. It does not change the original objective or reported weighted penalty.
+With the default weight sum of 100, normalized student points equal their
+existing weighted points. A student starting at 3.700 may reach at most 8.700
+under the individual default. With a baseline worst of 28.120, the default worst
+guard allows no selected score above 28.120. Different valid baselines produce
+different limits.
+
+The model applies limits to each registration pattern's **per-student** objective,
+without multiplying the limit by the number of students sharing that pattern.
+Every participating student, including repeat students, receives the same
+protection. The solver converts decimal point allowances to integer upper bounds
+with exact rational arithmetic and rounds downward, never loosening a limit.
+`fairness.py` independently compares the scorer's student penalties using exact
+rational arithmetic rather than trusting the model's integer cap conversion.
+Input and scoring fingerprints must match before any comparison is accepted.
+
+`optimize_timetable(..., baseline=draft, fairness=FairnessPolicy(enabled=True))`
+requires a validated baseline. If none is supplied, the existing baseline stage
+tries to obtain one within its configured budget share. If it returns `UNKNOWN`
+without a draft, protected optimization returns `UNKNOWN` without a timetable;
+it does not spend the remaining budget on unprotected optimization. Supply a
+valid baseline, increase `baseline_budget_percent`, or increase the shared time
+limit for a later run. No limits are automatically relaxed.
+
+Every candidate must pass H1-H11, the independent objective comparison and the
+independent fairness checks. It must also strictly improve the original total
+weighted penalty. Otherwise the exact valid baseline is returned, including its
+rooms and seats. Timeouts preserve the baseline. An unfair candidate or a model
+consistency error is reported through `optimization_status` and violations while
+the selected fallback remains valid. The baseline itself satisfies all these
+non-negative increase allowances, so a valid baseline keeps the protected model
+feasible; the model does not require strict improvement as a feasibility condition.
+
+Both modes report `fairness_comparison`: normalized baseline/selected worst
+scores, maximum individual increase, students improved/worsened/unchanged, and
+limit exceedance counts. When off, limits are **not** applied and
+`limits_satisfied` is null; exceedance counts are informational. When on, accepted
+results have `limits_satisfied: true`. `fairness_policy` and a separate fairness
+configuration fingerprint record the effective settings. Internal independent
+score reports contain immutable per-student penalty records. CLI summary output
+omits those records unless `--include-draft` is explicitly requested.
+
+For a controlled OFF/ON comparison, load one immutable snapshot and generate one
+baseline. Pass that same baseline and soft-scoring settings to both modes, using
+the same seed, workers and remaining search budget. Count the common baseline
+search time against each scenario's shared 60-second budget; do not use the OFF
+result as the ON baseline. Compare total and S1-S5 penalties, normalized worst
+score, maximum individual increase, changed-student counts and hard violations.
+Fairness may reduce total improvement or leave the baseline unchanged within the
+time limit. Finite-time outcomes can still vary. The default permits small
+individual increases up to five points, and does not protect each separate S1-S5
+component from worsening. Smaller allowances can be configured without changing
+algorithm code. Setting the individual allowance to zero prevents all individual
+score increases. These remain workload estimates, not clinical stress measures.
+
 ## Layout
 
 ```text

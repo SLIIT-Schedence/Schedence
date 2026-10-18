@@ -9,9 +9,12 @@ from app.scheduling.validation import validate_timetable
 from app.scheduling.optimization_policy import OptimizationPolicy
 from app.scheduling.evaluation import evaluate_timetable
 from app.scheduling.optimization import OptimizationResult, optimize_timetable
+from app.scheduling.fairness_policy import FairnessPolicy
+from app.scheduling.fairness import FairnessComparison, compare_fairness
 
 __all__ = [
     "DraftTimetable", "InputSnapshot", "SchedulingPolicy", "SolveResult", "SolveStatus",
     "SolverSettings", "SchedulingValidationError", "generate_timetable", "load_database_snapshot", "load_snapshot", "validate_timetable",
     "OptimizationPolicy", "OptimizationResult", "evaluate_timetable", "optimize_timetable",
+    "FairnessPolicy", "FairnessComparison", "compare_fairness",
 ]

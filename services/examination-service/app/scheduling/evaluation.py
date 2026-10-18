@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import combinations
 
@@ -19,6 +19,12 @@ class PenaltyScore:
     weight: int
     penalty_points: float  # 0..100, equal mean across participating students
     weighted_points: float  # weight * penalty_points / 100
+
+
+@dataclass(frozen=True)
+class StudentPenalty:
+    student_id: str
+    objective_units: int  # sum(weight * normalized penalty), without population multiplicity
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,9 @@ class TimetableEvaluation:
     worst_student_weighted_penalty: float
     repeat_student_mean_weighted_penalty: float | None
     scoring_version: str = SCORING_VERSION
+    student_penalties: tuple[StudentPenalty, ...] = ()
+    input_fingerprint: str = field(default="", compare=False)
+    configuration_fingerprint: str = field(default="", compare=False)
 
 
 def optimization_input_errors(snapshot: InputSnapshot) -> tuple[Violation, ...]:
@@ -133,4 +142,6 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
         gaps[0] if gaps else None, median, gaps[(len(gaps) - 1) // 10] if gaps else None,
         max_count, max_load / policy.load_scale, max(student_objectives.values()) / policy.score_scale,
         sum(repeat_scores) / (len(repeat_scores) * policy.score_scale) if repeat_scores else None,
+        student_penalties=tuple(StudentPenalty(student, units) for student, units in sorted(student_objectives.items())),
+        input_fingerprint=snapshot.fingerprint, configuration_fingerprint=policy.fingerprint,
     )
