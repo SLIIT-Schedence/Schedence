@@ -49,7 +49,7 @@ async def assign(client: httpx.AsyncClient, headers: dict, staff_id: str, positi
 
 
 async def test_super_admin_creates_hod_position(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     assert hod["code"] == "HEAD_OF_DEPARTMENT" and hod["unit_type"] == "DEPARTMENT" and hod["is_exclusive_per_unit"]
     assert hod["default_admin_hours_per_week"] == 10.0
@@ -57,19 +57,19 @@ async def test_super_admin_creates_hod_position(client: httpx.AsyncClient, calle
 
 
 async def test_super_admin_creates_program_coordinator_position(client: httpx.AsyncClient, caller) -> None:
-    pc = await create_position(client, caller("SUPER_ADMIN"), coordinator_body())
+    pc = await create_position(client, caller("INSTITUTION_ADMIN"), coordinator_body())
     assert (pc["code"], pc["default_admin_hours_per_week"], pc["unit_type"]) == ("PROGRAM_COORDINATOR", 6.0, "PROGRAM")
 
 
 async def test_position_hours_are_required_input_not_hardcoded(client: httpx.AsyncClient, caller) -> None:
     body = coordinator_body()
     body.pop("admin_hours_per_week")
-    response = await client.post(f"{API}/positions", headers=caller("SUPER_ADMIN"), json=body)
+    response = await client.post(f"{API}/positions", headers=caller("INSTITUTION_ADMIN"), json=body)
     assert response.status_code == 422
 
 
 async def test_administrative_hours_are_configurable_with_history(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     pc = await create_position(client, admin, coordinator_body())
 
     updated = await client.post(f"{API}/positions/{pc['id']}/workload-policies", headers=admin, json={
@@ -91,14 +91,14 @@ async def test_administrative_hours_are_configurable_with_history(client: httpx.
 
 
 async def test_duplicate_position_code_is_rejected(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     await create_position(client, admin, hod_body())
     duplicate = await client.post(f"{API}/positions", headers=admin, json=hod_body())
     assert duplicate.status_code == 409 and duplicate.json()["error"]["code"] == "POSITION_CODE_EXISTS"
 
 
 async def test_update_and_disable_positions(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
 
@@ -119,7 +119,7 @@ async def test_update_and_disable_positions(client: httpx.AsyncClient, caller) -
 
 
 async def test_academic_admin_can_read_but_not_manage_positions(client: httpx.AsyncClient, caller) -> None:
-    await create_position(client, caller("SUPER_ADMIN"), hod_body())
+    await create_position(client, caller("INSTITUTION_ADMIN"), hod_body())
     academic_admin = caller("ACADEMIC_ADMIN")
     assert (await client.get(f"{API}/positions", headers=academic_admin)).status_code == 200
     assert (await client.post(f"{API}/positions", headers=academic_admin, json=coordinator_body())).status_code == 403
@@ -129,7 +129,7 @@ async def test_academic_admin_can_read_but_not_manage_positions(client: httpx.As
 
 
 async def test_staff_appointment_creation(client: httpx.AsyncClient, caller, store) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
 
@@ -143,14 +143,14 @@ async def test_staff_appointment_creation(client: httpx.AsyncClient, caller, sto
 
 
 async def test_invalid_staff_reference(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     response = await assign(client, admin, str(uuid.uuid4()), hod["id"], unit_code="COMPUTING")
     assert response.status_code == 404 and response.json()["error"]["code"] == "STAFF_NOT_FOUND"
 
 
 async def test_unit_is_required_for_department_positions(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
     response = await assign(client, admin, staff["id"], hod["id"])
@@ -158,7 +158,7 @@ async def test_unit_is_required_for_department_positions(client: httpx.AsyncClie
 
 
 async def test_duplicate_and_exclusive_appointments_are_prevented(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     alice = await create_staff(client, admin, "EMP001", "Alice")
     bob = await create_staff(client, admin, "EMP002", "Bob")
@@ -181,7 +181,7 @@ async def test_duplicate_and_exclusive_appointments_are_prevented(client: httpx.
 
 
 async def test_staff_may_hold_multiple_different_appointments(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     pc = await create_position(client, admin, coordinator_body())
     staff = await create_staff(client, admin)
@@ -192,7 +192,7 @@ async def test_staff_may_hold_multiple_different_appointments(client: httpx.Asyn
 
 
 async def test_effective_date_validation(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
 
@@ -208,7 +208,7 @@ async def test_effective_date_validation(client: httpx.AsyncClient, caller) -> N
 
 
 async def test_appointment_termination_and_history(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
     appointment = (await assign(client, admin, staff["id"], hod["id"], unit_code="COMPUTING")).json()
@@ -233,7 +233,7 @@ async def test_appointment_termination_and_history(client: httpx.AsyncClient, ca
 
 
 async def test_update_permitted_fields_only(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin)
     appointment = (await assign(client, admin, staff["id"], hod["id"], unit_code="COMPUTING")).json()
@@ -249,8 +249,8 @@ async def test_update_permitted_fields_only(client: httpx.AsyncClient, caller) -
 
 
 async def test_institution_scope_is_enforced(client: httpx.AsyncClient, caller) -> None:
-    sliit_admin = caller("SUPER_ADMIN")
-    other_admin = caller(("SUPER_ADMIN", OTHER_INSTITUTION))
+    sliit_admin = caller("INSTITUTION_ADMIN")
+    other_admin = caller(("INSTITUTION_ADMIN", OTHER_INSTITUTION))
     hod = await create_position(client, sliit_admin, hod_body())
     staff = await create_staff(client, sliit_admin)
 
@@ -268,7 +268,7 @@ async def test_institution_scope_is_enforced(client: httpx.AsyncClient, caller) 
 
 
 async def test_hod_appointment_does_not_grant_super_admin(client: httpx.AsyncClient, caller, identity) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     lecturer = caller("LECTURER")
     hod = await create_position(client, admin, hod_body())
     staff = await create_staff(client, admin, identity_user_id=lecturer["X-Test-User-Id"])
@@ -282,7 +282,7 @@ async def test_hod_appointment_does_not_grant_super_admin(client: httpx.AsyncCli
 
 
 async def test_program_coordinator_appointment_does_not_grant_academic_admin(client: httpx.AsyncClient, caller, identity) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     lecturer = caller("LECTURER")
     pc = await create_position(client, admin, coordinator_body())
     staff = await create_staff(client, admin, identity_user_id=lecturer["X-Test-User-Id"])
@@ -293,7 +293,7 @@ async def test_program_coordinator_appointment_does_not_grant_academic_admin(cli
 
 
 async def test_staff_without_cognito_account_can_hold_appointments(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     pc = await create_position(client, admin, coordinator_body())
     staff = await create_staff(client, admin, "EMP900", "Visiting Lecturer")
     assert staff["identity_user_id"] is None
@@ -306,7 +306,7 @@ async def test_staff_without_cognito_account_can_hold_appointments(client: httpx
 
 
 async def test_administrative_workload_retrieval(client: httpx.AsyncClient, caller) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     academic_admin = caller("ACADEMIC_ADMIN")  # a future scheduler acts with this kind of permission
     hod = await create_position(client, admin, hod_body())
     pc = await create_position(client, admin, coordinator_body())
@@ -368,19 +368,27 @@ async def test_requests_without_valid_tokens_are_rejected(client: httpx.AsyncCli
 
 
 async def test_disabled_identity_is_rejected(client: httpx.AsyncClient, caller) -> None:
-    response = await client.get(f"{API}/positions", headers=caller("SUPER_ADMIN", status="DISABLED"))
+    response = await client.get(f"{API}/positions", headers=caller("INSTITUTION_ADMIN", status="DISABLED"))
     assert response.status_code == 403 and response.json()["error"]["code"] == "ACCOUNT_DISABLED"
 
 
+async def test_system_admin_has_no_academic_access(client: httpx.AsyncClient, caller) -> None:
+    """Platform permissions grant nothing here: a System Admin holds no role inside any institution."""
+    owner = caller("SYSTEM_ADMIN")
+    assert (await client.get(f"{API}/positions", headers=owner, params={"institution_id": str(INSTITUTION)})).status_code == 403
+    assert (await client.post(f"{API}/positions", headers=owner, json=hod_body())).status_code == 403
+    assert (await client.get(f"{API}/staff", headers=owner, params={"institution_id": str(INSTITUTION)})).status_code == 403
+
+
 async def test_identity_service_outage_fails_closed(client: httpx.AsyncClient, caller, identity) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     identity.down = True
     response = await client.get(f"{API}/positions", headers=admin)
     assert response.status_code == 503 and response.json()["error"]["code"] == "IDENTITY_SERVICE_UNAVAILABLE"
 
 
 async def test_reads_reuse_cached_permissions_but_writes_always_recheck(client: httpx.AsyncClient, caller, identity) -> None:
-    admin = caller("SUPER_ADMIN")
+    admin = caller("INSTITUTION_ADMIN")
     await client.get(f"{API}/positions", headers=admin)
     await client.get(f"{API}/positions", headers=admin)
     assert len(identity.requests) == 1

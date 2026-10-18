@@ -28,12 +28,14 @@ ACADEMIC_PERMISSIONS = [
 ]
 # Mirrors the Identity Service catalogue (academic part only).
 ROLE_PERMISSIONS = {
-    "SUPER_ADMIN": ACADEMIC_PERMISSIONS,
+    "INSTITUTION_ADMIN": ACADEMIC_PERMISSIONS,
     "ACADEMIC_ADMIN": ["academic:positions:read", "academic:appointments:read", "academic:staff:read", "academic:workload:read"],
     "EXAMINATION_ADMIN": ["academic:staff:read", "academic:workload:read"],
     "LECTURER": [],
     "STUDENT": [],
 }
+# Platform roles are granted outside any institution and carry no academic permissions.
+PLATFORM_ROLE_PERMISSIONS = {"SYSTEM_ADMIN": ["platform:institutions:create", "platform:institution_admins:create"]}
 _PREFIXES = ("AWS_", "COGNITO_", "DATABASE_URL", "DIRECT_DATABASE_URL", "DB_", "APP_ENV", "SCHEDENCE_ENV_FILE", "IDENTITY_", "FRONTEND_URL")
 
 
@@ -84,16 +86,20 @@ async def client(container: AcademicContainer) -> AsyncIterator[httpx.AsyncClien
 
 @pytest.fixture
 def caller(identity: FakeIdentityService, tokens: TokenFactory):
-    """Headers for a caller whose Identity-Service roles are given as (ROLE, institution) pairs."""
+    """Headers for a caller whose Identity-Service roles are given as (ROLE, institution) pairs (platform roles: just the code)."""
 
     def make(*roles: str | tuple[str, uuid.UUID], status: str = "ACTIVE") -> dict[str, str]:
         institutions: dict[uuid.UUID, tuple[list[str], list[str]]] = {}
+        platform: dict[str, list[str]] = {}
         for item in roles:
+            if item in PLATFORM_ROLE_PERMISSIONS:
+                platform[item] = PLATFORM_ROLE_PERMISSIONS[item]
+                continue
             role, institution = (item, INSTITUTION) if isinstance(item, str) else item
             names, perms = institutions.setdefault(institution, ([], []))
             names.append(role)
             perms.extend(p for p in ROLE_PERMISSIONS[role] if p not in perms)
-        sub, user_id = identity.register(institutions, status=status)
+        sub, user_id = identity.register(institutions, status=status, platform=platform)
         headers = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
         headers["X-Test-User-Id"] = str(user_id)  # for assertions only; the service ignores it
         return headers

@@ -208,9 +208,11 @@ class FakeIdentityService:
         self.requests: list[tuple[str, str]] = []
         self.down = False
 
-    def register(self, permissions_by_institution: dict[UUID, tuple[list[str], list[str]]], *, status: str = "ACTIVE") -> tuple[str, UUID]:
+    def register(self, permissions_by_institution: dict[UUID, tuple[list[str], list[str]]], *, status: str = "ACTIVE",
+                 platform: dict[str, list[str]] | None = None) -> tuple[str, UUID]:
         sub, user_id = str(uuid.uuid4()), uuid.uuid4()
-        self.accounts[sub] = {"user_id": user_id, "status": status, "institutions": permissions_by_institution}
+        self.accounts[sub] = {"user_id": user_id, "status": status, "institutions": permissions_by_institution,
+                              "platform": platform or {}}
         return sub, user_id
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -230,4 +232,6 @@ class FakeIdentityService:
             "account_status": "ACTIVE",
             "institutions": [{"institution_id": str(i), "roles": roles, "permissions": perms}
                              for i, (roles, perms) in account["institutions"].items()],
+            "platform": {"roles": sorted(account["platform"]),
+                         "permissions": sorted({p for perms in account["platform"].values() for p in perms})},
         })
