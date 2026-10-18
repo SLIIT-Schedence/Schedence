@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from app.models import IdentityAuditLog, UserProvisioning
+from app.models import IdentityAuditLog, Institution, UserProvisioning
+from app.schemas.platform import InstitutionOut, InstitutionSummaryOut
 from app.schemas.rbac import AuditLogOut
 from app.schemas.users import ProvisioningOut, RoleAssignmentOut, UserOut
 from app.services.users import UserDetail
@@ -23,6 +24,14 @@ def user_out(detail: UserDetail) -> UserOut:
             for r in detail.roles
         ],
     )
+
+
+def institution_out(institution: Institution) -> InstitutionOut:
+    return InstitutionOut.model_validate(institution)
+
+
+def institution_summary_out(institution: Institution) -> InstitutionSummaryOut:
+    return InstitutionSummaryOut.model_validate(institution)
 
 
 def provisioning_out(record: UserProvisioning) -> ProvisioningOut:

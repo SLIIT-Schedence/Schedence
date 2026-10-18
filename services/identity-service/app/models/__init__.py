@@ -2,6 +2,7 @@
 
 from app.models.audit import ACTOR_OPERATOR, ACTOR_SYSTEM, ACTOR_USER, IdentityAuditLog
 from app.models.base import SCHEMA, Base
+from app.models.institution import INSTITUTION_ACTIVE, INSTITUTION_DISABLED, INSTITUTION_STATUSES, Institution
 from app.models.provisioning import (
     OPEN_PROVISIONING_STATUSES,
     PROVISIONING_CANCELLED,
@@ -11,7 +12,7 @@ from app.models.provisioning import (
     PROVISIONING_PENDING,
     UserProvisioning,
 )
-from app.models.rbac import Permission, Role, RolePermission, UserRole
+from app.models.rbac import Permission, PlatformRoleAssignment, Role, RolePermission, UserRole
 from app.models.user import ACCOUNT_ACTIVE, ACCOUNT_DISABLED, ACCOUNT_STATUSES, User
 
 __all__ = [
@@ -21,6 +22,9 @@ __all__ = [
     "ACTOR_OPERATOR",
     "ACTOR_SYSTEM",
     "ACTOR_USER",
+    "INSTITUTION_ACTIVE",
+    "INSTITUTION_DISABLED",
+    "INSTITUTION_STATUSES",
     "OPEN_PROVISIONING_STATUSES",
     "PROVISIONING_CANCELLED",
     "PROVISIONING_COGNITO_CREATED",
@@ -30,7 +34,9 @@ __all__ = [
     "SCHEMA",
     "Base",
     "IdentityAuditLog",
+    "Institution",
     "Permission",
+    "PlatformRoleAssignment",
     "Role",
     "RolePermission",
     "User",

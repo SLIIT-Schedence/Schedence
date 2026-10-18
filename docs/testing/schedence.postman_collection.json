@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a586b398-cd98-59ec-9227-107bdcd7f457",
     "name": "Schedence API (local)",
-    "description": "Every endpoint of the Identity Service and the Academic Data Service, with automatic checks. Read docs/testing/API_TESTING.md first. Run folders 00-09 in order (Collection Runner works); M-folders need manual steps.",
+    "description": "Every endpoint of the Identity Service and the Academic Data Service, with automatic checks. Read docs/testing/API_TESTING.md first. Run folders 00-09 in order (Collection Runner works); M-folders need manual steps (M5 needs a System Admin token).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -200,6 +200,21 @@
       "key": "cancelProvisioningId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "systemAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testInstitutionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testInstitutionAdminId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -358,8 +373,8 @@
       ]
     },
     {
-      "name": "02 Identity - current user (Super Admin token)",
-      "description": "Uses the collection OAuth token (sign in as the Super Admin).",
+      "name": "02 Identity - current user (Institution Admin token)",
+      "description": "Uses the collection OAuth token (sign in as the Institution Admin).",
       "item": [
         {
           "name": "GET /me",
@@ -372,8 +387,9 @@
                   "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
                   "if (pm.response.code === 200 && pm.response.text()) {",
                   "  const body = pm.response.json();",
-                  "  pm.test(\"has SUPER_ADMIN\", function () { pm.expect(body.roles.some(r => r.role_code === \"SUPER_ADMIN\"), \"has SUPER_ADMIN\").to.be.true; });",
+                  "  pm.test(\"has INSTITUTION_ADMIN\", function () { pm.expect(body.roles.some(r => r.role_code === \"INSTITUTION_ADMIN\"), \"has INSTITUTION_ADMIN\").to.be.true; });",
                   "  pm.test(\"ACTIVE\", function () { pm.expect(body.account_status === \"ACTIVE\", \"ACTIVE\").to.be.true; });",
+                  "  pm.test(\"no platform role\", function () { pm.expect(body.platform_roles.length === 0, \"no platform role\").to.be.true; });",
                   "  pm.collectionVariables.set(\"myUserId\", body.id);",
                   "}"
                 ]
@@ -467,7 +483,7 @@
           }
         },
         {
-          "name": "GET /audit-logs (bootstrap event)",
+          "name": "GET /audit-logs (how this admin was created)",
           "event": [
             {
               "listen": "test",
@@ -477,7 +493,8 @@
                   "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
                   "if (pm.response.code === 200 && pm.response.text()) {",
                   "  const body = pm.response.json();",
-                  "  pm.test(\"bootstrap recorded\", function () { pm.expect(body.total >= 1, \"bootstrap recorded\").to.be.true; });",
+                  "  const created = body.items.some(e => [\"superadmin.bootstrapped\", \"user.created\"].includes(e.action));",
+                  "  pm.test(\"creation recorded\", function () { pm.expect(created, \"creation recorded\").to.be.true; });",
                   "}"
                 ]
               }
@@ -486,7 +503,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{identityUrl}}/api/v1/identity/audit-logs?action=superadmin.bootstrapped",
+            "url": "{{identityUrl}}/api/v1/identity/audit-logs?target_user_id={{myUserId}}",
             "description": ""
           }
         }
@@ -1297,7 +1314,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"SUPER_ADMIN\",\n    \"VENUE_MANAGER\"\n  ]\n}",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"INSTITUTION_ADMIN\",\n    \"VENUE_MANAGER\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3059,11 +3076,11 @@
               },
               {
                 "key": "X-Role",
-                "value": "SUPER_ADMIN"
+                "value": "INSTITUTION_ADMIN"
               },
               {
                 "key": "X-Roles",
-                "value": "SUPER_ADMIN"
+                "value": "INSTITUTION_ADMIN"
               },
               {
                 "key": "X-Permissions",
@@ -3201,10 +3218,10 @@
     },
     {
       "name": "M2 Manual - disabled account is blocked immediately",
-      "description": "Uses the Super Admin token for disable/enable and lecturerToken for the blocked calls. The Lecturer's token is still unexpired; the API rejects it anyway.",
+      "description": "Uses the Institution Admin token for disable/enable and lecturerToken for the blocked calls. The Lecturer's token is still unexpired; the API rejects it anyway.",
       "item": [
         {
-          "name": "Super Admin: disable the Lecturer",
+          "name": "Institution Admin: disable the Lecturer",
           "event": [
             {
               "listen": "test",
@@ -3324,7 +3341,7 @@
           }
         },
         {
-          "name": "Super Admin: enable the Lecturer",
+          "name": "Institution Admin: enable the Lecturer",
           "event": [
             {
               "listen": "test",
@@ -3562,6 +3579,595 @@
             "header": [],
             "url": "{{identityUrl}}/api/v1/identity/provisioning/{{cancelProvisioningId}}/cancel",
             "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "M5 Manual - as the System Admin (institutions and their admins)",
+      "description": "Needs systemAdminToken: bootstrap a System Admin with a dedicated e-mail (see the guide), get an access token for that user and paste it into systemAdminToken. Creates a TEST_ institution and its admin (one real invitation e-mail), proves the System Admin has no access inside institutions, and ends with the TEST_ institution disabled (institutions are never deleted).",
+      "item": [
+        {
+          "name": "System Admin: GET /me (platform role only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"SYSTEM_ADMIN\", function () { pm.expect(body.platform_roles.includes(\"SYSTEM_ADMIN\"), \"SYSTEM_ADMIN\").to.be.true; });",
+                  "  pm.test(\"no institution roles\", function () { pm.expect(body.roles.length === 0, \"no institution roles\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: GET /me/permissions (no institutions)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"no institutions\", function () { pm.expect(body.institutions.length === 0, \"no institutions\").to.be.true; });",
+                  "  pm.test(\"platform permissions\", function () { pm.expect(body.platform.permissions.includes(\"platform:institutions:create\"), \"platform permissions\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/me/permissions",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: GET /platform/institutions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"lists the main institution\", function () { pm.expect(body.items.some(i => i.id === pm.collectionVariables.get(\"institutionId\")), \"lists the main institution\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: POST /platform/institutions (TEST_)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"ACTIVE\", function () { pm.expect(body.status === \"ACTIVE\", \"ACTIVE\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"testInstitutionId\", body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TEST_{{runSuffix}}\",\n  \"name\": \"TEST_ Institution {{runSuffix}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: duplicate institution code -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"INSTITUTION_CODE_TAKEN\", function () { pm.expect(body.error.code === \"INSTITUTION_CODE_TAKEN\", \"INSTITUTION_CODE_TAKEN\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TEST_{{runSuffix}}\",\n  \"name\": \"Duplicate\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: PATCH /platform/institutions/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"renamed\", function () { pm.expect(body.name.endsWith(\"(renamed)\"), \"renamed\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions/{{testInstitutionId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TEST_ Institution {{runSuffix}} (renamed)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: POST /platform/institutions/{id}/admins",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"COMPLETED\", function () { pm.expect(body.provisioning.status === \"COMPLETED\", \"COMPLETED\").to.be.true; });",
+                  "  pm.test(\"INSTITUTION_ADMIN there\", function () { pm.expect(body.user.roles.some(r => r.role_code === \"INSTITUTION_ADMIN\" && r.institution_id === pm.collectionVariables.get(\"testInstitutionId\")), \"INSTITUTION_ADMIN there\").to.be.true; });",
+                  "  pm.collectionVariables.set(\"testInstitutionAdminId\", body.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions/{{testInstitutionId}}/admins",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+ia{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"TEST_ Institution Admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: GET /platform/institutions/{id}/admins",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"lists the new admin\", function () { pm.expect(body.items.some(u => u.id === pm.collectionVariables.get(\"testInstitutionAdminId\")), \"lists the new admin\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions/{{testInstitutionId}}/admins",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: GET /users -> 403 (no access inside institutions)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/users",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: Academic positions -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{academicUrl}}/api/v1/academic/positions?institution_id={{institutionId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Institution Admin: GET /platform/institutions -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions",
+            "description": ""
+          }
+        },
+        {
+          "name": "Institution Admin: grant SYSTEM_ADMIN -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"PLATFORM_ROLE_NOT_ASSIGNABLE\", function () { pm.expect(body.error.code === \"PLATFORM_ROLE_NOT_ASSIGNABLE\", \"PLATFORM_ROLE_NOT_ASSIGNABLE\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/users/{{userId}}/roles",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution_id\": \"{{institutionId}}\",\n  \"role_codes\": [\n    \"LECTURER\",\n    \"SYSTEM_ADMIN\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "System Admin: POST /platform/institutions/{id}/disable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"DISABLED\", function () { pm.expect(body.status === \"DISABLED\", \"DISABLED\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions/{{testInstitutionId}}/disable",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"TEST_ run finished\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: add admin to a disabled institution -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", function () { pm.response.to.have.status(409); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"INSTITUTION_DISABLED\", function () { pm.expect(body.error.code === \"INSTITUTION_DISABLED\", \"INSTITUTION_DISABLED\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{identityUrl}}/api/v1/identity/platform/institutions/{{testInstitutionId}}/admins",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmailLocal}}+ib{{runSuffix}}@{{testEmailDomain}}\",\n  \"full_name\": \"TEST_ Second Admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "System Admin: GET /platform/audit-logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.text()) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test(\"platform events only\", function () { pm.expect(body.items.every(e => e.action.startsWith(\"platform.\")), \"platform events only\").to.be.true; });",
+                  "  pm.test(\"institution created\", function () { pm.expect(body.items.some(e => e.action === \"platform.institution_created\"), \"institution created\").to.be.true; });",
+                  "  pm.test(\"admin created\", function () { pm.expect(body.items.some(e => e.action === \"platform.institution_admin_created\"), \"admin created\").to.be.true; });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{identityUrl}}/api/v1/identity/platform/audit-logs?institution_id={{testInstitutionId}}",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{systemAdminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         }
       ]

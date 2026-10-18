@@ -6,10 +6,11 @@ from app.api.dependencies.auth import (
     get_current_user,
     require_institution_scope,
     require_permissions,
+    require_platform_permissions,
     require_roles,
 )
 from app.api.dependencies.common import ContainerDep, PaginationDep, UnitOfWorkDep, get_container, get_uow
-from app.api.dependencies.services import DirectoryServiceDep, UserServiceDep
+from app.api.dependencies.services import DirectoryServiceDep, PlatformServiceDep, UserServiceDep
 
 __all__ = [
     "AccessTokenClaimsDep",
@@ -17,6 +18,7 @@ __all__ = [
     "CurrentUser",
     "DirectoryServiceDep",
     "PaginationDep",
+    "PlatformServiceDep",
     "UnitOfWorkDep",
     "UserServiceDep",
     "enforce_write_rate_limit",
@@ -26,5 +28,6 @@ __all__ = [
     "get_uow",
     "require_institution_scope",
     "require_permissions",
+    "require_platform_permissions",
     "require_roles",
 ]

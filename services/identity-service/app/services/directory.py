@@ -8,6 +8,7 @@ from uuid import UUID
 from app.core.errors import PermissionDeniedError
 from app.core.principal import Principal
 from app.models import IdentityAuditLog, Permission, Role
+from app.rbac.catalog import PLATFORM_PERMISSION_PREFIX, PLATFORM_ROLE_CODES
 from app.repositories.base import AuditQuery, IdentityUnitOfWork
 
 PERM_AUDIT_READ = "identity:audit:read"
@@ -18,11 +19,14 @@ class DirectoryService:
         self.uow = uow
 
     async def list_roles(self) -> list[tuple[Role, frozenset[str]]]:
+        """Roles that can be granted within an institution (platform roles are left out)."""
         grants = await self.uow.roles.role_permission_codes()
-        return [(role, grants.get(role.code, frozenset())) for role in await self.uow.roles.list_roles()]
+        return [(role, grants.get(role.code, frozenset())) for role in await self.uow.roles.list_roles()
+                if role.code not in PLATFORM_ROLE_CODES]
 
     async def list_permissions(self) -> list[Permission]:
-        return await self.uow.roles.list_permissions()
+        """Permissions that institution roles can carry (``platform:*`` permissions are left out)."""
+        return [p for p in await self.uow.roles.list_permissions() if not p.code.startswith(PLATFORM_PERMISSION_PREFIX)]
 
     async def list_audit_logs(
         self,

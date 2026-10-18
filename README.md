@@ -8,7 +8,7 @@ The goal is to generate **feasible, practical timetables** that respect institut
 
 > **Project status:** This README describes the **planned architecture and repository structure**. Creating the folders does not mean the services, endpoints, or infrastructure are implemented yet.
 >
-> **Implemented so far:** `packages/db-core`, `packages/auth-core`, the [Identity Service](services/identity-service/README.md) (Cognito authentication, accounts, roles, permissions, Super Admin bootstrap, audit log), and the administrative-positions part of the [Academic Data Service](services/academic-data-service/README.md) (position types, workload policies, staff appointments, workload contract). Other services are still planned.
+> **Implemented so far:** `packages/db-core`, `packages/auth-core`, the [Identity Service](services/identity-service/README.md) (Cognito authentication, institution registry, accounts, roles, permissions, System Admin bootstrap, audit log), and the administrative-positions part of the [Academic Data Service](services/academic-data-service/README.md) (position types, workload policies, staff appointments, workload contract). Other services are still planned.
 
 ## Technology stack (planned)
 
@@ -68,12 +68,13 @@ Manages **who can access Schedence and what they are permitted to do**.
 
 - User accounts, activation/deactivation, and sign-in integration.
 - System roles, permissions, and access scopes (institution, campus, department, etc.).
-- Access for Super Admin, Academic Admin, Examination Admin, Venue Manager, lecturers, and students.
+- The institution registry, managed by System Admins (the Schedence product owners).
+- Access for System Admin, Institution Admin, Academic Admin, Examination Admin, Venue Manager, lecturers, and students.
 - Audit-relevant identity events.
 
 **Important:** A staff member's **academic rank** (e.g., Professor) or **administrative appointment** (e.g., HOD or Program Coordinator) does **not** automatically grant additional system permissions. Appointments and workload policies belong to the Academic Data Service, while access permissions belong here.
 
-**Status: implemented.** AWS Cognito (managed login, Authorization Code + PKCE), access-token verification via `packages/auth-core`, database-driven RBAC per institution, administrator onboarding with retryable Cognito/Neon provisioning, operator-only Super Admin bootstrap, and audit logs. See [services/identity-service/README.md](services/identity-service/README.md).
+**Status: implemented.** AWS Cognito (managed login, Authorization Code + PKCE), access-token verification via `packages/auth-core`, database-driven RBAC per institution, System Admin → Institution Admin → user onboarding with retryable Cognito/Neon provisioning, operator-only System Admin bootstrap, and audit logs. See [services/identity-service/README.md](services/identity-service/README.md).
 
 ### 2. Academic Data Service (`services/academic-data-service/`)
 
@@ -201,7 +202,8 @@ The diagram is **conceptual**, not a claim that a dedicated API Gateway is alrea
 
 | User type                            | Main access                                                                                         |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **Super Admin (Non-Academic Admin)** | Campus onboarding, account/permission management, institutional setup and oversight.                |
+| **System Admin (product owners)**    | Register institutions and create each institution's admin. No access inside an institution.         |
+| **Institution Admin**                | Account/permission management, institutional setup and oversight within one institution.           |
 | **Academic Admin**                   | Configure and review teaching schedules; approve/publish teaching timetables within assigned scope. |
 | **Examination Admin**                | Configure, review and publish examination schedules and duty allocations.                           |
 | **Venue Manager**                    | Manage venue availability, maintenance, and booking requests.                                       |
@@ -212,7 +214,7 @@ Actual permissions should be **scoped** and configurable. A person may have mult
 
 ## Example scheduling workflow
 
-1. Super Admin onboards a campus and its users; academic and venue owners maintain approved data.
+1. A System Admin registers the institution and its Institution Admin, who onboards the campus users; academic and venue owners maintain approved data.
 2. Academic Admin or Examination Admin requests timetable generation.
 3. The relevant service validates inputs and reads consistent staff, module, registration, and venue-availability data.
 4. A background CP-SAT job finds a timetable satisfying all hard constraints and attempts to improve soft objectives.

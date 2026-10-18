@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from app.schemas.common import ApiModel
+from app.schemas.platform import InstitutionSummaryOut
 from app.schemas.users import RoleAssignmentOut
 
 
@@ -29,13 +30,23 @@ class InstitutionPermissionsOut(ApiModel):
     permissions: list[str]
 
 
+class PlatformPermissionsOut(ApiModel):
+    roles: list[str]
+    permissions: list[str]
+
+
 class MePermissionsOut(ApiModel):
-    """Contract consumed by other Schedence services to authorise a caller."""
+    """Contract consumed by other Schedence services to authorise a caller.
+
+    Services authorise from ``institutions`` only. ``platform`` lists System Admin
+    permissions, which grant nothing inside an institution.
+    """
 
     user_id: UUID
     cognito_sub: str
     account_status: str
     institutions: list[InstitutionPermissionsOut]
+    platform: PlatformPermissionsOut
 
 
 class MeOut(ApiModel):
@@ -44,6 +55,8 @@ class MeOut(ApiModel):
     full_name: str
     account_status: str
     roles: list[RoleAssignmentOut]
+    platform_roles: list[str]
+    institutions: list[InstitutionSummaryOut]
 
 
 class AuditLogOut(ApiModel):

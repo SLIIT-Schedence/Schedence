@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 from sqlalchemy.exc import OperationalError
 
-import scripts.bootstrap_superadmin as bootstrap_script
+import scripts.bootstrap_system_admin as bootstrap_script
 import scripts.seed_roles as seed_script
 
 HOST = "ep-secret-endpoint-123456.c-7.us-east-2.aws.neon.tech"
@@ -38,7 +36,7 @@ def test_seed_script_debug_flag_shows_the_real_error(monkeypatch: pytest.MonkeyP
 
 def test_bootstrap_script_hides_host_names_on_connection_timeout(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     monkeypatch.setattr(bootstrap_script, "_bootstrap", _raise_timeout)
-    code = bootstrap_script.main(["--email", "admin@example.edu", "--institution-id", str(uuid.uuid4()), "--yes"])
+    code = bootstrap_script.main(["--email", "owner@example.com", "--yes"])
     output = capsys.readouterr()
     assert code == 1
     assert HOST not in output.out + output.err

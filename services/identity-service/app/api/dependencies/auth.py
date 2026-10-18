@@ -8,7 +8,9 @@ Layering:
    account and loads its roles/permissions from the database (never from
    headers or token groups).
 3. :func:`require_permissions` / :func:`require_roles` /
-   :func:`require_institution_scope` - deny-by-default checks on top.
+   :func:`require_institution_scope` - deny-by-default checks on top, against
+   institution permissions only. :func:`require_platform_permissions` checks
+   System Admin (platform) permissions, which never satisfy the others.
 
 Services repeat institution-specific checks for resources whose institution
 is only known from the database or the request body.
@@ -67,6 +69,17 @@ def require_permissions(*permissions: str):
 
     async def dependency(principal: CurrentUser) -> Principal:
         if not all(principal.has_permission(p) for p in permissions):
+            raise PermissionDeniedError(details={"required_permissions": list(permissions)})
+        return principal
+
+    return dependency
+
+
+def require_platform_permissions(*permissions: str):
+    """Caller must hold *all* platform permissions (System Admin)."""
+
+    async def dependency(principal: CurrentUser) -> Principal:
+        if not all(principal.has_platform_permission(p) for p in permissions):
             raise PermissionDeniedError(details={"required_permissions": list(permissions)})
         return principal
 
