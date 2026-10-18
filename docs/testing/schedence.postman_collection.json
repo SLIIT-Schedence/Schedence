@@ -469,7 +469,7 @@
                   "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
                   "if (pm.response.code === 200 && pm.response.text()) {",
                   "  const body = pm.response.json();",
-                  "  pm.test(\"25 permissions\", function () { pm.expect(body.length === 25, \"25 permissions\").to.be.true; });",
+                  "  pm.test(\"27 permissions\", function () { pm.expect(body.length === 27, \"27 permissions\").to.be.true; });",
                   "}"
                 ]
               }

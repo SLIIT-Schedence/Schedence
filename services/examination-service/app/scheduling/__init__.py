@@ -1,0 +1,20 @@
+"""Offline draft scheduling. Importing this package does not import OR-Tools."""
+
+from app.scheduling.inputs import load_snapshot, load_database_snapshot
+from app.scheduling.contracts import SchedulingValidationError
+from app.scheduling.policy import SchedulingPolicy, SolverSettings
+from app.scheduling.service import generate_timetable
+from app.scheduling.types import DraftTimetable, InputSnapshot, SolveResult, SolveStatus
+from app.scheduling.validation import validate_timetable
+from app.scheduling.optimization_policy import OptimizationPolicy
+from app.scheduling.evaluation import evaluate_timetable
+from app.scheduling.optimization import OptimizationResult, optimize_timetable
+from app.scheduling.fairness_policy import FairnessPolicy
+from app.scheduling.fairness import FairnessComparison, compare_fairness
+
+__all__ = [
+    "DraftTimetable", "InputSnapshot", "SchedulingPolicy", "SolveResult", "SolveStatus",
+    "SolverSettings", "SchedulingValidationError", "generate_timetable", "load_database_snapshot", "load_snapshot", "validate_timetable",
+    "OptimizationPolicy", "OptimizationResult", "evaluate_timetable", "optimize_timetable",
+    "FairnessPolicy", "FairnessComparison", "compare_fairness",
+]

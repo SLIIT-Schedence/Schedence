@@ -258,9 +258,21 @@ POST /users ─▶ provisioning PENDING (committed)
 | `SYSTEM_ADMIN` | platform | all `platform:*` (institutions, Institution Admins, platform audit) |
 | `INSTITUTION_ADMIN` | institution | all `identity:*` and all `academic:*` |
 | `ACADEMIC_ADMIN` | institution | `teaching:generate`, `teaching:approve`, `academic:positions:read`, `academic:appointments:read`, `academic:staff:read`, `academic:workload:read`, `venues:read` |
-| `EXAMINATION_ADMIN` | institution | `examinations:generate`, `examinations:approve`, `academic:staff:read`, `academic:workload:read`, `venues:read` |
+| `EXAMINATION_ADMIN` | institution | `examinations:read`, `examinations:manage`, `examinations:generate`, `examinations:approve`, `academic:staff:read`, `academic:workload:read`, `venues:read` |
 | `VENUE_MANAGER` | institution | `venues:read`, `venues:manage` |
 | `LECTURER`, `STUDENT` | institution | none yet (portal access only) |
+
+The catalog contains 36 permissions: 27 institution permissions and 9 `platform:*`
+permissions. Examination permissions belong only to `EXAMINATION_ADMIN`;
+`INSTITUTION_ADMIN` and `SYSTEM_ADMIN` have no automatic examination override.
+`examinations:read` covers examination data, timetables, reports, comparisons
+and exports. `examinations:manage` covers examination configuration and draft
+edits. Generation and approval remain reserved for future scheduling workflows.
+
+The two new permissions (`examinations:read` and `examinations:manage`) and their
+grants need a separately approved RBAC data update before deploying the new
+Examination Service checks. Editing the catalog alone does not update Neon.
+No database schema migration or Cognito configuration change is required.
 
 Rules enforced in `app/services/users.py` and `app/services/platform.py`:
 - Everything is denied by default. Institution permissions are evaluated **per institution**; platform permissions are separate.

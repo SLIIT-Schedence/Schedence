@@ -1,0 +1,8 @@
+module_code,source_row,field,original_value,corrected_value,reason
+IT2040,26,module_name,DataBase Management Systems,Database Management Systems,spelling correction
+IE3030,96,module_name,Wide area Networks,Wide Area Networks,spelling correction
+IT3060,125,module_code,IT3060,IT3041,confirmed correction (code reused for another module); Main Admin dataset lists IT3041 = Information Retrieval and Web Analytics
+IT3061,126,module_name,Massive Data Processing and cloud Computing,Massive Data Processing and Cloud Computing,spelling correction
+IT3080,129,module_name,Data Sceince & Analytics,Data Science & Analytics,spelling correction
+IE4080,173,module_name,Software Deﬁned Networks,Software Defined Networks,unicode normalization (e.g. 'fi' ligature)
+IT4100,189,module_name,Software Quality Asuarance,Software Quality Assurance,spelling correction
