@@ -251,4 +251,5 @@ def test_openapi_lists_every_endpoint(client: TestClient) -> None:
         f"{API}/settings/exam-seating",
         f"{API}/settings/exam-seating/default",
         f"{API}/settings/exam-seating/venues/{{venue_id}}",
+        f"{API}/settings/scheduling",
     }

@@ -12,6 +12,13 @@ from dataclasses import dataclass
 
 from app.scheduling.contracts import SchedulingValidationError, Violation, frozen_sequence, text_errors
 
+# Server-side resource limits, applied wherever these settings are used (API, saved
+# settings, command line, library calls). They bound one solver run and keep breaks
+# within a day; they never relax a hard rule.
+MAX_TIME_LIMIT_SECONDS = 3600  # one hour per solver run
+MAX_SEARCH_WORKERS = 16
+MAX_MINIMUM_BREAK_MINUTES = 1440  # one day
+
 DEFAULT_COMPATIBILITY = (
     ("written", ("lecture_hall", "smart_classroom")),
     ("computer_based", ("computer_lab",)),
@@ -64,6 +71,8 @@ class SchedulingPolicy:
             errors.append("Permitted start times must be unique.")
         if not whole_number(self.minimum_break_minutes):
             errors.append("Minimum break must be a whole number of minutes >= 0.")
+        elif self.minimum_break_minutes > MAX_MINIMUM_BREAK_MINUTES:
+            errors.append(f"Minimum break must be at most {MAX_MINIMUM_BREAK_MINUTES} minutes (one day).")
         if self.max_rooms_per_exam is not None and not whole_number(self.max_rooms_per_exam, 1):
             errors.append("Maximum rooms must be a positive whole number or None.")
         for name in ("venue_compatibility", "module_venue_overrides"):
@@ -93,8 +102,12 @@ class SolverSettings:
                 pass  # A finite Python integer may still exceed the solver's double range.
         if not finite_limit:
             errors.append("Solver time limit must be finite and greater than zero.")
+        elif self.time_limit_seconds > MAX_TIME_LIMIT_SECONDS:
+            errors.append(f"Solver time limit must be at most {MAX_TIME_LIMIT_SECONDS} seconds.")
         if not whole_number(self.random_seed) or self.random_seed > 2**31 - 1:
             errors.append("Random seed must be an integer between 0 and 2147483647.")
         if not whole_number(self.num_search_workers, 1):
             errors.append("Solver workers must be a positive whole number; use 1 for reproducibility.")
+        elif self.num_search_workers > MAX_SEARCH_WORKERS:
+            errors.append(f"Solver workers must be at most {MAX_SEARCH_WORKERS}.")
         return tuple(errors)

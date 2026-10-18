@@ -642,3 +642,141 @@ async def test_database_and_dataset_sources_give_the_same_effective_capacities(e
     assert from_db.venues == from_memory.venues and from_db.fingerprint == from_memory.fingerprint
     assert [c for _, c in api_db] == [c for _, c in await memory.venues()]
     assert from_db.exam_capacity("Robotics Lab") == 0 and from_db.exam_capacity("F303") == 237
+
+
+# --- Scheduling settings (migration 0006) --------------------------------------------------------------------
+
+from app.scheduling.configuration import SchedulingConfiguration  # noqa: E402
+from app.scheduling_settings.errors import (  # noqa: E402
+    SchedulingSettingsConflictError,
+    SchedulingSettingsInvalidStoredError,
+    SchedulingSettingsNotConfiguredError,
+)
+from app.scheduling_settings.service import SchedulingSettingsService  # noqa: E402
+from app.scheduling_settings.store import DatabaseSchedulingSettingsStore  # noqa: E402
+
+SETTINGS_INSTITUTION = uuid.UUID("33333333-3333-4333-8333-333333333333")  # test value, not a real institution
+
+
+def _settings_document(minimum_break: int) -> dict:
+    document = SchedulingConfiguration().to_document()
+    document["scheduling"]["minimum_break_minutes"] = minimum_break
+    return document
+
+
+def _settings_service(session: AsyncSession, institution=SETTINGS_INSTITUTION) -> SchedulingSettingsService:
+    return SchedulingSettingsService(DatabaseSchedulingSettingsStore(session), institution)
+
+
+@pytest.fixture
+async def settings_engine(migrated: str):
+    _alembic("upgrade", "0006")
+    engine = create_db_engine(load_settings(), poolclass=NullPool)
+    yield engine
+    await dispose_engine(engine)
+
+
+async def test_0006_inserts_no_rows_and_leaves_seed_and_seating_data_alone(database: str) -> None:
+    _alembic("upgrade", "0005")
+    before = _seed_fingerprint(database), _query(database, "SELECT * FROM examinations.exam_seating_rule_history")
+    _alembic("upgrade", "0006")
+    assert (_seed_fingerprint(database), _query(database, "SELECT * FROM examinations.exam_seating_rule_history")) == before
+    assert _query(database, "SELECT count(*) FROM examinations.exam_scheduling_settings") == [(0,)]
+    assert _query(database, "SELECT count(*) FROM examinations.exam_scheduling_settings_history") == [(0,)]
+
+
+async def test_0006_settings_are_saved_versioned_and_read_back(settings_engine, migrated: str) -> None:
+    async with AsyncSession(settings_engine) as session:
+        service = _settings_service(session)
+        assert (await service.view(history_limit=5)).version == 0
+        change = await service.update(_settings_document(90), reason=REASON, expected_version=0, user_id=USER,
+                                      dry_run=False)
+        assert (change.action, change.version) == ("create", 1)
+    async with AsyncSession(settings_engine) as session:
+        service = _settings_service(session)
+        view = await service.view(history_limit=5)
+        assert view.saved.settings == _settings_document(90)  # JSONB round trip
+        assert (await service.configuration()).scheduling.minimum_break_minutes == 90
+        with pytest.raises(SchedulingSettingsConflictError):
+            await service.update(_settings_document(30), reason=REASON, expected_version=0, user_id=USER,
+                                 dry_run=False)
+        change = await service.update(_settings_document(30), reason=REASON, expected_version=1, user_id=USER,
+                                      dry_run=False)
+        assert change.version == 2
+    rows = _query(migrated, "SELECT action, version, old_settings IS NULL, changed_by FROM "
+                            "examinations.exam_scheduling_settings_history ORDER BY history_id")
+    assert rows == [("create", 1, True, USER), ("update", 2, False, USER)]
+    assert _query(migrated, "SELECT institution_id, version FROM examinations.exam_scheduling_settings") == [
+        (SETTINGS_INSTITUTION, 2)]
+
+
+async def test_0006_dry_run_writes_nothing(settings_engine, migrated: str) -> None:
+    async with AsyncSession(settings_engine) as session:
+        await _settings_service(session).update(_settings_document(90), reason=REASON, expected_version=0,
+                                                user_id=USER, dry_run=True)
+    assert _query(migrated, "SELECT count(*) FROM examinations.exam_scheduling_settings") == [(0,)]
+
+
+async def test_0006_two_first_saves_cannot_both_win(settings_engine) -> None:
+    async with AsyncSession(settings_engine) as first, AsyncSession(settings_engine) as second:
+        a, b = DatabaseSchedulingSettingsStore(first), DatabaseSchedulingSettingsStore(second)
+        await a.insert(institution_id=SETTINGS_INSTITUTION, format="scheduling-settings-v1",
+                       settings=_settings_document(90), reason=REASON, updated_by=USER)
+        await a.commit()
+        with pytest.raises(SchedulingSettingsConflictError):
+            await b.insert(institution_id=SETTINGS_INSTITUTION, format="scheduling-settings-v1",
+                           settings=_settings_document(30), reason=REASON, updated_by=USER)
+
+
+async def test_0006_settings_of_another_institution_are_separate(settings_engine) -> None:
+    async with AsyncSession(settings_engine) as session:
+        await _settings_service(session).update(_settings_document(90), reason=REASON, expected_version=0,
+                                                user_id=USER, dry_run=False)
+    async with AsyncSession(settings_engine) as session:
+        other = await _settings_service(session, uuid.uuid4()).view(history_limit=5)
+        assert (other.source, other.version) == ("defaults", 0)
+
+
+async def test_settings_at_0005_are_a_safe_503(engine) -> None:
+    async with AsyncSession(engine) as session:
+        with pytest.raises(SchedulingSettingsNotConfiguredError):
+            await _settings_service(session).view(history_limit=5)
+
+
+async def test_0006_downgrade_keeps_saved_settings_unless_told_otherwise(settings_engine, migrated: str) -> None:
+    async with AsyncSession(settings_engine) as session:
+        await _settings_service(session).update(_settings_document(90), reason=REASON, expected_version=0,
+                                                user_id=USER, dry_run=False)
+    await dispose_engine(settings_engine)
+    with pytest.raises(Exception, match="scheduling settings were saved"):
+        _alembic("downgrade", "0005")
+    assert _query(migrated, "SELECT version_num FROM examinations.alembic_version") == [("0006",)]
+    _alembic("downgrade", "0005", "drop_scheduling_settings=true")
+    assert _query(migrated, "SELECT version_num FROM examinations.alembic_version") == [("0005",)]
+
+
+async def test_0006_invalid_stored_settings_are_reported_and_repaired(settings_engine, migrated: str) -> None:
+    async with AsyncSession(settings_engine) as session:
+        await _settings_service(session).update(_settings_document(90), reason=REASON, expected_version=0,
+                                                user_id=USER, dry_run=False)
+    # As a stricter code update or a manual edit might leave it: valid JSON, invalid settings.
+    _query(migrated, "UPDATE examinations.exam_scheduling_settings "
+                     "SET settings = jsonb_set(settings, '{solver,num_search_workers}', '64')")
+    broken = _query(migrated, "SELECT settings FROM examinations.exam_scheduling_settings")[0][0]
+    async with AsyncSession(settings_engine) as session:
+        service = _settings_service(session)
+        view = await service.view(history_limit=5)
+        assert (view.status, view.version, view.saved.settings) == ("invalid", 1, broken)
+        with pytest.raises(SchedulingSettingsInvalidStoredError):
+            await service.configuration()
+        with pytest.raises(SchedulingSettingsConflictError):
+            await service.update(_settings_document(30), reason=REASON, expected_version=1, user_id=USER,
+                                 dry_run=False)
+        change = await service.update(_settings_document(30), reason=REASON, expected_version=1, user_id=USER,
+                                      dry_run=False, replace_invalid=True)
+        assert (change.action, change.version) == ("repair", 2)
+    [(action, old_settings, old_format, changed)] = _query(
+        migrated, "SELECT action, old_settings, old_format, changed_fields FROM "
+                  "examinations.exam_scheduling_settings_history WHERE version = 2")
+    assert (action, old_settings, old_format) == ("repair", broken, "scheduling-settings-v1")
+    assert changed == list(change.changed_fields)

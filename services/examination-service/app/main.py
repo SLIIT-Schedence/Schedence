@@ -7,8 +7,8 @@ for psycopg async; see the service README)::
 
 Security: ``/health`` and ``/health/db`` are public; every ``/api/v1`` route
 requires a Cognito access token. GET routes require ``examinations:read``;
-seating PUT/DELETE routes require ``examinations:manage`` in this service's
-institution (see ``app.auth``).
+seating and scheduling-settings PUT/DELETE routes require
+``examinations:manage`` in this service's institution (see ``app.auth``).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import exam_periods, health, modules, settings, students, venues
+from app.api import exam_periods, health, modules, scheduling_settings, settings, students, venues
 from app.api.errors import register_error_handlers
 from app.auth.context import AuthContext, build_auth_context
 from app.auth.dependencies import get_current_user, require_exam_data_access
@@ -70,5 +70,6 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
         api.include_router(module.router, dependencies=[Depends(require_exam_data_access)])
     # Settings mixes read and write operations, so it checks each operation.
     api.include_router(settings.router)
+    api.include_router(scheduling_settings.router)
     app.include_router(api)
     return app

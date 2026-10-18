@@ -7,8 +7,12 @@ from typing import Annotated, Literal
 from fastapi import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.context import AuthContext
+from app.auth.dependencies import get_auth
 from app.database import get_session, get_write_session
 from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
+from app.scheduling_settings.service import SchedulingSettingsService
+from app.scheduling_settings.store import DatabaseSchedulingSettingsStore, SchedulingSettingsStore
 from app.seating.service import SeatingService
 from app.seating.store import DatabaseSeatingStore, SeatingRuleStore
 from app.sources import DatabaseSource, ExamDataSource
@@ -60,3 +64,30 @@ def get_seating_writer(session: Annotated[AsyncSession, Depends(get_write_sessio
 
 SeatingReaderDep = Annotated[SeatingService, Depends(get_seating_reader)]
 SeatingWriterDep = Annotated[SeatingService, Depends(get_seating_writer)]
+
+
+def get_scheduling_settings_store(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SchedulingSettingsStore:
+    """Scheduling settings on the request's read-only session."""
+    return DatabaseSchedulingSettingsStore(session)
+
+
+def get_scheduling_settings_reader(
+    store: Annotated[SchedulingSettingsStore, Depends(get_scheduling_settings_store)],
+    auth: Annotated[AuthContext, Depends(get_auth)],
+) -> SchedulingSettingsService:
+    # The institution in which the caller's examination permissions are checked.
+    return SchedulingSettingsService(store, auth.settings.institution_id)
+
+
+def get_scheduling_settings_writer(
+    session: Annotated[AsyncSession, Depends(get_write_session)],
+    auth: Annotated[AuthContext, Depends(get_auth)],
+) -> SchedulingSettingsService:
+    """A writable session (read-only for dry runs); the service commits explicitly."""
+    return SchedulingSettingsService(DatabaseSchedulingSettingsStore(session), auth.settings.institution_id)
+
+
+SchedulingSettingsReaderDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_reader)]
+SchedulingSettingsWriterDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_writer)]

@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.db.base import Base
-from app.db import seating_models, seed_models  # noqa: F401
+from app.db import scheduling_settings_models, seating_models, seed_models  # noqa: F401
 
 from conftest import SERVICE_DIR
 
@@ -209,6 +209,42 @@ def test_0005_downgrade_guard_can_be_skipped_explicitly(monkeypatch: pytest.Monk
     sql = _sql(monkeypatch, "0005:0004", downgrade=True, x=["drop_seating_history=true"])
     assert "RAISE EXCEPTION" not in sql
     assert "DROP TABLE examinations.exam_seating_rule_history" in sql
+
+
+def test_0006_only_adds_the_scheduling_settings_tables(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0005:0006")
+    body = _between(sql)
+    assert set(re.findall(r"CREATE TABLE examinations\.(\w+)", body)) == {
+        "exam_scheduling_settings", "exam_scheduling_settings_history"}
+    # No existing table, row or constraint changes, and no institution is assumed: nothing is inserted.
+    for forbidden in ("ALTER TABLE", "DROP ", "DELETE FROM", "TRUNCATE", "UPDATE ", "INSERT INTO"):
+        assert forbidden not in body.upper()
+    assert sql.count("BEGIN;") == 1
+
+
+def test_0006_scheduling_settings_constraints(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0005:0006")
+    assert "CONSTRAINT uq_exam_scheduling_settings_institution_id UNIQUE (institution_id)" in sql
+    assert _inline_check(sql, "ck_exam_scheduling_settings_version_positive") == ["version >= 1"]
+    assert _inline_check(sql, "ck_exam_scheduling_settings_settings_object") == ["jsonb_typeof(settings) = 'object'"]
+    [values] = _inline_check(sql, "ck_exam_scheduling_settings_history_action_values")
+    assert "action = 'create' AND old_settings IS NULL AND old_format IS NULL" in values
+    assert "action IN ('update', 'repair') AND old_settings IS NOT NULL AND old_format IS NOT NULL" in values
+    assert _inline_check(sql, "ck_exam_scheduling_settings_history_action_valid") == [
+        "action IN ('create', 'update', 'repair')"]
+    assert _inline_check(sql, "ck_exam_scheduling_settings_history_changed_fields_array") == [
+        "jsonb_typeof(changed_fields) = 'array'"]
+    assert "settings JSONB NOT NULL" in sql and "institution_id UUID NOT NULL" in sql
+    assert "REFERENCES" not in _between(sql)  # no link to seed data or to other services' tables
+
+
+def test_0006_downgrade_refuses_to_lose_saved_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0006:0005", downgrade=True)
+    assert sql.index("RAISE EXCEPTION") < sql.index("DROP TABLE examinations.exam_scheduling_settings_history")
+    assert set(re.findall(r"DROP TABLE ([\w.]+)", sql)) == {
+        "examinations.exam_scheduling_settings", "examinations.exam_scheduling_settings_history"}
+    skipped = _sql(monkeypatch, "0006:0005", downgrade=True, x=["drop_scheduling_settings=true"])
+    assert "RAISE EXCEPTION" not in skipped and "DROP TABLE examinations.exam_scheduling_settings" in skipped
 
 
 def test_url_is_never_written_to_output(upgrade_sql: str) -> None:

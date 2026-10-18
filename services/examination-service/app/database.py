@@ -6,8 +6,9 @@
 * Every request gets its own session whose transaction is ``READ ONLY``: the
   API cannot change the database even by mistake. psycopg opens it with
   ``BEGIN READ ONLY``, so this costs no extra round trip to Neon.
-* The only exception: the seating-rule changes (``PUT``/``DELETE
-  /api/v1/settings/exam-seating...``) get a writable session from
+* The only exceptions: the seating-rule changes (``PUT``/``DELETE
+  /api/v1/settings/exam-seating...``) and the scheduling-settings change
+  (``PUT /api/v1/settings/scheduling``) get a writable session from
   :func:`get_write_session`, which never commits by itself. A dry run
   (``dry_run=true``) gets the read-only session instead.
 """
@@ -44,7 +45,7 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 
 async def get_write_session(request: Request, dry_run: bool = False) -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency for seating-rule changes: writable unless ``dry_run``.
+    """FastAPI dependency for settings changes: writable unless ``dry_run``.
 
     Nothing is committed here; the caller commits explicitly. Uncommitted work
     is rolled back when the session closes, and on any error.

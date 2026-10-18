@@ -11,9 +11,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_seating_store, get_source
+from app.api.deps import get_scheduling_settings_store, get_seating_store, get_source
 from app.auth.settings import load_auth_settings
 from app.main import create_app
+from app.scheduling_settings.memory import MemorySchedulingSettingsStore
 from app.seating.memory import MemorySeatingStore
 from app.seed.generator import generate_dataset
 from app.sources import DatasetSource
@@ -33,7 +34,7 @@ SOURCE = DatasetSource(generate_dataset())
 DATA_ENDPOINTS = [
     f"{API}/modules", f"{API}/modules/IT3041", f"{API}/students", f"{API}/students/IT30129034",
     f"{API}/registrations", f"{API}/venues", f"{API}/venue-blocks", f"{API}/exam-periods",
-    f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/settings/exam-seating",
+    f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/settings/exam-seating", f"{API}/settings/scheduling",
 ]
 STUDENT_DATA = [f"{API}/students", f"{API}/students/IT30129034", f"{API}/registrations"]
 
@@ -59,6 +60,7 @@ def _client(tokens, identity, source=SOURCE, **settings) -> TestClient:
     app = create_app(make_auth_context(tokens, identity, **settings))
     app.dependency_overrides[get_source] = lambda: source
     app.dependency_overrides[get_seating_store] = MemorySeatingStore
+    app.dependency_overrides[get_scheduling_settings_store] = MemorySchedulingSettingsStore
     return TestClient(app)
 
 
@@ -271,6 +273,7 @@ def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
         ("PUT", f"{API}/settings/exam-seating/default"),
         ("PUT", f"{API}/settings/exam-seating/venues/F303"),
         ("DELETE", f"{API}/settings/exam-seating/venues/F303"),
+        ("PUT", f"{API}/settings/scheduling"),  # access tests: test_scheduling_settings.py
     }
 
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
 
 T = TypeVar("T")
@@ -188,6 +189,68 @@ class SeatingChangeOut(_Out):
     newly_unavailable_venues: list[str]
     total_exam_capacity_before: int
     total_exam_capacity_after: int
+
+
+# --- Examination scheduling settings -----------------------------------------------
+
+SettingsVersion = Annotated[int, Field(ge=0, le=2_147_483_647)]
+
+
+class SetSchedulingSettingsIn(_In):
+    settings: dict[str, Any] = Field(
+        description="The complete settings document (as returned by GET). Every section and key is required; "
+                    "unknown keys are rejected. Hard rules H1-H11 cannot be configured.",
+        examples=[SchedulingConfiguration().to_document()],
+    )
+    reason: Reason
+    expected_version: SettingsVersion = Field(
+        description="The settings version you last read (0 = nothing saved yet; 409 if it changed)"
+    )
+
+
+class SettingsProblemOut(_Out):
+    rule: str
+    message: str
+
+
+class SchedulingSettingsHistoryOut(_Out):
+    history_id: int
+    action: Literal["create", "update", "repair"]
+    version: int
+    changed_fields: list[str]
+    changed_by: UUID
+    changed_at: dt.datetime
+    reason: str
+
+
+class SchedulingSettingsOut(_Out):
+    institution_id: UUID
+    source: Literal["defaults", "saved"]
+    status: Literal["valid", "invalid"] = Field(
+        description="invalid: the saved document fails validation; the scheduler will not use it until an "
+                    "admin repairs it (PUT with replace_invalid=true)")
+    problems: list[SettingsProblemOut] = Field(description="Why the saved document is invalid (empty when valid)")
+    version: int
+    format: str = Field(description="Format of the saved document (or of the defaults)")
+    fingerprint: str | None = Field(description="Fingerprint of the valid configuration; null when invalid")
+    reason: str | None
+    updated_by: UUID | None
+    updated_at: dt.datetime | None
+    settings: dict[str, Any] = Field(description="The configuration; when invalid, the saved document as stored")
+    mandatory_rules: list[str]
+    history: list[SchedulingSettingsHistoryOut]
+
+
+class SchedulingSettingsChangeOut(_Out):
+    dry_run: bool
+    changed: bool
+    action: Literal["create", "update", "repair"] | None
+    version: int
+    history_id: int | None
+    changed_fields: list[str]
+    changed_by: UUID | None
+    fingerprint: str
+    settings: dict[str, Any]
 
 
 class PageOut(_Out, Generic[T]):

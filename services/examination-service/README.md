@@ -421,10 +421,11 @@ services/examination-service/
 │       ├── 20261012_0002_real_module_catalog.py
 │       ├── 20261014_0003_campus_venues_expand.py
 │       ├── 20261014_0004_campus_venues_contract.py
-│       └── 20261015_0005_configurable_exam_seating.py
+│       ├── 20261015_0005_configurable_exam_seating.py
+│       └── 20261018_0006_scheduling_settings.py
 ├── app/
 │   ├── main.py                    # FastAPI app (create_app); uvicorn app.main:app
-│   ├── database.py                # engine + read-only sessions; writable only for seating changes
+│   ├── database.py                # engine + read-only sessions; writable only for settings changes
 │   ├── auth/                      # Cognito token check (auth-core) + Identity Service permissions
 │   ├── api/                       # routes, response schemas, input rules, safe errors
 │   ├── sources/                   # read-only data layer shared with the future scheduler
@@ -438,10 +439,15 @@ services/examination-service/
 │   │   ├── memory.py              # in-memory store (tests)
 │   │   ├── service.py             # validation, versions, dry run, history, logging
 │   │   └── snapshot.py            # frozen capacity snapshot for the future CP-SAT scheduler
+│   ├── scheduling_settings/       # admin scheduling settings (versioned, per institution)
+│   │   ├── store.py               # SchedulingSettingsStore + DatabaseSchedulingSettingsStore
+│   │   ├── memory.py              # in-memory store (tests)
+│   │   └── service.py             # validation, versions, dry run, history, logging
 │   ├── db/
 │   │   ├── base.py                # Base with MetaData(schema="examinations")
 │   │   ├── seed_models.py         # development-only seed_* tables
-│   │   └── seating_models.py      # exam_seating_rules + exam_seating_rule_history
+│   │   ├── seating_models.py      # exam_seating_rules + exam_seating_rule_history
+│   │   └── scheduling_settings_models.py  # exam_scheduling_settings + history
 │   └── seed/
 │       ├── assumptions.py         # every configurable number (NOT real policy)
 │       ├── catalog.py             # loads data/module_catalog.csv + data/venue_catalog.csv
@@ -740,6 +746,94 @@ restores the 50% check (the seed column was never changed, so it holds again).
 If any user has changed a rule, the downgrade stops and changes nothing, so
 the history is not lost by accident. Export it first (`python -m app.seed.backup export --pooled`), then run `alembic -x pooled=true -x drop_seating_history=true downgrade 0004`.
 
+## Exam scheduling settings
+
+Examination Admins configure the scheduler through
+`GET`/`PUT /api/v1/settings/scheduling` (`examinations:read` / `examinations:manage`).
+The settings are one JSON document with four sections, each checked by the
+existing policy class:
+
+| Section | Class | Settings |
+|---|---|---|
+| `scheduling` | `SchedulingPolicy` | `permitted_start_times` (`"HH:MM"`), `minimum_break_minutes`, `max_rooms_per_exam` (`null` = no limit), `venue_compatibility` (every exam type), `module_venue_overrides` |
+| `solver` | `SolverSettings` | `time_limit_seconds`, `random_seed`, `num_search_workers` |
+| `optimization` | `OptimizationPolicy` | S1-S5 weights, gap thresholds, workload coefficients, scales, `baseline_budget_percent` |
+| `fairness` | `FairnessPolicy` | `enabled`, `max_individual_increase_points`, `protect_worst_student`, `max_worst_increase_points` (`automatic_relaxation` must stay `false`) |
+
+* **H1-H11 are always enforced.** No setting can switch off student clash
+  prevention, room capacity or room conflict checks; unknown keys are rejected
+  with `422`, and every response lists the mandatory rules. A minimum break of
+  `0` allows back-to-back exams, never overlaps.
+* `PUT` needs the **complete** document (copy `settings` from `GET`, edit,
+  send back), a `reason` and `expected_version`, so a missing key can never
+  silently reset a setting. All problems are listed at once (`rule`, `message`).
+* Until an admin saves settings, `GET` shows the built-in defaults as
+  `version: 0` (`source: "defaults"`); the first save sends `expected_version: 0`.
+  Same versioning, row lock, single transaction, `dry_run` and `changed: false`
+  behaviour as the seating settings.
+* **Ownership:** settings are stored per institution: the one in which the
+  admin's `examinations:manage` permission is checked (`SLIIT_INSTITUTION_ID`).
+  Nothing else is assigned an owner. If `SLIIT_INSTITUTION_ID` changes, the
+  new institution starts with the defaults; the old settings stay in the history.
+* `data/scheduling_settings.prototype.json` is the default document.
+* **Server-side limits** (in `app/scheduling/policy.py`, so they apply to the
+  API, saved settings, the command line and library calls alike):
+
+  | Setting | Limit |
+  |---|---|
+  | `solver.time_limit_seconds` | at most `3600` (one hour per solver run) |
+  | `solver.num_search_workers` | at most `16` |
+  | `scheduling.minimum_break_minutes` | at most `1440` (one day) |
+
+  Larger values are rejected (`422` from the API, `MODEL_INVALID` from the
+  scheduler). The limits bound resources; they never relax a hard rule.
+* **Invalid saved settings.** A saved document can become invalid, for example
+  when a limit is tightened by a code update. It is never replaced by the
+  defaults: `GET` answers `status: "invalid"` with the saved version, the
+  document as stored and its `problems` (`rule`, `message`); the scheduler
+  refuses it (`503`, and `--settings-file` with an exported invalid response
+  fails). An admin repairs it with a normal `PUT` (complete valid document,
+  current `expected_version`, `examinations:manage`) plus `replace_invalid=true`.
+  The flag is required only then, and refused (`409`) otherwise. The history row
+  has action `repair` and keeps the invalid document exactly (`old_settings`,
+  `old_format`).
+* `changed_fields` in the `PUT` response is stored with the history row, so
+  both always agree. The first save is compared with the built-in defaults.
+
+Tables (created by 0006, which inserts **no** rows): `exam_scheduling_settings`
+(one row per `institution_id`; `version`; `settings` JSONB) and
+`exam_scheduling_settings_history` (action `create`/`update`/`repair`, version,
+changed fields, old and new document with their formats, `changed_by`,
+`changed_at`, `reason`).
+
+**Scheduler:** `python -m app.scheduling --settings-file saved.json [--optimize]`
+runs with saved settings: the `settings` document or the whole `GET` response.
+It cannot be combined with `--starts`, `--minimum-break`, `--time-limit`,
+`--seed`, `--workers`, `--max-rooms`, `--compatibility`, `--module-venues`,
+`--optimization-config`, `--fairness` or `--fairness-config`. Without it, the
+command-line defaults work as before. In code:
+`await SchedulingSettingsService(store, institution_id).configuration()`.
+
+### Applying 0006 (later, after review)
+
+Not applied to Neon yet. Until it is, both settings routes answer `503`
+("scheduling settings are not available"); every other route keeps working.
+Each step needs approval:
+
+```powershell
+cd services/examination-service
+python -m app.seed.backup export --pooled                 # 1. backup at 0005 (seed + seating tables)
+alembic -x pooled=true upgrade 0005:0006 --sql            # 2. preview the SQL; changes nothing
+alembic -x pooled=true upgrade 0006                       # 3. one transaction, two new empty tables
+alembic -x pooled=true current                            # 4. expect 0006
+```
+
+The backup tool does not export the scheduling settings tables yet.
+
+**Rollback:** `alembic -x pooled=true downgrade 0005` drops the two tables. If
+settings were saved, it stops and changes nothing; export the history first,
+then add `-x drop_scheduling_settings=true`.
+
 ## API
 
 Start the server from `services/examination-service` (Windows needs the
@@ -752,8 +846,9 @@ uvicorn app.main:create_app --factory --port 8003 --loop asyncio:SelectorEventLo
 
 Interactive docs: <http://127.0.0.1:8003/docs> (hidden when `APP_ENV=production`).
 The API uses the pooled `DATABASE_URL`, one engine per process, and opens every
-transaction `READ ONLY`. The only exception: saved seating changes (`PUT`/`DELETE`
-under `/api/v1/settings/exam-seating`, without `dry_run`) get a writable
+transaction `READ ONLY`. The only exceptions: saved seating changes (`PUT`/`DELETE`
+under `/api/v1/settings/exam-seating`) and saved scheduling settings
+(`PUT /api/v1/settings/scheduling`), without `dry_run`, get a writable
 session that commits explicitly.
 
 ### Security (RBAC)
@@ -769,7 +864,8 @@ Reuses the team's authentication; there is no separate login system.
    headers from the browser are ignored.
 3. Every `/api/v1` route requires authentication. Examination GET routes require
    `examinations:read` in the institution `SLIIT_INSTITUTION_ID`.
-4. Seating changes (`PUT`/`DELETE /api/v1/settings/exam-seating/...`), including
+4. Seating and scheduling-settings changes (`PUT`/`DELETE /api/v1/settings/exam-seating/...`,
+   `PUT /api/v1/settings/scheduling`), including
    dry runs, require `examinations:manage` in that institution. They do not also
    require `examinations:read`. Writes always ask Identity again (no cache).
 
@@ -804,7 +900,8 @@ unavailable). Settings (repository-root `.env`): `AWS_REGION`, `COGNITO_USER_POO
 (default `http://localhost:8001`) and `FRONTEND_URL` (CORS).
 
 To call the API locally, run the Identity Service too
-(`python scriptsun_services.py --only identity` from the repository root),
+(`python scripts
+un_services.py --only identity` from the repository root),
 sign in as an examination admin, and paste the **access token** into Swagger's
 "Authorize" button.
 
@@ -825,6 +922,8 @@ sign in as an examination admin, and paste the **access token** into Swagger's
 | `PUT /api/v1/settings/exam-seating/default` | change the default (`examinations:manage`) | body `percentage`, `reason`, `expected_version`; `dry_run` |
 | `PUT /api/v1/settings/exam-seating/venues/{venue_id}` | create (`expected_version: null`) or change an override | body as above; `dry_run` |
 | `DELETE /api/v1/settings/exam-seating/venues/{venue_id}` | remove an override | `expected_version`, `reason`, `dry_run` |
+| `GET /api/v1/settings/scheduling` | scheduling settings (defaults until saved), `status` (`valid`/`invalid`) and `problems`, mandatory rules H1-H11, recent history | `history_limit` (0-500, default 20) |
+| `PUT /api/v1/settings/scheduling` | replace the settings (`examinations:manage`) | body `settings` (complete document), `reason`, `expected_version` (0 = first save); `dry_run`; `replace_invalid` (only to repair invalid saved settings) |
 
 Settings input rules: `percentage` is a whole number 1-100 (`50.5`, `"50"` and
 `true` are rejected); `reason` is 5-500 characters without control characters
