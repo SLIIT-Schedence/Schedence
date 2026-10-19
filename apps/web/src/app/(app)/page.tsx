@@ -7,6 +7,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { isAcademicAdmin } from "@/lib/academic";
 import { type Account, getAccount, isSystemAdmin } from "@/lib/identity";
 import { isInstitutionAdmin } from "@/lib/institution";
+import { isExaminationAdmin } from "@/lib/examination-access";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -31,6 +32,7 @@ async function AccountOverview() {
       if (isSystemAdmin(result.account)) redirect("/platform");
       if (isInstitutionAdmin(result.account)) redirect("/admin");
       if (isAcademicAdmin(result.account)) redirect("/academic");
+      if (isExaminationAdmin(result.account)) redirect("/exams");
       return <Welcome account={result.account} />;
     case "not-provisioned":
       return (

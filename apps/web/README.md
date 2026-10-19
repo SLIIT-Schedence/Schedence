@@ -23,6 +23,7 @@ Fill in the rest of `.env.local` (see [.env.example](.env.example)). Every varia
 | `AUTH_COGNITO_ISSUER` | `https://cognito-idp.<region>.amazonaws.com/<user pool id>` |
 | `IDENTITY_SERVICE_URL` | `http://localhost:8001` |
 | `ACADEMIC_SERVICE_URL` | `http://localhost:8002` (Academic Admin console) |
+| `EXAMINATION_SERVICE_URL` | `http://localhost:8003` (defaults to this when unset) |
 
 In the Cognito console, open **App clients → Schedence-Web → App client information → Edit** and, under **Authentication flows**, make sure these are selected:
 
@@ -53,6 +54,98 @@ npm run dev        # http://localhost:3000
 6. **Sign out** clears the Auth.js session and revokes the refresh token in Cognito (`RevokeToken`), so a copied session cookie stops working.
 
 The home page reports accounts that are not provisioned (`ACCOUNT_NOT_PROVISIONED`) or disabled (`ACCOUNT_DISABLED`), and an identity service that is unreachable.
+
+## Examination Admin console (F1)
+
+Start the existing identity-service on port 8001 and Examination Service on port 8003, then run `npm run dev`
+from `apps/web`. Open [http://localhost:3000/exams](http://localhost:3000/exams) and sign in through the existing
+Cognito flow with an active account assigned `EXAMINATION_ADMIN`. The service also checks `examinations:read`
+in its configured institution. Other users return to `/`; System Admin and Institution Admin home redirects
+keep their existing priority.
+
+The overview reads `/api/v1/exam-periods`, `/modules`, `/venues`, `/registrations` and `/timetables` from the
+Examination Service. Failed reads show errors independently; unavailable data is never replaced with zero.
+All calls run on the Next.js server with the current Cognito access token and `cache: "no-store"`.
+`EXAMINATION_SERVICE_URL` is server-only. Requests default to a 15-second timeout; server callers can set
+`timeoutMs` on `examinationRequest` for longer requests. The remaining navigation sections show Coming Soon,
+except for FINAL timetable generation and saved timetables described below.
+
+### FINAL timetable generation (F2)
+
+Open `/exams/generate`, select a FINAL examination cycle, choose Feasibility or Optimized, and optionally enter
+a solver limit greater than zero and at most 300 seconds. The backend permits an override only when it does
+not exceed the saved solver limit. Leaving it blank uses that saved limit. All configured cycle modules are
+included; MID generation is unavailable in this UI and rejected by the server action.
+
+The server action rechecks the role and selected cycle, then calls only `POST /api/v1/timetables/generate`
+with the current server-side Cognito access token. It uses a 360-second request timeout for solver execution
+and input processing. The form disables repeat submissions while pending. Session expiry returns to the
+existing sign-in flow; other API failures keep the service's error message and HTTP status.
+
+Results display actual sessions, venue allocations, aggregate candidate counts, solver runtime and status,
+validation, S1–S5 workload scores, and any returned baseline/selected and fairness comparisons. The action
+selects public fields explicitly and redacts student identifiers from diagnostic/error text. No student IDs
+or individual seat records are sent to the results view. Results stay in page state; reloading or leaving
+the page discards them. A preview is never saved; use Generate & Save Draft (below).
+
+Step 1, **Select Examination**, replaces the old cycle dropdown. The academic years come from
+`GET /exam-periods`. The admin picks a year, MID or FINAL, and a semester card; the matching real period is
+selected automatically, or chosen from a list when several match. If none matches, the step shows
+"Examination period not configured" and Continue stays disabled. The summary shows the period name, dates,
+exam days and its mapped module count (from `/exam-periods/{code}/modules`). It also shows the registration
+count, but only when it is exact, meaning every mapped module has scope `all`; it is the sum of the module
+`candidate_count`s. The period code is secondary text. MID periods are listed if they exist but cannot
+continue: generation is FINAL-only. Continue still sends only the matched `period_code`.
+
+The generator now guides the admin through six steps: Select Examination, calendar, academic groups, current
+scheduling/seating rules, generation inputs, and results. It reads each period's `/modules` mapping and the
+real module catalog. Year, semester, specialization and module filters affect display only; generation
+always omits `module_codes` and schedules the full mapped cycle. Missing metadata and empty groups are
+identified explicitly. Step 3 browses the mapped modules with Year 1–4 tabs (with counts), a semester toggle, a specialization
+list built from real module data, and search by code or name. It shows "Showing X of Y mapped modules".
+These filters are display-only; generation always includes the whole mapping. The normal and repeat counts
+per module are exact. The server counts repeat registrations from `GET /registrations?registration_type=repeat`,
+and normal = the module's `candidate_count` − repeat. Only counts reach the browser. A repeat-only module
+examines repeats only. Counts are never split by specialization. Calendar View and Table View retain full sitting counts and show Regular/Repeat
+counts returned by generation. Counts are not recalculated for a specialization that shares a module.
+
+Step 2, **Exam calendar**, is a normal part of generation. It starts from the configured period, and the
+admin sets the start and end dates, daily hours, Saturdays/Sundays and excluded dates for *this* timetable.
+The calendar is sent as `calendar` with `POST /timetables/generate` and `/drafts`. The backend validates it
+like a period and generates on exactly those days. The saved period is never edited, so an approved or
+published timetable no longer blocks choosing new dates. Results and saved timetables show the calendar
+the service used; saved drafts keep it, and approval re-checks against it. The old period editor
+(`PeriodCalendar` with dry-run/save) is no longer used by the wizard.
+
+Draft counts and released timetable warnings are scoped to the configured institution. The API does not
+provide a global lock-status endpoint; its dry-run/save checks enforce locks across institutions. Individual
+H1–H11 success flags are also unavailable: the summary shows the overall independent validation, reported
+violations and linked rule descriptions. It never infers an individual pass merely from a listed rule.
+
+### Saved timetables: Save Draft, Approve, Publish and History (F3)
+
+**Generate & Save Draft** (steps 5 and 6 of the generator) calls `POST /api/v1/timetables/drafts` with the
+same cycle, mode and limit checks as a preview. The backend runs a *fresh* generation, validates it again and
+stores it as a new DRAFT, so it can differ from the preview on screen; the admin must tick a confirmation
+first. Saving locks the wizard while it runs (up to 360 seconds) and then opens the saved draft.
+
+`/exams/timetables` lists saved FINAL timetables from `GET /api/v1/timetables`, newest first, filtered by
+semester, cycle and status (URL parameters; unknown values are ignored). A semester filter queries each FINAL
+cycle of that semester and merges the pages. `/exams/timetables/[id]` shows the saved sessions in the same
+Calendar/Table browser, the validation summary and `GET .../history`. Seat allocations with student IDs
+(`/seats`) are never requested.
+
+**Approve** (DRAFT only) and **Publish** (APPROVED only) use `ActionDialog` with a reason (5–500 characters,
+one line) and the revision shown on the page as `expected_revision`. Publish also needs `PUBLISH` typed in,
+and offers `replace_published` only as an explicit "archive the currently published timetable" choice with a
+warning. Approval never publishes. The backend checks the permission (`examinations:approve`), status,
+revision, stored content and stale inputs; the dialog explains STALE, REVISION, ALREADY_PUBLISHED, 403, 422,
+429 and 503 answers and redacts student identifiers. Actors appear as "You" or a short user ID, because the
+Examination Service stores Identity Service user IDs only.
+
+Focused validation: `node --test tests/examination-api.test.mjs tests/examination-timetables.test.mjs tests/examination-selection.test.mjs tests/examination-module-browser.test.mjs`,
+`npx tsc --noEmit --incremental false`, and ESLint on `src/lib/examination*.ts`, `src/app/(examination)` and
+`src/app/(app)/page.tsx`.
 
 ## System Admin console
 
