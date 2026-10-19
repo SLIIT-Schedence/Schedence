@@ -47,6 +47,10 @@ from schedence_db.runtime import run
 
 from app.db.base import SCHEMA, Base
 from app.db import seating_models, seed_models  # noqa: F401  (registers the tables)
+from app.db.seed_models import DEFAULT_EXAM_KIND
+
+PRE_0008_MODULE_DEFAULTS = {"has_final_exam": True, "has_mid_exam": False, "mid_duration_minutes": None,
+                            "delivery_mode": "regular", "block_category": None}
 
 BACKUP_ROOT = Path(__file__).resolve().parents[2] / "backups"
 # Parents first: the order used for restore (and reversed for any cleanup).
@@ -59,6 +63,7 @@ SEED_TABLES = (
     "seed_venue_blocks",
     "seed_exam_periods",
     "seed_exam_period_exclusions",
+    "seed_exam_period_modules",  # migration 0009; exported only when present
 )
 # Created by migration 0005. Exported only when present; IDs are kept.
 SEATING_TABLES = ("exam_seating_rules", "exam_seating_rule_history")
@@ -179,6 +184,13 @@ def load_rows(backup_dir: Path, table: str) -> list[dict[str, Any]]:
         # Backups taken before migration 0002 have no reading-time flag.
         if table == "seed_modules" and "has_extra_reading_time" not in row:
             row["has_extra_reading_time"] = row["reading_time_minutes"] > 0
+        # Backups taken before migration 0007 have no exam kind: those periods were finals.
+        if table == "seed_exam_periods" and "exam_kind" not in row:
+            row["exam_kind"] = DEFAULT_EXAM_KIND
+        # Backups taken before migration 0008: modules had a final examination only.
+        if table == "seed_modules":
+            for name, value in PRE_0008_MODULE_DEFAULTS.items():
+                row.setdefault(name, value)
         rows.append(row)
     return rows
 

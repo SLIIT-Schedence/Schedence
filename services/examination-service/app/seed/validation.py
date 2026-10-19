@@ -11,10 +11,13 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, SIMULATED_BLOCK_SOURCES, VENUE_TYPES
+from app.db.seed_models import (
+    BLOCK_SOURCES, EXAM_KINDS, EXAM_TYPES, REGISTRATION_TYPES, SIMULATED_BLOCK_SOURCES, VENUE_TYPES,
+)
 from app.seed.assumptions import DEFAULT_ASSUMPTIONS, SeedAssumptions
 from app.seed.generator import exam_capacity, exam_days
 from app.seed.records import Dataset
+from app.sources.exam_rules import cycle_candidate, cycle_member_errors, module_exam_errors
 
 
 @dataclass
@@ -74,7 +77,13 @@ def validate_dataset(data: Dataset, assumptions: SeedAssumptions = DEFAULT_ASSUM
             err(f"module {m.module_code}: reading time minutes do not match the reading-time flag")
         if not specs.get(m.module_code):
             err(f"module {m.module_code}: has no specialization")
+        for problem in module_exam_errors(m):
+            err(f"module {m.module_code}: {problem}")
     module_codes = {m.module_code for m in data.modules}
+    synthetic = ([code for code, _ in assumptions.synthetic_mid_exams] + list(assumptions.synthetic_no_final_modules)
+                 + [code for code, _ in assumptions.synthetic_block_modules])
+    for code in sorted(set(synthetic) - module_codes):
+        err(f"synthetic exam setting refers to unknown module {code}")
     for link in data.module_specializations:
         if link.module_code not in module_codes:
             err(f"specialization link {link.module_code}/{link.specialization}: unknown module")
@@ -142,12 +151,42 @@ def validate_dataset(data: Dataset, assumptions: SeedAssumptions = DEFAULT_ASSUM
             err(f"period {p.period_code}: daily end time must be after start time")
         if not exam_days(p, data.exam_period_exclusions):
             err(f"period {p.period_code}: has no examination days")
+        if p.exam_kind not in EXAM_KINDS:
+            err(f"period {p.period_code}: exam_kind must be one of {', '.join(EXAM_KINDS)}")
     for e in data.exam_period_exclusions:
         p = periods.get(e.period_code)
         if p is None:
             err(f"exclusion {e.excluded_date}: unknown period {e.period_code}")
         elif not p.start_date <= e.excluded_date <= p.end_date:
             err(f"exclusion {e.excluded_date}: outside period {e.period_code}")
+
+    # --- Examination cycle modules ---------------------------------------------------
+    for dup in _duplicates((c.period_code, c.module_code) for c in data.exam_period_modules):
+        err(f"duplicate cycle module: {dup}")
+    for c in data.exam_period_modules:
+        label = f"cycle module {c.period_code}/{c.module_code}"
+        p, module = periods.get(c.period_code), modules.get(c.module_code)
+        if p is None:
+            err(f"{label}: unknown period")
+        if module is None:
+            err(f"{label}: unknown module")
+        if p is None or module is None:
+            continue
+        for problem in cycle_member_errors(p, module, c.candidate_scope):
+            err(f"{label}: {problem}")
+        if not any(r.module_code == c.module_code and cycle_candidate(r, c.candidate_scope)
+                   for r in data.registrations):
+            err(f"{label}: no registrations to examine for scope {c.candidate_scope}")
+    # Warning only: a repeat registration whose module is in no cycle would never be examined.
+    in_a_cycle = {c.module_code for c in data.exam_period_modules}
+    unmapped = Counter(r.module_code for r in data.registrations
+                       if r.registration_type == "repeat" and r.module_code not in in_a_cycle)
+    if unmapped and not data.exam_period_modules:
+        report.warnings.append(f"no examination cycle mapping yet: {sum(unmapped.values())} repeat registration(s) "
+                               f"of {len(unmapped)} module(s) are not mapped to any examination cycle")
+    elif unmapped:
+        for code, count in sorted(unmapped.items()):
+            report.warnings.append(f"module {code}: {count} repeat registration(s) not mapped to any examination cycle")
 
     # --- Venue blocks --------------------------------------------------------------
     venue_ids = {v.venue_id for v in data.venues}

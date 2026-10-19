@@ -78,7 +78,9 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
     if type(policy) is not OptimizationPolicy:
         raise SchedulingValidationError((Violation("OPTIMIZATION", "policy must be an OptimizationPolicy."),))
     modules = {m.module_code: m for m in snapshot.modules}
-    sessions = {s.module_code: s for s in draft.sessions}
+    # Each student is scored on the session they actually sit (read from the seats).
+    sitting = {(seat.student_id, session.module_code): session
+               for session in draft.sessions for room in session.rooms for seat in room.seats}
     loads = {code: _independent_load(m, policy) for code, m in modules.items()}
     by_student = defaultdict(list)
     repeats = set()
@@ -95,7 +97,8 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
     windows = sorted({(max(0, x), min(span, x + policy.window_days))
                       for x in (*range(span), *range(1 - policy.window_days, span - policy.window_days + 1))})
     for student, codes in by_student.items():
-        ordered = sorted((sessions[code] for code in codes), key=lambda s: s.start)
+        own = {code: sitting[student, code] for code in codes}
+        ordered = sorted(own.values(), key=lambda s: s.start)
         count = len(codes)
         raw = [0] * 5
         for a, b in combinations(ordered, 2):
@@ -117,7 +120,7 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
         single_excess = max(0, *deviations.values())
         load_bound = sum(max(0, value) for value in deviations.values()) - single_excess
         for low, high in windows:
-            in_window = [c for c in codes if low <= (sessions[c].start.date() - snapshot.period.start_date).days < high]
+            in_window = [c for c in codes if low <= (own[c].start.date() - snapshot.period.start_date).days < high]
             raw[3] = max(raw[3], sum(deviations[c] for c in in_window) - single_excess)
             raw[4] = max(raw[4], len(in_window) - policy.preferred_window_exams)
             max_count = max(max_count, len(in_window))

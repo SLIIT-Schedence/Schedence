@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
+
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
 from app.api.deps import get_seating_store, get_source
 from app.api.errors import DATABASE_UNAVAILABLE
+from app.api.schemas import ExamPeriodOut
 from app.auth.dependencies import get_current_user, require_exam_data_access
 from app.main import create_app
 from app.seating.memory import MemorySeatingStore
@@ -248,8 +253,77 @@ def test_openapi_lists_every_endpoint(client: TestClient) -> None:
         f"{API}/venue-blocks",
         f"{API}/exam-periods",
         f"{API}/exam-periods/{{period_code}}",
+        f"{API}/exam-periods/{{period_code}}/modules",
         f"{API}/settings/exam-seating",
         f"{API}/settings/exam-seating/default",
         f"{API}/settings/exam-seating/venues/{{venue_id}}",
         f"{API}/settings/scheduling",
+        f"{API}/timetables/generate",
     }
+
+
+# --- Examination period kind (MID / FINAL) -------------------------------------------
+
+
+def test_exam_periods_show_their_kind(client: TestClient) -> None:
+    [period] = client.get(f"{API}/exam-periods").json()
+    assert period["exam_kind"] == "FINAL"
+    assert client.get(f"{API}/exam-periods/{period['period_code']}").json()["exam_kind"] == "FINAL"
+
+
+def test_mid_and_final_periods_are_listed() -> None:
+    data = generate_dataset()
+    mid = dataclasses.replace(data.exam_periods[0], period_code="PP1-2026-S2-MID", exam_kind="MID")
+    client = TestClient(_app(DatasetSource(dataclasses.replace(data, exam_periods=data.exam_periods + (mid,)))))
+    kinds = {p["period_code"]: p["exam_kind"] for p in client.get(f"{API}/exam-periods").json()}
+    assert kinds == {"PP1-2026-S2-FINAL": "FINAL", "PP1-2026-S2-MID": "MID"}
+
+
+@pytest.mark.parametrize("kind", ["MIDTERM", "final", "", None])
+def test_exam_period_response_rejects_unknown_kinds(kind) -> None:
+    period = asyncio.run(SOURCE.list_exam_periods())[0]
+    assert ExamPeriodOut.model_validate(period).exam_kind == "FINAL"
+    with pytest.raises(ValidationError):
+        ExamPeriodOut.model_validate(dataclasses.replace(period, exam_kind=kind))
+
+
+# --- Module examination eligibility and Block Mode -------------------------------------------
+
+
+def test_modules_show_exam_eligibility_and_delivery(client: TestClient) -> None:
+    module = client.get(f"{API}/modules").json()[0]
+    assert {k: module[k] for k in ("has_final_exam", "has_mid_exam", "mid_duration_minutes", "delivery_mode",
+                                   "block_category")} == {
+        "has_final_exam": True, "has_mid_exam": False, "mid_duration_minutes": None, "delivery_mode": "regular",
+        "block_category": None}
+
+
+def test_synthetic_mid_and_block_module_is_shown() -> None:
+    data = generate_dataset()
+    synthetic = dataclasses.replace(data.modules[0], has_mid_exam=True, mid_duration_minutes=45,
+                                    delivery_mode="block", block_category="pro_rata")
+    client = TestClient(_app(DatasetSource(dataclasses.replace(data, modules=(synthetic,) + data.modules[1:]))))
+    module = client.get(f"{API}/modules/{synthetic.module_code}").json()
+    assert (module["has_mid_exam"], module["mid_duration_minutes"], module["delivery_mode"],
+            module["block_category"], module["duration_minutes"]) == (True, 45, "block", "pro_rata",
+                                                                      synthetic.duration_minutes)
+
+
+# --- Examination cycle modules ---------------------------------------------------------------
+
+
+def test_exam_period_modules_are_empty_until_configured(client: TestClient) -> None:
+    [period] = client.get(f"{API}/exam-periods").json()
+    assert client.get(f"{API}/exam-periods/{period['period_code']}/modules").json() == []
+    assert client.get(f"{API}/exam-periods/NO-SUCH-PERIOD/modules").status_code == 404
+
+
+def test_exam_period_modules_list_the_synthetic_cycle() -> None:
+    from app.seed.cycles import build_synthetic_cycle
+
+    data = build_synthetic_cycle(generate_dataset())
+    client = TestClient(_app(DatasetSource(data)))
+    rows = client.get(f"{API}/exam-periods/{data.exam_periods[0].period_code}/modules").json()
+    assert len(rows) == len(data.exam_period_modules)
+    assert sum(r["candidate_scope"] == "repeat_only" for r in rows) == 3
+    assert rows == sorted(rows, key=lambda r: r["module_code"])

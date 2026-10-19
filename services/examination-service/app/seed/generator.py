@@ -85,6 +85,8 @@ def exam_days(period: ExamPeriod, exclusions: Iterable[ExamPeriodExclusion]) -> 
 
 
 def _module(m: CatalogModule, a: SeedAssumptions) -> Module:
+    mid = dict(a.synthetic_mid_exams).get(m.module_code)
+    block = dict(a.synthetic_block_modules).get(m.module_code)
     return Module(
         module_code=m.module_code,
         module_name=m.module_name,
@@ -96,6 +98,11 @@ def _module(m: CatalogModule, a: SeedAssumptions) -> Module:
         duration_minutes=m.duration_minutes,
         has_extra_reading_time=m.has_extra_reading_time,
         reading_time_minutes=a.reading_time_minutes if m.has_extra_reading_time else 0,
+        has_final_exam=m.module_code not in a.synthetic_no_final_modules,
+        has_mid_exam=mid is not None,
+        mid_duration_minutes=mid,
+        delivery_mode="regular" if block is None else "block",
+        block_category=block,
     )
 
 
@@ -177,6 +184,7 @@ def _exam_period(a: SeedAssumptions) -> tuple[ExamPeriod, tuple[ExamPeriodExclus
         day_end_time=a.day_end,
         include_saturdays=a.include_saturdays,
         include_sundays=a.include_sundays,
+        exam_kind=a.exam_kind,
     )
     exclusions = tuple(ExamPeriodExclusion(a.period_code, day, reason) for day, reason in a.excluded_dates)
     return period, exclusions

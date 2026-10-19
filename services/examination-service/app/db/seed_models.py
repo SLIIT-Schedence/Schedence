@@ -42,6 +42,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     false,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,6 +53,18 @@ EXAM_TYPES = ("written", "computer_based", "hybrid")
 # cleanup migration. New data must use EXAM_TYPES.
 LEGACY_EXAM_TYPES = ("practical",)
 REGISTRATION_TYPES = ("normal", "repeat")
+# Kind of examination held in a period. Periods created before migration 0007
+# were all final examinations, so FINAL is the default.
+EXAM_KINDS = ("MID", "FINAL")
+DEFAULT_EXAM_KIND = "FINAL"
+# How a module is delivered (0008). Block Mode modules are taught in a block;
+# a block module's category says whether it is a pro-rata or a full module.
+# These are labels only: the real classification must come from the institution.
+DELIVERY_MODES = ("regular", "block")
+BLOCK_CATEGORIES = ("pro_rata", "full_module")
+# Who sits a module in an examination cycle (0009): everyone registered, or only
+# repeat candidates.
+CANDIDATE_SCOPES = ("all", "repeat_only")
 # Campus venue types (data/venue_catalog.csv). Migration 0003 still allows the
 # old fictional types (auditorium, exam_hall) so the old rows stay valid until
 # they are replaced; migration 0004 removes them.
@@ -77,6 +90,18 @@ class SeedModule(Base):
         CheckConstraint(_in("exam_type", EXAM_TYPES + LEGACY_EXAM_TYPES), name="exam_type_valid"),
         CheckConstraint("duration_minutes > 0", name="duration_positive"),
         CheckConstraint("reading_time_minutes >= 0", name="reading_time_non_negative"),
+        CheckConstraint(
+            # NULL-safe: a CHECK that evaluates to NULL would pass, so test IS NOT NULL first.
+            "(has_mid_exam AND mid_duration_minutes IS NOT NULL AND mid_duration_minutes > 0)"
+            " OR (NOT has_mid_exam AND mid_duration_minutes IS NULL)",
+            name="mid_exam_duration_valid",
+        ),
+        CheckConstraint(_in("delivery_mode", DELIVERY_MODES), name="delivery_mode_valid"),
+        CheckConstraint(
+            "(delivery_mode = 'regular' AND block_category IS NULL)"
+            f" OR (delivery_mode = 'block' AND block_category IS NOT NULL AND {_in('block_category', BLOCK_CATEGORIES)})",
+            name="block_category_valid",
+        ),
     )
 
     module_code: Mapped[str] = mapped_column(String(16), primary_key=True)
@@ -89,10 +114,18 @@ class SeedModule(Base):
     credits: Mapped[int] = mapped_column(SmallInteger)
     difficulty: Mapped[int] = mapped_column(SmallInteger)
     exam_type: Mapped[str] = mapped_column(String(20))
+    # Duration of the FINAL examination.
     duration_minutes: Mapped[int] = mapped_column(SmallInteger)
     reading_time_minutes: Mapped[int] = mapped_column(SmallInteger)
     # Source flag (Extra_Reading_Time = Yes/No); minutes above are an assumption.
     has_extra_reading_time: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    # Examination eligibility (0008). Defaults keep the old behaviour: a final
+    # examination only. MID needs its own duration; nothing is assumed.
+    has_final_exam: Mapped[bool] = mapped_column(Boolean, server_default=true())
+    has_mid_exam: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    mid_duration_minutes: Mapped[int | None] = mapped_column(SmallInteger)
+    delivery_mode: Mapped[str] = mapped_column(String(10), server_default="regular")
+    block_category: Mapped[str | None] = mapped_column(String(20))  # only for block modules
 
 
 class SeedModuleSpecialization(Base):
@@ -192,6 +225,7 @@ class SeedExamPeriod(Base):
     __table_args__ = (
         CheckConstraint("end_date >= start_date", name="date_range_valid"),
         CheckConstraint("day_end_time > day_start_time", name="day_hours_valid"),
+        CheckConstraint(_in("exam_kind", EXAM_KINDS), name="exam_kind_valid"),
     )
 
     period_code: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -204,6 +238,8 @@ class SeedExamPeriod(Base):
     day_end_time: Mapped[dt.time] = mapped_column(Time)
     include_saturdays: Mapped[bool] = mapped_column(Boolean)
     include_sundays: Mapped[bool] = mapped_column(Boolean)
+    # MID or FINAL (EXAM_KINDS). Added by 0007; existing rows became FINAL.
+    exam_kind: Mapped[str] = mapped_column(String(10), server_default=DEFAULT_EXAM_KIND)
 
 
 class SeedExamPeriodExclusion(Base):
@@ -218,6 +254,29 @@ class SeedExamPeriodExclusion(Base):
     reason: Mapped[str] = mapped_column(String(120))
 
 
+class SeedExamPeriodModule(Base):
+    """A module examined in an examination cycle (period), and which candidates sit it (0009).
+
+    ``all``: normal and repeat registrations; ``repeat_only``: only repeat
+    registrations (a module re-examined for repeat candidates in this cycle).
+    Full-cycle generation schedules exactly these modules, never the whole catalogue.
+    """
+
+    __tablename__ = "seed_exam_period_modules"
+    __table_args__ = (
+        CheckConstraint(_in("candidate_scope", CANDIDATE_SCOPES), name="candidate_scope_valid"),
+        Index(None, "module_code"),
+    )
+
+    period_code: Mapped[str] = mapped_column(
+        ForeignKey("seed_exam_periods.period_code", ondelete="RESTRICT"), primary_key=True
+    )
+    module_code: Mapped[str] = mapped_column(
+        ForeignKey("seed_modules.module_code", ondelete="RESTRICT"), primary_key=True
+    )
+    candidate_scope: Mapped[str] = mapped_column(String(12), server_default="all")
+
+
 SEED_MODELS = (
     SeedModule,
     SeedModuleSpecialization,
@@ -227,4 +286,5 @@ SEED_MODELS = (
     SeedVenueBlock,
     SeedExamPeriod,
     SeedExamPeriodExclusion,
+    SeedExamPeriodModule,
 )

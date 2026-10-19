@@ -20,9 +20,15 @@ class Module:
     credits: int
     difficulty: int
     exam_type: str
-    duration_minutes: int
+    duration_minutes: int  # FINAL examination
     has_extra_reading_time: bool
     reading_time_minutes: int
+    # Defaults match the database defaults for older modules (final exam only, regular).
+    has_final_exam: bool = True
+    has_mid_exam: bool = False
+    mid_duration_minutes: int | None = None
+    delivery_mode: str = "regular"
+    block_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,8 @@ class ExamPeriod:
     day_end_time: dt.time
     include_saturdays: bool
     include_sundays: bool
+    # "MID" or "FINAL"; FINAL, like the database default for older periods.
+    exam_kind: str = "FINAL"
 
 
 @dataclass(frozen=True)
@@ -86,6 +94,15 @@ class ExamPeriodExclusion:
     period_code: str
     excluded_date: dt.date
     reason: str
+
+
+@dataclass(frozen=True)
+class ExamPeriodModule:
+    """A module examined in an examination cycle (period); see SeedExamPeriodModule."""
+
+    period_code: str
+    module_code: str
+    candidate_scope: str = "all"  # "all" or "repeat_only"
 
 
 @dataclass(frozen=True)
@@ -98,6 +115,8 @@ class Dataset:
     venue_blocks: tuple[VenueBlock, ...]
     exam_periods: tuple[ExamPeriod, ...]
     exam_period_exclusions: tuple[ExamPeriodExclusion, ...]
+    # Cycle membership; empty by default (nothing is mapped unless configured).
+    exam_period_modules: tuple[ExamPeriodModule, ...] = ()
 
     def registration_counts(self) -> dict[str, int]:
         """Candidates per module, derived from the registration records only."""

@@ -34,7 +34,8 @@ SOURCE = DatasetSource(generate_dataset())
 DATA_ENDPOINTS = [
     f"{API}/modules", f"{API}/modules/IT3041", f"{API}/students", f"{API}/students/IT30129034",
     f"{API}/registrations", f"{API}/venues", f"{API}/venue-blocks", f"{API}/exam-periods",
-    f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/settings/exam-seating", f"{API}/settings/scheduling",
+    f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/exam-periods/PP1-2026-S2-FINAL/modules",
+    f"{API}/settings/exam-seating", f"{API}/settings/scheduling",
 ]
 STUDENT_DATA = [f"{API}/students", f"{API}/students/IT30129034", f"{API}/registrations"]
 
@@ -274,6 +275,7 @@ def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
         ("PUT", f"{API}/settings/exam-seating/venues/F303"),
         ("DELETE", f"{API}/settings/exam-seating/venues/F303"),
         ("PUT", f"{API}/settings/scheduling"),  # access tests: test_scheduling_settings.py
+        ("POST", f"{API}/timetables/generate"),  # access tests: test_timetable_generation.py
     }
 
 

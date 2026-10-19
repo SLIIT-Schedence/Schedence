@@ -236,3 +236,36 @@ def test_different_seed_changes_dataset_but_stays_valid() -> None:
     other = generate_dataset(assumptions)
     assert other != generate_dataset()
     assert validate_dataset(other, assumptions).ok
+
+
+def test_current_period_is_a_final_examination(data) -> None:
+    [period] = data.exam_periods
+    assert period.exam_kind == DEFAULT_ASSUMPTIONS.exam_kind == "FINAL"
+
+
+def test_period_records_default_to_final() -> None:
+    # Older callers that do not pass a kind keep getting a FINAL period.
+    from app.seed.records import ExamPeriod
+
+    fields = {f.name: f for f in dataclasses.fields(ExamPeriod)}
+    assert fields["exam_kind"].default == "FINAL"
+
+
+def test_real_modules_keep_final_only_regular_defaults(data) -> None:
+    # The catalogue has no MID, Block Mode or pro-rata data: nothing is assumed.
+    for m in data.modules:
+        assert (m.has_final_exam, m.has_mid_exam, m.mid_duration_minutes, m.delivery_mode, m.block_category) == (
+            True, False, None, "regular", None), m.module_code
+
+
+def test_synthetic_eligibility_settings_mark_only_the_listed_modules(data) -> None:
+    first, second, third = (m.module_code for m in data.modules[:3])
+    assumptions = SeedAssumptions(synthetic_mid_exams=((first, 60),), synthetic_no_final_modules=(second,),
+                                  synthetic_block_modules=((second, "pro_rata"), (third, "full_module")))
+    other = {m.module_code: m for m in generate_dataset(assumptions).modules}
+    assert other[first].has_mid_exam and other[first].mid_duration_minutes == 60 and other[first].has_final_exam
+    assert not other[second].has_final_exam and other[second].block_category == "pro_rata"
+    assert other[third].delivery_mode == "block" and other[third].block_category == "full_module"
+    assert sum(m.has_mid_exam or m.delivery_mode == "block" or not m.has_final_exam
+               for m in other.values()) == 3
+    assert validate_dataset(generate_dataset(assumptions), assumptions).ok

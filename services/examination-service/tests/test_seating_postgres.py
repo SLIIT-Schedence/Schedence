@@ -805,3 +805,29 @@ def test_0006_settings_survive_a_service_restart(migrated: str) -> None:
     assert _query(migrated, "SELECT action, version, old_settings IS NULL FROM "
                             "examinations.exam_scheduling_settings_history ORDER BY history_id") == [
         ("create", 1, True), ("update", 2, False)]
+
+
+# --- Timetable generation reads inputs and settings from PostgreSQL ------------------------------------------
+
+async def test_generation_uses_database_inputs_and_saved_settings(settings_engine) -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from app.api.deps import get_timetable_generator
+    from app.generation.service import GenerationRequest
+    from schedence_db import create_session_factory
+
+    document = _settings_document(120)
+    document["scheduling"]["permitted_start_times"] = ["09:00", "14:00"]
+    async with AsyncSession(settings_engine) as session:
+        await _settings_service(session).update(document, reason=REASON, expected_version=0, user_id=USER,
+                                                dry_run=False)
+    state = SimpleNamespace(engine=settings_engine, generation_lock=asyncio.Lock(),
+                            session_factory=create_session_factory(
+                                settings_engine.execution_options(postgresql_readonly=True)))
+    auth = SimpleNamespace(settings=SimpleNamespace(institution_id=SETTINGS_INSTITUTION))
+    generator = get_timetable_generator(SimpleNamespace(app=SimpleNamespace(state=state)), auth)
+    outcome = await generator.generate(GenerationRequest("PP1-2026-S2-FINAL", ("IT1010", "IT1030"), "feasibility", 20))
+    assert outcome.timetable is not None and outcome.settings_version == 1
+    assert {s.start.strftime("%H:%M") for s in outcome.timetable.sessions} <= {"09:00", "14:00"}
+    assert outcome.snapshot.capacities.ruleset_version >= 1  # seat capacities came from the seating rules

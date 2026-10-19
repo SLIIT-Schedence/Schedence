@@ -4,18 +4,21 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.context import AuthContext
 from app.auth.dependencies import get_auth
 from app.database import get_session, get_write_session
+from app.generation.service import TimetableGenerator
+from app.scheduling.inputs import load_database_snapshot
 from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
 from app.scheduling_settings.service import SchedulingSettingsService
 from app.scheduling_settings.store import DatabaseSchedulingSettingsStore, SchedulingSettingsStore
 from app.seating.service import SeatingService
 from app.seating.store import DatabaseSeatingStore, SeatingRuleStore
 from app.sources import DatabaseSource, ExamDataSource
+from schedence_db import session_scope
 
 # Identifier formats. Anything else is rejected with 422 before a query runs.
 MODULE_CODE = r"^[A-Z]{2,4}[0-9]{4}$"  # e.g. IT3041
@@ -91,3 +94,25 @@ def get_scheduling_settings_writer(
 
 SchedulingSettingsReaderDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_reader)]
 SchedulingSettingsWriterDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_writer)]
+
+
+def get_timetable_generator(
+    request: Request, auth: Annotated[AuthContext, Depends(get_auth)],
+) -> TimetableGenerator:
+    """Reads finish (and their transactions close) before the solver starts; nothing is written."""
+    state = request.app.state
+
+    async def load_settings():
+        async with session_scope(state.session_factory, commit=False) as session:  # read-only, closed at once
+            return await SchedulingSettingsService(
+                DatabaseSchedulingSettingsStore(session), auth.settings.institution_id).active()
+
+    async def load_snapshot(period_code, policy, module_codes):
+        # One REPEATABLE READ, READ ONLY transaction for every input table.
+        return await load_database_snapshot(state.engine, period_code=period_code, policy=policy,
+                                            module_codes=module_codes, from_cycle=True)
+
+    return TimetableGenerator(load_snapshot, load_settings, request.app.state.generation_lock)
+
+
+TimetableGeneratorDep = Annotated[TimetableGenerator, Depends(get_timetable_generator)]

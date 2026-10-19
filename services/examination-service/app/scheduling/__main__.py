@@ -80,8 +80,8 @@ def seating_percentage(text: str) -> int:
 
 
 # Options that a --settings-file replaces; they are SUPPRESSed so "given" can be detected.
-SETTINGS_FILE_OPTIONS = ("starts", "minimum_break", "time_limit", "seed", "workers", "max_rooms", "compatibility",
-                         "module_venues")
+SETTINGS_FILE_OPTIONS = ("starts", "minimum_break", "time_limit", "seed", "workers", "max_rooms", "max_sessions",
+                         "compatibility", "module_venues")
 
 
 async def run(args: argparse.Namespace) -> tuple[dict, bool]:
@@ -103,6 +103,7 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
             venue_compatibility=tuple(compatibility.items()),
             module_venue_overrides=tuple(getattr(args, "module_venues", [])),
             max_rooms_per_exam=getattr(args, "max_rooms", None),
+            max_sessions_per_exam=getattr(args, "max_sessions", SchedulingPolicy().max_sessions_per_exam),
         )
         defaults = SolverSettings()
         settings = SolverSettings(getattr(args, "time_limit", defaults.time_limit_seconds),
@@ -148,6 +149,7 @@ async def run(args: argparse.Namespace) -> tuple[dict, bool]:
             "room_allocations": sum(len(s.rooms) for s in draft.sessions) if draft else 0,
             "seat_allocations": sum(len(r.seats) for s in draft.sessions for r in s.rooms) if draft else 0,
             "multi_room_exams": sum(len(s.rooms) > 1 for s in draft.sessions) if draft else 0,
+            "multi_session_modules": len({s.module_code for s in draft.sessions if s.session_count > 1}) if draft else 0,
             "independent_validation_passed": draft is not None and not validate_timetable(snapshot, draft),
         },
     )
@@ -219,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=hidden,
                         help=f"Default: {SolverSettings().num_search_workers}; at most {MAX_SEARCH_WORKERS}.")
     parser.add_argument("--max-rooms", type=int, default=hidden, help="Default: no limit.")
+    parser.add_argument("--max-sessions", type=int, default=hidden,
+                        help="Most sessions per module when one sitting cannot seat everyone. Default: 3.")
     parser.add_argument("--seating-percentage", type=seating_percentage, default=INITIAL_DEFAULT_PERCENTAGE,
                         help="Prototype in-memory seating default only.")
     parser.add_argument("--compatibility", type=venue_mapping, action="append", default=hidden, metavar="EXAM_TYPE=TYPES")

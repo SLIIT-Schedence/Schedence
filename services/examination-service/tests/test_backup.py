@@ -112,3 +112,34 @@ async def test_backup_from_0004_leaves_seating_alone(tmp_path: Path) -> None:
 def test_export_order_puts_parents_first() -> None:
     assert TABLES[-2:] == ("exam_seating_rules", "exam_seating_rule_history")
     assert TABLES.index("seed_venues") < TABLES.index("exam_seating_rules")  # overrides need their venue
+
+
+OLD_PERIOD = {
+    "period_code": "PP1-2026-S2-FINAL", "period_name": "Synthetic Semester 2 Final Examinations (PP1)",
+    "academic_year_label": "2026/2027", "semester": 2, "start_date": "2026-11-16", "end_date": "2026-11-28",
+    "day_start_time": "08:30:00", "day_end_time": "17:30:00", "include_saturdays": False, "include_sundays": False,
+}
+
+
+def test_pre_0007_periods_load_as_final(tmp_path: Path) -> None:
+    [row] = load_rows(_write_backup(tmp_path, {"seed_exam_periods": [OLD_PERIOD]}), "seed_exam_periods")
+    assert row["exam_kind"] == "FINAL" and row["start_date"] == dt.date(2026, 11, 16)
+
+
+def test_saved_exam_kind_is_kept(tmp_path: Path) -> None:
+    backup = _write_backup(tmp_path, {"seed_exam_periods": [{**OLD_PERIOD, "exam_kind": "MID"}]})
+    [row] = load_rows(backup, "seed_exam_periods")
+    assert row["exam_kind"] == "MID"
+
+
+def test_pre_0008_modules_load_as_final_only_and_regular(tmp_path: Path) -> None:
+    [row] = load_rows(_write_backup(tmp_path, {"seed_modules": [OLD_MODULE]}), "seed_modules")
+    assert (row["has_final_exam"], row["has_mid_exam"], row["mid_duration_minutes"], row["delivery_mode"],
+            row["block_category"]) == (True, False, None, "regular", None)
+
+
+def test_saved_module_exam_settings_are_kept(tmp_path: Path) -> None:
+    saved = {**OLD_MODULE, "has_extra_reading_time": False, "has_final_exam": False, "has_mid_exam": True,
+             "mid_duration_minutes": 45, "delivery_mode": "block", "block_category": "full_module"}
+    [row] = load_rows(_write_backup(tmp_path, {"seed_modules": [saved]}), "seed_modules")
+    assert (row["has_final_exam"], row["mid_duration_minutes"], row["block_category"]) == (False, 45, "full_module")

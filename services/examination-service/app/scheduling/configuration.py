@@ -31,7 +31,11 @@ from app.scheduling.policy import SchedulingPolicy, SolverSettings
 SETTINGS_FORMAT = "scheduling-settings-v1"
 SECTIONS = ("scheduling", "solver", "optimization", "fairness")
 SCHEDULING_KEYS = ("permitted_start_times", "minimum_break_minutes", "max_rooms_per_exam",
-                   "venue_compatibility", "module_venue_overrides")
+                   "max_sessions_per_exam", "venue_compatibility", "module_venue_overrides")
+# Keys added after documents were first saved. A saved document without one of
+# them keeps the policy default for it (it never existed there); new documents
+# always contain every key.
+LATER_SCHEDULING_KEYS = {"max_sessions_per_exam": SchedulingPolicy().max_sessions_per_exam}
 MANDATORY_RULES = (
     "H1: a student never sits two exams at once, and gets at least the minimum break between exams",
     "H2: room seat counts never exceed the room's effective exam capacity",
@@ -42,7 +46,8 @@ MANDATORY_RULES = (
     "H7: exams start at a permitted time and finish within daily exam hours",
     "H8: no exams on weekends or excluded dates (as the period's calendar says)",
     "H9: every booking covers the full duration plus reading time",
-    "H10: every module gets one sitting and every registered student gets exactly one seat",
+    "H10: every module gets the fewest sittings its capacity allows (one when everyone fits), at different "
+    "times, and every registered student gets exactly one seat in exactly one sitting",
     "H11: inputs and outputs are checked for consistent references and counts",
 )
 _TIME = re.compile(r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
@@ -107,6 +112,7 @@ def _scheduling(section: dict) -> tuple[SchedulingPolicy | None, list[Violation]
             venue_compatibility=compatibility,
             module_venue_overrides=overrides,
             max_rooms_per_exam=section["max_rooms_per_exam"],
+            max_sessions_per_exam=section["max_sessions_per_exam"],
         )
     except SchedulingValidationError as exc:
         return None, list(exc.violations)
@@ -146,6 +152,8 @@ class SchedulingConfiguration:
             "optimization": tuple(f.name for f in fields(OptimizationPolicy)),
             "fairness": tuple(f.name for f in fields(FairnessPolicy)),
         }
+        if type(document["scheduling"]) is dict:
+            document = {**document, "scheduling": {**LATER_SCHEDULING_KEYS, **document["scheduling"]}}
         for name, keys in sections.items():
             errors += _keys_errors(name, document[name], keys)
         if errors:
@@ -171,6 +179,7 @@ class SchedulingConfiguration:
                 "permitted_start_times": [t.isoformat(timespec="minutes") for t in s.permitted_start_times],
                 "minimum_break_minutes": s.minimum_break_minutes,
                 "max_rooms_per_exam": s.max_rooms_per_exam,
+                "max_sessions_per_exam": s.max_sessions_per_exam,
                 "venue_compatibility": {key: list(types) for key, types in s.venue_compatibility},
                 "module_venue_overrides": {key: list(types) for key, types in s.module_venue_overrides},
             },

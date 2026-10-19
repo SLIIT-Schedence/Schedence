@@ -6,8 +6,10 @@ import datetime as dt
 from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.deps import MODULE_CODE, PERIOD_CODE
+from app.generation.service import MAX_API_TIME_LIMIT_SECONDS, MAX_MODULES
 from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
 
@@ -27,9 +29,15 @@ class ModuleOut(_Out):
     credits: int
     difficulty: int
     exam_type: str
-    duration_minutes: int
+    duration_minutes: int = Field(description="FINAL examination duration")
     has_extra_reading_time: bool
     reading_time_minutes: int
+    has_final_exam: bool
+    has_mid_exam: bool
+    mid_duration_minutes: int | None = Field(description="MID examination duration; null without a MID exam")
+    delivery_mode: Literal["regular", "block"]
+    block_category: Literal["pro_rata", "full_module"] | None = Field(
+        description="Only for block modules (label from the data; not an official classification)")
     candidate_count: int
 
 
@@ -83,11 +91,15 @@ class ExamPeriodExclusionOut(_Out):
     reason: str
 
 
+ExamKind = Literal["MID", "FINAL"]
+
+
 class ExamPeriodOut(_Out):
     period_code: str
     period_name: str
     academic_year_label: str
     semester: int
+    exam_kind: ExamKind
     start_date: dt.date
     end_date: dt.date
     day_start_time: dt.time
@@ -96,6 +108,13 @@ class ExamPeriodOut(_Out):
     include_sundays: bool
     exclusions: list[ExamPeriodExclusionOut]
     exam_days: list[dt.date]
+
+
+class ExamPeriodModuleOut(_Out):
+    period_code: str
+    module_code: str
+    candidate_scope: Literal["all", "repeat_only"] = Field(
+        description="all: normal and repeat registrations; repeat_only: only repeat registrations")
 
 
 # --- Examination seating settings --------------------------------------------------
@@ -251,6 +270,202 @@ class SchedulingSettingsChangeOut(_Out):
     changed_by: UUID | None
     fingerprint: str
     settings: dict[str, Any]
+
+
+# --- Timetable generation (not saved) -------------------------------------------------
+
+ModuleCode = Annotated[str, Field(pattern=MODULE_CODE)]
+
+
+class GenerateTimetableIn(_In):
+    period_code: str = Field(pattern=PERIOD_CODE, description="Exam period, e.g. PP1-2026-S2-FINAL")
+    module_codes: list[ModuleCode] | None = Field(
+        None, min_length=1, max_length=MAX_MODULES,
+        description="Optional. Omit to schedule the full examination cycle (the period's configured module "
+                    "mapping). List modules for a partial run: they must all be in the cycle. A period without "
+                    "a mapping accepts listed modules of its own semester only.")
+    mode: Literal["feasibility", "optimized"] = Field(
+        "feasibility", description="feasibility: H1-H11 only. optimized: also S1-S5 and the configured fairness.")
+    time_limit_seconds: float | None = Field(
+        None, gt=0, le=MAX_API_TIME_LIMIT_SECONDS,
+        description="Optional; may only lower the saved solver time limit")
+
+    @field_validator("module_codes")
+    @classmethod
+    def _unique(cls, codes: list[str] | None) -> list[str] | None:
+        if codes is not None and len(set(codes)) != len(codes):
+            raise ValueError("module_codes must not contain duplicates")
+        return codes
+
+
+class GeneratedRoomOut(_Out):
+    venue_id: str
+    venue_name: str
+    venue_type: str
+    seats: int = Field(description="Logical seats allocated in this room")
+    exam_capacity: int = Field(description="Effective exam capacity of the room")
+
+
+class GeneratedSessionOut(_Out):
+    session_id: str
+    module_code: str
+    module_name: str
+    exam_type: str
+    candidate_scope: Literal["all", "repeat_only"] = Field(
+        description="From the cycle mapping: all (normal and repeat candidates) or repeat_only. "
+                    "all when the period has no cycle mapping")
+    academic_year: int
+    semester: int
+    delivery_mode: Literal["regular", "block"]
+    session_number: int = Field(description="Session N of this module, in time order (1 when not split)")
+    session_count: int = Field(description="Sessions of this module: more than 1 only when one sitting cannot "
+                                           "seat every candidate")
+    session_label: str = Field(description='e.g. "Session 01"')
+    date: dt.date
+    start_time: dt.time
+    end_time: dt.time
+    start: dt.datetime = Field(description="Local calendar time of the exam period (no time zone)")
+    end: dt.datetime
+    duration_minutes: int
+    reading_time_minutes: int
+    candidates: int
+    normal_candidates: int = Field(description="Candidates seated in this session with a normal registration")
+    repeat_candidates: int = Field(description="Candidates seated in this session with a repeat registration")
+    rooms: list[GeneratedRoomOut]
+
+
+class GenerationValidationOut(_Out):
+    passed: bool | None = Field(description="null when the solver returned no timetable to validate")
+    rules_checked: list[str]
+    violations: list[SettingsProblemOut]
+
+
+class GenerationSummaryOut(_Out):
+    sessions: int
+    exam_days_used: int
+    room_allocations: int
+    seat_allocations: int
+    multi_room_exams: int
+    multi_session_modules: int = Field(description="Modules split into several sessions for capacity")
+
+
+class PenaltyOut(_Out):
+    constraint: str
+    weight: int
+    penalty_points: float
+    weighted_points: float
+
+
+class WorkloadMetricsOut(_Out):
+    """Estimated S1-S5 workload scores (prototype; not a validated stress measure)."""
+
+    objective_units: int
+    total_weighted_penalty: float
+    penalties: list[PenaltyOut]
+    same_day_student_pairs: int
+    student_days_with_multiple_exams: int
+    short_gap_student_pairs: int
+    difficult_pairs_below_target: int
+    minimum_gap_minutes: int | None
+    median_gap_minutes: float | None
+    lower_decile_gap_minutes: int | None
+    maximum_window_exams: int
+    maximum_window_load_points: float
+    worst_student_weighted_penalty: float
+    repeat_student_mean_weighted_penalty: float | None
+
+
+class FairnessOut(_Out):
+    protection_applied: bool
+    limits_satisfied: bool | None
+    students: int
+    students_improved: int
+    students_worsened: int
+    students_unchanged: int
+    baseline_worst_normalized_penalty: float
+    selected_worst_normalized_penalty: float
+    maximum_individual_increase_points: float
+    worst_student_increase_points: float
+
+
+class OptimizationOut(_Out):
+    status: str | None
+    improved: bool
+    baseline: WorkloadMetricsOut | None
+    selected: WorkloadMetricsOut | None
+    objective_bound_units: float | None
+    relative_gap: float | None
+    fairness: FairnessOut | None
+
+
+class GenerationInputsOut(_Out):
+    period_code: str
+    period_name: str
+    exam_kind: ExamKind
+    start_date: dt.date
+    end_date: dt.date
+    exam_days: list[dt.date]
+    selection: Literal["full_cycle", "partial_cycle", "listed_modules"] = Field(
+        description="full_cycle / partial_cycle: from the period's module mapping; listed_modules: no mapping")
+    modules: int
+    repeat_only_modules: int = Field(description="Cycle modules examined only for repeat candidates")
+    students: int = Field(description="Students registered for at least one selected module")
+    registrations: int
+    repeat_registrations: int
+    venues: int
+    input_fingerprint: str
+    capacity_ruleset_version: int
+    capacity_fingerprint: str
+    settings_version: int = Field(description="Scheduling settings version used (0 = built-in defaults)")
+    settings_fingerprint: str
+
+
+class SolverRunOut(_Out):
+    mode: Literal["feasibility", "optimized"]
+    time_limit_seconds: float
+    num_search_workers: int
+    random_seed: int
+    wall_time_seconds: float
+    solver_version: str | None
+
+
+class ExcludedModuleOut(_Out):
+    module_code: str
+    module_name: str
+    academic_year: int
+    semester: int
+    normal_registrations: int
+    repeat_registrations: int
+    other_cycles: list[str] = Field(description="Other examination cycles (periods) whose mapping includes this module")
+
+
+class ExcludedRegistrationsOut(_Out):
+    """Counts only; no student identifiers."""
+
+    note: str
+    total: int
+    normal: int
+    repeat: int
+    modules: list[ExcludedModuleOut]
+
+
+class GeneratedTimetableOut(_Out):
+    status: Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN", "MODEL_INVALID"]
+    generated: bool = Field(description="True only when a validated timetable is returned in sessions")
+    persisted: Literal[False] = Field(False, description="Generated timetables are not saved yet")
+    solver: SolverRunOut
+    inputs: GenerationInputsOut
+    validation: GenerationValidationOut
+    summary: GenerationSummaryOut
+    sessions: list[GeneratedSessionOut]
+    workload: WorkloadMetricsOut | None = Field(description="S1-S5 scores of the returned timetable")
+    optimization: OptimizationOut | None = Field(description="Only for mode=optimized")
+    violations: list[SettingsProblemOut] = Field(description="Problems reported by the solver run")
+    diagnostics: list[str]
+    notices: list[str]
+    excluded_registrations: ExcludedRegistrationsOut = Field(
+        description="Potentially excluded registrations: their module is not in this cycle's mapping, so they were "
+                    "not scheduled. Some may belong to another cycle. Empty for periods without a mapping")
 
 
 class PageOut(_Out, Generic[T]):

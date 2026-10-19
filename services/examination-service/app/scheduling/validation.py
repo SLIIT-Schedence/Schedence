@@ -53,13 +53,32 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
         candidates[r.module_code].add(r.student_id)
     if timetable.period_code != p.period_code or timetable.input_fingerprint != snapshot.fingerprint:
         error("H11", "Draft period or input fingerprint does not match the snapshot.")
-    if Counter(s.module_code for s in sessions) != Counter({code: 1 for code in modules}):
-        error("H10", "Every selected module must have exactly one examination session.")
+    by_module: dict[str, list] = defaultdict(list)
+    for s in sessions:
+        by_module[s.module_code].append(s)
+    for code, m in modules.items():
+        own = by_module.get(code, [])
+        expected = _sessions_needed(snapshot, m)
+        if len(own) != expected:
+            error("H10", f"Module {code} must have exactly {expected} examination session(s) "
+                         f"(the fewest that can seat its candidates); found {len(own)}.")
+        if any(type(x.session_number) is not int or type(x.session_count) is not int for x in own):
+            error("H11", f"Sessions of {code} need whole session numbers.")
+            continue
+        if any(not isinstance(x.start, dt.datetime) or not isinstance(x.end, dt.datetime) for x in own):
+            continue  # reported per session below
+        ordered = sorted(own, key=lambda x: x.start)
+        if ([x.session_number for x in ordered] != list(range(1, len(own) + 1))
+                or any(x.session_count != len(own) for x in own)):
+            error("H10", f"Sessions of {code} must be numbered 1..{len(own)} in time order.")
+        if any(b.start < a.end for a, b in zip(ordered, ordered[1:])):
+            error("H10", f"Sessions of {code} must be held at different, non-overlapping times.")
     ids = [s.session_id for s in sessions]
     if any(not i for i in ids) or len(ids) != len(set(ids)):
         error("H11", "Session IDs must be non-empty and unique.")
     room_times: dict[str, list] = defaultdict(list)
     student_times: dict[str, list] = defaultdict(list)
+    module_seated: dict[str, Counter[str]] = defaultdict(Counter)  # over all sessions of the module
     for s, rooms in normalized:
         m = modules.get(s.module_code)
         if m is None:
@@ -120,10 +139,13 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
                 if not whole_number(seat.seat_number, 1) or (cap is not None and seat.seat_number > cap.exam_capacity):
                     error("H2", f"Logical seat is outside effective capacity in {room.venue_id}.")
             # Room times are inherited from the containing session: split rooms cannot drift.
-        if seated != Counter({student: 1 for student in candidates[m.module_code]}):
-            error("H10", f"Every candidate for {m.module_code} must receive exactly one seat.")
-        for student in candidates[m.module_code]:
+        module_seated[m.module_code].update(seated)
+        # H1 uses the session each student actually sits (one per module when valid).
+        for student in seated:
             student_times[student].append(s)
+    for code in modules:
+        if module_seated[code] != Counter({student: 1 for student in candidates[code]}):
+            error("H10", f"Every candidate for {code} must receive exactly one seat in exactly one session.")
     for venue, sessions in room_times.items():
         for a, b in combinations(sessions, 2):
             if a.start < b.end and b.start < a.end:
@@ -133,3 +155,49 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
             if b.start - a.end < dt.timedelta(minutes=policy.minimum_break_minutes):
                 error("H1", f"Student {student} has overlapping exams or insufficient break.")
     return tuple(errors)
+
+
+def _sessions_needed(snapshot: InputSnapshot, module) -> int:
+    """Recomputed here (not taken from the solver): the fewest sittings that could seat every candidate.
+
+    For every permitted start on an allowed day (recomputed from the calendar),
+    one sitting seats at most the effective capacities of the module's compatible
+    venues that no block overlaps for the whole exam, limited to max_rooms_per_exam.
+    1 when one start can seat everyone (or none has a usable seat); otherwise the
+    fewest non-overlapping starts that together can, else ceil(candidates / best).
+    """
+    policy, p = snapshot.policy, snapshot.period
+    length = dt.timedelta(minutes=module.duration_minutes + module.reading_time_minutes)
+    allowed = policy.allowed_venue_types(module.exam_type, module.module_code)
+    venues = [c for c in snapshot.capacities.venues if c.exam_capacity > 0 and c.venue_type in allowed]
+    excluded = {e.excluded_date for e in p.exclusions}
+    slots = []  # (start, seats), in time order
+    for offset in range((p.end_date - p.start_date).days + 1):
+        day = p.start_date + dt.timedelta(days=offset)
+        if day in excluded or (day.weekday() == 5 and not p.include_saturdays) or (
+                day.weekday() == 6 and not p.include_sundays):
+            continue
+        for clock in sorted(policy.permitted_start_times):
+            begin = dt.datetime.combine(day, clock)
+            if clock < p.day_start_time or begin + length > dt.datetime.combine(day, p.day_end_time):
+                continue
+            seats = sorted((c.exam_capacity for c in venues if not any(
+                b.venue_id == c.venue_id and begin < dt.datetime.combine(b.block_date, b.end_time)
+                and dt.datetime.combine(b.block_date, b.start_time) < begin + length for b in snapshot.blocks)),
+                reverse=True)
+            if policy.max_rooms_per_exam is not None:
+                seats = seats[:policy.max_rooms_per_exam]
+            slots.append((begin, sum(seats)))
+    best = max((seats for _, seats in slots), default=0)
+    if best <= 0 or module.candidate_count <= best:
+        return 1
+    # most[k]: most seats from at most k non-overlapping sittings among the slots seen so far.
+    history = [[0] * (len(slots) + 1)]
+    for index, (begin, seats) in enumerate(slots):
+        before = max((j + 1 for j in range(index) if slots[j][0] + length <= begin), default=0)
+        row = [0] + [max(history[-1][k], history[before][k - 1] + seats) for k in range(1, len(slots) + 1)]
+        history.append(row)
+    for k in range(1, len(slots) + 1):
+        if history[-1][k] >= module.candidate_count:
+            return k
+    return -(-module.candidate_count // best)

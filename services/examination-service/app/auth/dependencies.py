@@ -8,9 +8,10 @@ Layering (same as the Identity and Academic Data services):
 2. :func:`require_any_permission`: deny by default; the caller needs at least one
    of the permissions **in this service's institution**.
 
-Reading examination data requires ``examinations:read``; changing seating
-settings requires ``examinations:manage``. Generation and approval permissions
-are reserved for future scheduling workflows. Student-specific access is
+Reading examination data requires ``examinations:read``; changing seating and
+scheduling settings requires ``examinations:manage``; generating a timetable
+requires ``examinations:generate``. The approval permission is reserved for a
+future publishing workflow. Student-specific access is
 intentionally absent until a secure user -> student ID mapping exists.
 """
 
@@ -84,3 +85,6 @@ require_exam_data_access = require_any_permission(READ)
 
 # Seating changes (including dry runs) do not also require read permission.
 require_exam_settings_admin = require_any_permission(MANAGE)
+
+# Timetable generation (runs the solver; saves nothing yet).
+require_exam_generation = require_any_permission(GENERATE)
