@@ -14,6 +14,9 @@ from .eligibility import candidate_pools
 from .results import SolverInputError
 
 
+NO_APPLICABLE_PREFERENCES = "Preference optimization requires at least one applicable eligible-staff criterion."
+
+
 class PreferencePriority(StrEnum):
     TEACHING_THEN_PREFERENCES = "TEACHING_THEN_PREFERENCES"
     PREFERENCES_THEN_TEACHING = "PREFERENCES_THEN_TEACHING"
@@ -110,7 +113,7 @@ def checked_preference_inputs(prepared, config, preferences, calendar, policy, o
                     raise SolverInputError("Applicable time-of-day preference needs explicit configured boundaries.")
             units.append(unit)
         if not units:
-            raise SolverInputError("Preference optimization requires at least one applicable eligible-staff criterion.")
+            raise SolverInputError(NO_APPLICABLE_PREFERENCES)
         confirmed = sum(all(row.confirmation_status is PreferenceConfirmation.CONFIRMED for row in unit) for unit in units)
         return CheckedPreferenceOptimization(canonical, calendar, policy, options, tuple(units), confirmed)
     except (PreferenceInputError, ValidationError) as error:

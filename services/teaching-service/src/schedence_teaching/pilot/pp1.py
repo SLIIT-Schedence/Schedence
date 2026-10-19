@@ -5,12 +5,14 @@ from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import quote
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from schedence_teaching.excel_import.preference_adapter import map_lecturer_preferences
 from schedence_teaching.excel_import.preference_config import LecturerPreferenceMapping
 from schedence_teaching.lunch import confirmed_student_lunch_policy
 from schedence_teaching.preferences import LecturerPreferenceInput, PreferenceCalendar, PreferenceScoringPolicy, prepare_lecturer_preferences
+from schedence_teaching.preferences.product_settings import (
+    LecturerPreferenceSettings, apply_hard_unavailability, build_lecturer_preferences, hard_availability_diagnostics)
 from schedence_teaching.preparation import prepare_timetable_input
 from schedence_teaching.schemas import ModuleOffering, SessionType, VenueType
 from schedence_teaching.schemas.models import InputContract, RequiredText
@@ -40,6 +42,15 @@ class PP1Configuration(InputContract):
     staff_input: StaffSchedulingInput | None = None
     protected_periods: WorkPeriodInput | None = None
     protected_period_config: WorkPeriodSolverConfig | None = None
+    # P2.5: one institution's interpretation of its stored day-part preferences; omitted when unset.
+    lecturer_preference_settings: LecturerPreferenceSettings | None = None
+
+    @model_serializer(mode="wrap")
+    def historical_payload(self, handler):
+        result = handler(self)
+        if self.lecturer_preference_settings is None:
+            result.pop("lecturer_preference_settings", None)  # Existing configurations stay byte-identical.
+        return result
 
     @model_validator(mode="after")
     def explicit_scope(self):
@@ -128,6 +139,11 @@ def prepare_pp1(allocations, academic, venue_source, configuration: PP1Configura
         availability=[dict(staff_id=row.staff_id, allowed_teaching_days=set(windows), available_windows=windows,
             blocked_periods=[], effective_from=calendar.week_start, effective_until=calendar.week_end)
             for row in teaching.staff_members])
+    settings, preference_build = configuration.lecturer_preference_settings, None
+    if settings is not None:
+        preference_build = build_lecturer_preferences(academic, settings, calendar,
+            configured_streams={stream for day in configuration.solver_config.days for stream in day.windows})
+        staff = apply_hard_unavailability(staff, preference_build.blocked_periods)
     provenance = dict(source="user-configured-PP1-test-calendar", reference=configuration.configuration_reference)
     lunch = confirmed_student_lunch_policy(policy_reference="confirmed-year-specific-student-lunch", week_reference=calendar.week_reference,
         provenance=provenance, applicable_dates=set(calendar.day_dates.values()),
@@ -148,7 +164,27 @@ def prepare_pp1(allocations, academic, venue_source, configuration: PP1Configura
     # Numerical day-part windows are absent; preserve them as diagnostics instead
     # of inventing MORNING/AFTERNOON cutoffs or treating preferences as hard blocks.
     day_preferences = [row for row in mapping.preferences if row.category.value in {"WORKING_DAY", "WEEKEND_DAY"}]
-    if day_preferences:
+    soft_preferences_applicable = None
+    if preference_build is not None:
+        from schedence_teaching.solver import SolverInputError
+        from schedence_teaching.solver.preference_inputs import NO_APPLICABLE_PREFERENCES, checked_preference_inputs
+        soft = dict(preference_input=prepare_lecturer_preferences(teaching, preference_build.preferences),
+            preference_calendar=calendar, preference_policy=preference_build.scoring_policy,
+            preference_config=PreferenceOptimizationConfig(priority_policy_reference=settings.settings_reference,
+                calendar_semantics_reference=settings.settings_reference,
+                day_streams={row.day: set(row.windows) for row in configuration.solver_config.days},
+                unscoped_preferences_apply_to_all_streams=preference_build.unscoped_preferences_apply_to_all_streams,
+                max_model_variables=configuration.max_model_variables, max_model_constraints=configuration.max_model_constraints))
+        try:  # The solver's own applicability check; hard blocks above apply either way.
+            checked_preference_inputs(prepared, configuration.solver_config, soft["preference_input"], calendar,
+                soft["preference_policy"], soft["preference_config"], staff_input=staff)
+            soft_preferences_applicable = True
+            contexts.update(soft)
+        except SolverInputError as error:
+            if str(error) != NO_APPLICABLE_PREFERENCES:
+                raise
+            soft_preferences_applicable = False
+    elif day_preferences:
         contexts.update(preference_input=prepare_lecturer_preferences(teaching, LecturerPreferenceInput(preferences=day_preferences)),
             preference_calendar=calendar, preference_policy=PreferenceScoringPolicy(
                 policy_reference=configuration.configuration_reference + ":equal-test-soft-weights", weight_mode="SYNTHETIC_DEFAULTS",
@@ -186,6 +222,9 @@ def prepare_pp1(allocations, academic, venue_source, configuration: PP1Configura
             "Underlying academic ranks of appointment-only titles remain unresolved; source titles are preserved.",
             "Source day-part availability/preferences require numerical boundaries; no hard blocks or clock preferences are inferred.",
             "Cross-specialization overlap and shared lectures are excluded from PP1; true student membership is not asserted."])
+    if preference_build is not None:
+        metadata.update(lecturer_preferences={**preference_build.summary(), "soft_preferences_applicable": soft_preferences_applicable},
+            hard_availability_diagnostics=list(hard_availability_diagnostics(prepared, configuration.solver_config, staff)))
     if grouping:
         metadata.update(academic_grouping=grouping.report, group_source_specializations=applicability,
             group_count_without_mapped_requirements=len({row.group_id for row in teaching.student_groups}

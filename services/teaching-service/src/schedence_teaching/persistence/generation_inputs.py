@@ -1,6 +1,7 @@
 """Database-to-existing-PP1 adapter; no Excel reads, SQL calls or new demand."""
 
 from collections import Counter, defaultdict
+import json
 from dataclasses import dataclass
 from typing import Annotated, Literal
 from uuid import UUID
@@ -241,6 +242,70 @@ def allocation_cohorts(evidence):
     return cohorts
 
 
+def academic_track_cohorts(evidence, document, academic, cohorts, sizing):
+    """Recorded academic-track grouping, re-derived from the stored per-specialization allocations.
+
+    Track cohorts and their planning groups are regenerated with the existing pathway
+    grouping from authoritative allocation rows and module curricula; the snapshot must
+    match exactly. Snapshots without recorded grouping provenance are unaffected.
+    """
+    recorded = [row.provenance["academic_grouping"] for row in document.sources if "academic_grouping" in row.provenance]
+    if not recorded:
+        return {}
+    require(len(recorded) == 1, "academic-track grouping provenance is ambiguous")
+    from schedence_teaching.pilot.academic_pathways import AcademicPathwayConfiguration, prepare_academic_grouping
+    from schedence_teaching.pilot.allocations import SpecializationAllocations
+    grouping = recorded[0]
+    configuration = AcademicPathwayConfiguration.model_validate(grouping["configuration"])
+    datasets = unique(evidence.academic["source_datasets"], "id")
+    digests = {datasets[row["source_id"]]["sha256"] for row in evidence.academic["pp1_specialization_allocations"]}
+    require(digests == {grouping["original_allocation_source_sha256"]}, "academic-track grouping cites another allocation source")
+    rows = lambda values: sorted(canonical_json(value) for value in values)
+    require(rows(row.model_dump(mode="json") for row in cohorts.values()) == rows(grouping["original_allocation_rows"]),
+        "academic-track grouping differs from the stored per-specialization allocations")
+    derived = prepare_academic_grouping(SpecializationAllocations(cohorts=list(cohorts.values()), sizing=sizing,
+        source_sha256=digests.pop()), extract_academic_catalog(academic), configuration)
+    periods = {(rule.academic_year, rule.semester) for rule in configuration.rules}
+    tracks = {row.cohort_id: row for row in derived.plan.cohorts if (row.academic_year, row.semester) in periods}
+    members = defaultdict(set)
+    for group in derived.plan.groups:
+        members[derived.plan.cohort_by_group[group.group_id]].add(group.group_id)
+    regenerated = {group.group_id: group for group in derived.plan.groups if derived.plan.cohort_by_group[group.group_id] in tracks}
+    recorded_slices = grouping["group_allocation_slices"]
+    for scope in document.scopes:
+        if scope.scope_key not in tracks:
+            continue
+        require(set(scope.group_references) == members[scope.scope_key], "academic-track scope groups differ from the derived plan")
+        for group_id in scope.group_references:
+            snapshot_group = next((row for row in document.teaching_input.student_groups if row.group_id == group_id), None)
+            require(snapshot_group == regenerated[group_id], "academic-track planning group differs from the derived plan")
+            require(canonical_json(recorded_slices.get(group_id)) == canonical_json(derived.group_allocation_slices[group_id]),
+                "academic-track allocation slices differ from the derived plan")
+    return tracks
+
+
+def verify_preference_settings(document, academic, configuration):
+    """P2.5: current stored preference rows must rebuild the snapshot's soft preferences and hard blocks exactly."""
+    from schedence_teaching.preferences.product_settings import build_lecturer_preferences
+    contexts = document.contexts
+    require(contexts.preference_input is not None and contexts.preference_policy is not None and contexts.staff_input is not None,
+        "institution preference settings require their preference and staff contexts")
+    build = build_lecturer_preferences(academic, configuration.lecturer_preference_settings, document.calendar,
+        configured_streams={stream for day in configuration.solver_config.days for stream in day.windows})
+    require(canonical_json(build.preferences) == canonical_json(contexts.preference_input),
+        "database lecturer preferences differ from snapshot")
+    require(canonical_json(build.scoring_policy) == canonical_json(contexts.preference_policy),
+        "institution preference scoring settings differ from snapshot")
+    base = {row.staff_id: row.blocked_periods for row in configuration.staff_input.availability} if configuration.staff_input else {}
+    expected = {}
+    for staff, block in build.blocked_periods:
+        expected.setdefault(staff, set()).add(canonical_json(block))
+    for row in contexts.staff_input.availability:
+        actual = {canonical_json(block) for block in row.blocked_periods}
+        required = {canonical_json(block) for block in base.get(row.staff_id, ())} | expected.get(row.staff_id, set())
+        require(actual == required, "hard lecturer unavailability differs from stored Not Available records")
+
+
 def reconstruct_enrollment(evidence):
     document, prepared, config, contexts = replay_snapshot(evidence.document)
     require(document.institution_id == evidence.institution_id, "snapshot institution mismatch")
@@ -257,9 +322,14 @@ def reconstruct_enrollment(evidence):
             ("venue_name", "venue_type", "capacity", "building", "floor", "lab_specialization")})
         require(reconstructed == venue, "venue capacity, type or location differs from snapshot")
     configuration = PP1Configuration.model_validate(evidence_source(document, "PP1:calendar-configuration")["configuration"])
-    require(canonical_json(configuration.solver_config) == canonical_json(config) and configuration.calendar == document.calendar,
-        "selected calendar or timetable rules differ from snapshot")
-    if document.contexts.preference_input is not None:
+    # A sealed snapshot's config carries its resolved policy; the configured rules themselves must be identical.
+    # Search budgets, seeds and workers are operational, outside the policy seal and outside this comparison.
+    from schedence_teaching.policy.resolution import solver_rules
+    require(canonical_json(solver_rules(configuration.solver_config)) == canonical_json(solver_rules(config))
+        and configuration.calendar == document.calendar, "selected calendar or timetable rules differ from snapshot")
+    if configuration.lecturer_preference_settings is not None:
+        verify_preference_settings(document, academic, configuration)
+    elif document.contexts.preference_input is not None:
         # Extending the teaching calendar did not rewrite the independently
         # versioned interpretation of the source weekend preference cells.
         references = {row.provenance.interpretation_reference
@@ -276,7 +346,9 @@ def reconstruct_enrollment(evidence):
             if row.category.value in {"WORKING_DAY", "WEEKEND_DAY"}])
         require(canonical_json(preferences) == canonical_json(document.contexts.preference_input),
             "database lecturer preferences differ from snapshot")
+    sizing = GroupSizingPolicy.model_validate(metadata["groups"]["effective_sizing"])
     cohorts = allocation_cohorts(evidence)
+    cohorts |= academic_track_cohorts(evidence, document, academic, cohorts, sizing)
     supported = [row for row in document.scopes if row.scope_status == "SUPPORTED"]
     links = {group: scope.scope_key for scope in supported for group in scope.group_references}
     for scope in document.scopes:
@@ -285,7 +357,6 @@ def reconstruct_enrollment(evidence):
         require((scope.student_count, scope.academic_year, scope.semester, scope.stream, scope.specialization) ==
             (cohort.student_count, cohort.academic_year, cohort.semester, cohort.stream, cohort.specialization),
             "snapshot scope differs from its approved allocation")
-    sizing = GroupSizingPolicy.model_validate(metadata["groups"]["effective_sizing"])
     require(all(group.student_count <= (sizing.main_group_maximum if group.parent_group_id is None else sizing.lab_subgroup_maximum)
         for group in document.teaching_input.student_groups), "enrollment group exceeds its supplied planning cap")
     plan = EnrollmentPlan(tuple(cohorts[row.scope_key] for row in supported), tuple(document.teaching_input.student_groups),
@@ -327,6 +398,25 @@ def compare_snapshot_inputs(document, earlier):
     return dict(status="PASSED", checks=checks, extra_owner_uuid_and_export_provenance_are_additive=True)
 
 
+def blocked_scope_rows(document, scopes):
+    """Original blocked-cohort rows, exactly as recorded in each scope's academic-mapping issue.
+
+    Snapshot capture consumes these rows (cohort identity, period, counts and reason); the stored
+    scope summary alone would drop the recorded reason, so the issue details are the source.
+    """
+    recorded = {row.scope_key: row.details for row in document.issues if row.issue_code == "BLOCKED_MISSING_ACADEMIC_MAPPING"}
+    rows = []
+    for scope in scopes:
+        details = recorded.get(scope.scope_key)
+        require(details is not None and details.get("cohort_id") == scope.scope_key and
+            (details.get("academic_year"), details.get("semester"), details.get("stream"), details.get("specialization"),
+             details.get("student_count")) == (scope.academic_year, scope.semester, scope.stream.value, scope.specialization,
+                                               scope.student_count),
+            "blocked scope has no matching recorded academic-mapping issue")
+        rows.append(json.loads(canonical_json(details)))
+    return tuple(rows)
+
+
 def build_database_generation(evidence, request):
     request = DatabaseGenerationRequest.model_validate(request.model_dump())
     document = evidence.document
@@ -339,7 +429,7 @@ def build_database_generation(evidence, request):
     if request.specializations is not None:
         require(request.specializations <= {row.specialization for row in scopes}, "a requested specialization is missing")
     supported = [row for row in scopes if row.scope_status == "SUPPORTED"]
-    blocked = tuple(row.model_dump(mode="json") for row in scopes if row.scope_status != "SUPPORTED")
+    blocked = blocked_scope_rows(document, [row for row in scopes if row.scope_status != "SUPPORTED"])
     require(bool(supported), "BLOCKED_MISSING_ACADEMIC_MAPPING: selected scope has no supported teaching demand")
     keys = {(row.academic_year, row.semester, row.stream.value, row.specialization) for row in supported}
     selected = select_enrolled_scope(enrolled, keys, max_time_seconds=request.max_time_seconds)

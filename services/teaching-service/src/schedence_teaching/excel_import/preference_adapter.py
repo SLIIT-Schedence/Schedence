@@ -20,6 +20,8 @@ class PreferenceMappingResult:
     mapped_staff_count: int = 0
     cell_classifications: Counter = field(default_factory=Counter)
     source_confirmation_reference: str | None = None
+    # Source "Not Available" day parts, retained as (staff, weekday, time of day, column); never converted here.
+    unavailable_slots: list = field(default_factory=list)
 
     @property
     def valid(self):
@@ -133,6 +135,7 @@ def map_lecturer_preferences(source: WideImportResult, mapping: LecturerPreferen
                 result.cell_classifications["neutral_available"] += 1
             else:
                 result.cell_classifications["source_availability_assertion"] += 1
+                result.unavailable_slots.append((identity, selector.day, selector.time_of_day, column))
                 if source.source_confirmation_reference:
                     note(row, column, "availability_scope_required", "University-sourced unavailability is retained; dated numerical availability windows are still required for hard scheduling inputs.")
                 else:
