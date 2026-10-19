@@ -19,6 +19,12 @@ from app.duty_allocation.eligibility import EligibilityReport, Exclusion, RoomEl
 from app.duty_allocation.allocation_policy import DutyLimitPolicy
 from app.duty_allocation.validation import validate_allocation
 from app.duty_allocation.solver import allocate_duties  # imports OR-Tools only when solving
+from app.duty_allocation.fairness_policy import (
+    AdminWorkload, DayPreference, DayPreferenceKind, DutyFairnessPolicy, DutyHistory, FairnessInputs,
+    FairnessWeights, LoadUnit, MissingAdminHours, admin_workload_from_records,
+)
+from app.duty_allocation.fairness_metrics import FairnessMetrics, measure_fairness
+from app.duty_allocation.fairness import DutyFairnessComparison, allocate_fair_duties, compare_duty_fairness
 
 __all__ = [
     "DutyAllocationInput", "DutyAllocationResult", "DutyAllocationStatus", "DutyAssignment",
@@ -29,4 +35,8 @@ __all__ = [
     "ExcludedStaff", "StaffImport", "import_staff", "page_items",
     "EligibilityReport", "Exclusion", "RoomEligibility", "build_eligibility",
     "DutyLimitPolicy", "validate_allocation", "allocate_duties",
+    "AdminWorkload", "DayPreference", "DayPreferenceKind", "DutyFairnessPolicy", "DutyHistory", "FairnessInputs",
+    "FairnessWeights", "LoadUnit", "MissingAdminHours", "admin_workload_from_records",
+    "FairnessMetrics", "measure_fairness",
+    "DutyFairnessComparison", "allocate_fair_duties", "compare_duty_fairness",
 ]

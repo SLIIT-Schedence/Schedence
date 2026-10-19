@@ -7,6 +7,7 @@ scheduler's SolverSettings, and a roster the independent validator rejects is ne
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from importlib.metadata import version
 
 from app.duty_allocation.allocation_policy import DutyLimitPolicy
@@ -26,6 +27,16 @@ _STATUS_MESSAGES = {
 
 def allocate_duties(data: DutyAllocationInput, eligibility: EligibilityPolicy, limits: DutyLimitPolicy,
                     settings: SolverSettings = SolverSettings()) -> DutyAllocationResult:
+    """Step 4: any roster satisfying the hard constraints (no objective)."""
+    return solve_duties(data, eligibility, limits, settings)
+
+
+def solve_duties(data: DutyAllocationInput, eligibility: EligibilityPolicy, limits: DutyLimitPolicy,
+                 settings: SolverSettings = SolverSettings(), *,
+                 extend_model: Callable | None = None,
+                 extra_checks: Callable | None = None) -> DutyAllocationResult:
+    """Shared pipeline. extend_model(duty_model) may add an objective or opt-in constraints;
+    extra_checks(assignments) returns further violations for the rules it added."""
     fingerprint = data.timetable.input_fingerprint if type(data) is DutyAllocationInput else "unknown"
     bad = [name for name, value, kind in (("data", data, DutyAllocationInput), ("eligibility", eligibility, EligibilityPolicy),
                                           ("limits", limits, DutyLimitPolicy), ("settings", settings, SolverSettings))
@@ -52,6 +63,8 @@ def allocate_duties(data: DutyAllocationInput, eligibility: EligibilityPolicy, l
         raise
 
     duty_model = build_duty_model(data, report, limits)
+    if extend_model is not None:
+        extend_model(duty_model)
     solver_version = version("ortools")
     model_error = duty_model.model.validate()
     if model_error:
@@ -68,6 +81,8 @@ def allocate_duties(data: DutyAllocationInput, eligibility: EligibilityPolicy, l
 
     assignments = decode_assignments(duty_model, solver)
     violations = validate_allocation(data, eligibility, limits, assignments)
+    if extra_checks is not None:
+        violations += tuple(extra_checks(assignments))
     if violations:
         return DutyAllocationResult(DutyAllocationStatus.MODEL_INVALID, fingerprint, violations=violations,
                                     diagnostics=("Independent validation rejected the solver output; no roster returned.",),
