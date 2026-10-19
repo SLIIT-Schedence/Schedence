@@ -55,7 +55,7 @@ async function Header() {
   return (
     <PageHeader
       title="People"
-      description={`Everyone with an account at ${context.institutions.length === 1 ? context.primary.name : "your institutions"}. Invite examination admins, venue managers and lecturers here.`}
+      description={`Everyone with an account at ${context.institutions.length === 1 ? context.primary.name : "your institutions"}. Invite academic admins, examination admins, venue managers and lecturers here.`}
       actions={<InviteDialog institutions={context.institutions} />}
     />
   );
@@ -157,7 +157,7 @@ async function PeopleTable({ searchParams }: { searchParams: SearchParams }) {
           </EmptyState>
         ) : (
           <EmptyState icon="group" title="No one here yet" action={<InviteDialog institutions={context.institutions} variant="secondary" />}>
-            Invite your examination admins, venue managers and lecturers.
+            Invite your academic admins, examination admins, venue managers and lecturers.
           </EmptyState>
         )
       ) : (
