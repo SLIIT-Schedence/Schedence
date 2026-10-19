@@ -3659,7 +3659,7 @@ role headers are trusted, and no roles or permissions are seeded by Teaching.
 
 Existing Identity grants `teaching:generate`/`teaching:approve` authorize the
 Academic Admin read workflow; explicit Teaching read permissions have compatible
-extension contracts. Super Admin, Examination Admin and Venue Manager get no
+extension contracts. Institution Admin, System Admin, Examination Admin and Venue Manager get no
 automatic private Teaching access. Lecturer/student reads require trusted
 Academic account/scope bindings; missing bindings fail closed. Students cannot
 see the current unpublished experimental drafts. HOD/Professor/coordinator
