@@ -153,7 +153,7 @@ def test_invalid_or_expired_tokens_cannot_reach_identity_or_database(api,kind):
     assert not api.store.calls and api.identity['calls']==0
 
 
-@pytest.mark.parametrize('role',['EXAMINATION_ADMIN','VENUE_MANAGER','SUPER_ADMIN','HOD','PROGRAM_COORDINATOR','PROFESSOR'])
+@pytest.mark.parametrize('role',['EXAMINATION_ADMIN','VENUE_MANAGER','INSTITUTION_ADMIN','HOD','PROGRAM_COORDINATOR','PROFESSOR'])
 def test_other_roles_and_academic_titles_do_not_imply_teaching_access(api,role):
     grant(api,role,['academic:staff:read','academic:workload:read','venues:read'])
     assert api.client.get(BASE,headers=api.headers).status_code==403
@@ -177,8 +177,18 @@ def test_existing_identity_catalogue_is_the_role_authority():
     catalog=runpy.run_path(str(ROOT/'services/identity-service/app/rbac/catalog.py'))
     roles={role.code:role for role in catalog['ROLES']}
     assert {'teaching:generate','teaching:approve'}<=roles['ACADEMIC_ADMIN'].permissions
-    assert not any(value.startswith('teaching:') for value in roles['SUPER_ADMIN'].permissions)
+    for code in ('SYSTEM_ADMIN','INSTITUTION_ADMIN'):
+        assert not any(value.startswith('teaching:') for value in roles[code].permissions)
     assert 'HOD' not in roles and 'PROGRAM_COORDINATOR' not in roles
+
+
+def test_platform_system_admin_grants_no_institution_teaching_access(api):
+    # Identity lists System Admin only under `platform`, never inside an institution.
+    api.profile.update(institutions=[],platform=dict(roles=['SYSTEM_ADMIN'],
+        permissions=['platform:institutions:create','platform:institutions:read']))
+    for params in ({},{'institution_id':str(TENANT)}):
+        assert api.client.get(BASE,params=params,headers=api.headers).status_code==403
+    assert not api.store.calls
 
 
 def test_cross_institution_query_is_denied_before_database_read(api):

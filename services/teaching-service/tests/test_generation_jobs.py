@@ -137,7 +137,7 @@ def test_authorized_acceptance_both_prefixes_and_safe_result(api):
 
 
 @pytest.mark.parametrize('role,permissions', [('ACADEMIC_ADMIN',['teaching:timetables:read']),
-    ('ACADEMIC_ADMIN',['teaching:approve']), ('SUPER_ADMIN',[]), ('LECTURER',['teaching:timetables:read:self']),
+    ('ACADEMIC_ADMIN',['teaching:approve']), ('INSTITUTION_ADMIN',[]), ('LECTURER',['teaching:timetables:read:self']),
     ('HOD',[]), ('DEAN',[]), ('PROFESSOR',[]), ('PROGRAM_COORDINATOR',[])])
 def test_read_roles_and_appointments_do_not_grant_generation(api, role, permissions):
     jobs,body,_ = install(api)

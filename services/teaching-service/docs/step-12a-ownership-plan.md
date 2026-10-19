@@ -29,7 +29,8 @@ evidence before full-week integration. The adapter preserves its daily scope.
 
 Identity's ACADEMIC_ADMIN currently has teaching generation/approval permissions.
 Use explicit permission and institution checks in a future authenticated API;
-do not assume SUPER_ADMIN or an academic rank implies every teaching permission.
+do not assume INSTITUTION_ADMIN, SYSTEM_ADMIN or an academic rank implies every
+teaching permission.
 No Identity roles or Academic Data Service contracts were changed in Step 12A.
 
 `db-core.session_scope` defaults to commit; `commit=False` alone is not a

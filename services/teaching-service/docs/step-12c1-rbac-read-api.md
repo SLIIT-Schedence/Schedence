@@ -12,7 +12,7 @@ verification. That verifier checks RS256/JWKS, issuer, expiry, token use, app-cl
 ID and configured OAuth scopes. Identity then resolves the verified Cognito subject
 to an active database account and its active institution-specific role grants.
 User-role assignment remains Identity-owned through its existing account/role
-operations and operator Super Admin bootstrap. Teaching does not read Identity
+operations and operator System Admin bootstrap. Teaching does not read Identity
 tables, manage accounts, seed grants or mint production tokens.
 
 The existing service-to-service authorization endpoint is
@@ -39,15 +39,18 @@ documentation.
 
 ## Roles and compatible permission mapping
 
-All six system roles already exist in Identity. The user's Non-Academic/Super
-Admin maps to existing `SUPER_ADMIN` (displayed there as Administrative Admin),
-not a newly invented role. Academic rank, appointment and access role stay separate.
+All roles already exist in Identity: the platform role `SYSTEM_ADMIN` and the
+institution roles below. The user's Non-Academic/Super Admin maps to the existing
+institution-scoped `INSTITUTION_ADMIN`, not a newly invented role. (Earlier
+Identity versions called this role `SUPER_ADMIN`.) Academic rank, appointment and
+access role stay separate.
 
 | Existing role | Teaching behavior in this step |
 | --- | --- |
 | `ACADEMIC_ADMIN` | Existing institution-scoped `teaching:generate` or `teaching:approve` grants imply administrative read access only; no generation/management endpoint is implemented |
 | `EXAMINATION_ADMIN` | Examination permissions grant no Teaching access; a separately explicit Teaching grant is required |
-| `SUPER_ADMIN` | Existing identity/academic administration permissions do not grant private Teaching reads |
+| `INSTITUTION_ADMIN` | Existing identity/academic administration permissions do not grant private Teaching reads |
+| `SYSTEM_ADMIN` | Platform-only `platform:*` permissions sit outside every institution and grant no Teaching access |
 | `VENUE_MANAGER` | Venue permissions remain Resource-owned; they do not grant Teaching draft access, lecture edits or approval |
 | `LECTURER` | Personal read contract requires explicit permission plus an owner-resolved staff binding; private personal drafts require an additional explicit grant |
 | `STUDENT` | Published-only read contract requires explicit permission and a complete owner-resolved academic/group scope; private history and institutional validation remain forbidden |
