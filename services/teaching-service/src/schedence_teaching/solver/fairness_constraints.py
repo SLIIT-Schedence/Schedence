@@ -31,13 +31,19 @@ def add_fairness_variables(model, context, assignments, guard_model):
     model.add(aggregate == sum(weights[identity] * row[2] for identity, row in variables.items()))
     guard_model()
     components={"MAXIMUM_TARGET_DEVIATION": maximum, "AGGREGATE_TARGET_DEVIATION": aggregate}
-    if context.config.priority.value=='DELIVERY_COST_THEN_OVERAGE_FAIRNESS_PREFERENCES':
+    from .fairness_inputs import OVERAGE_PRIORITIES, FairnessPriority
+    if context.config.priority in OVERAGE_PRIORITIES:
         overages=[]
         for identity,target in context.targets:
             overage=model.new_int_var(0,max(0,uppers[identity]-target),f'teaching_target_excess:{identity}')
             model.add_max_equality(overage,[variables[identity][0]-target,0])
             overages.append(overage);guard_model()
         components['TOTAL_OVER_TARGET_MINUTES']=sum(overages)
+        if context.config.priority is FairnessPriority.DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES:
+            peak=model.new_int_var(0,max(max(0,uppers[identity]-target) for identity,target in context.targets),
+                'teaching_target_maximum_excess')
+            model.add_max_equality(peak,overages)
+            components['MAXIMUM_OVER_TARGET_MINUTES']=peak;guard_model()
     return variables, components
 
 

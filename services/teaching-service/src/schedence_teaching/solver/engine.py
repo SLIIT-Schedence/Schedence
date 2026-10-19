@@ -91,6 +91,12 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         raise SolverInputError("Online/physical delivery calendars currently support separate deliveries only; combining was not enabled.")
     if combination_config is not None and not combination_enabled:
         raise SolverInputError("Combination config requires prepared combination input.")
+    online_days = None
+    if config.batch_online_days is not None:
+        if combination_enabled or venue_input is None:
+            raise SolverInputError("Batch online days require separate deliveries with venue allocation.")
+        from .online_day_inputs import add_batch_online_day, booking_mode, checked_batch_online_days
+        online_days = checked_batch_online_days(prepared, config, staff_input.day_dates if staff_input is not None else None)
     if combination_enabled:
         combination_input, combination_config = checked_combinations(prepared, combination_input, combination_config)
     venue_enabled = venue_input is not None
@@ -143,6 +149,55 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
             consecutive_config, alternatives, staff_input=staff_input, work_periods=work_periods,
             preference_calendar=preference_calendar, fairness_calendar=fairness_calendar)
         consecutive_order, _ = consecutive_objective_plan(prepared, consecutive_context, fairness_context, preference_context, combination_config)
+    compactness_enabled = config.teaching_day_compactness is not None
+    daily_enabled = config.daily_load_distribution is not None
+    quality_enabled = compactness_enabled or daily_enabled
+    if quality_enabled:
+        from .compactness_inputs import add_thin_day_flags, compactness_report
+        from .daily_load_inputs import (STAFF as DAILY_STAFF, STUDENT as DAILY_STUDENT, add_staff_daily_maximum,
+                                        add_student_daily_maximum, daily_load_report, quality_order)
+        from .deliveries import DeliveryObjective
+        from .lexicographic import staged_minimize
+        daily_criteria = {row.value for row in config.daily_load_distribution.criteria} if daily_enabled else set()
+        if staff_input is None and (compactness_enabled or DAILY_STAFF in daily_criteria):
+            raise SolverInputError("Teaching-day compactness and staff daily load require original staff scheduling input.")
+        if config.objective_stage_plan is None and (consecutive_enabled or (preference_enabled and not fairness_enabled)):
+            raise SolverInputError("Teaching-day compactness and daily-load stages are staged with delivery/workload objectives; "
+                                   "they are not yet combined with consecutive or preference-only optimization.")
+        mode = combination_config.objective if combination_config else DeliveryObjective.DELIVERIES_THEN_MINUTES
+        base_order = fairness_order if fairness_enabled else {
+            DeliveryObjective.DELIVERIES_THEN_MINUTES: ("DELIVERIES", "CONTACT_MINUTES"),
+            DeliveryObjective.DELIVERIES: ("DELIVERIES",), DeliveryObjective.CONTACT_MINUTES: ("CONTACT_MINUTES",),
+            DeliveryObjective.FEASIBILITY: ()}[mode]
+        try:
+            if config.objective_stage_plan is None:
+                thin_order = quality_order(base_order, compactness=config.teaching_day_compactness,
+                                           daily=config.daily_load_distribution, fairness_enabled=fairness_enabled)
+        except ValueError as error:
+            raise SolverInputError(str(error)) from None
+    stage_plan_enabled = config.objective_stage_plan is not None
+    if stage_plan_enabled:
+        # P3.1: one checked shared order; module orders are its projections, never re-derived independently.
+        from .deliveries import DeliveryObjective
+        from .lexicographic import staged_minimize
+        from .objective_stage_plan import project, stage_report, stage_report_issues, unified_order
+        plan = config.objective_stage_plan
+        mode = combination_config.objective if combination_config else DeliveryObjective.DELIVERIES_THEN_MINUTES
+        plan_base = (fairness_order if fairness_enabled else preference_order if preference_enabled else {
+            DeliveryObjective.DELIVERIES_THEN_MINUTES: ("DELIVERIES", "CONTACT_MINUTES"),
+            DeliveryObjective.DELIVERIES: ("DELIVERIES",), DeliveryObjective.CONTACT_MINUTES: ("CONTACT_MINUTES",),
+            DeliveryObjective.FEASIBILITY: ()}[mode])
+        extra = ({"THIN_TEACHING_DAYS"} if compactness_enabled else set()) | (set(daily_criteria) if daily_enabled else set()) | (
+            {"CONSECUTIVE_PENALTY"} if consecutive_enabled else set())
+        try:
+            thin_order = unified_order(plan, plan_base, extra, compactness=config.teaching_day_compactness,
+                                       daily=config.daily_load_distribution, fairness_enabled=fairness_enabled)
+            if fairness_enabled:
+                fairness_order = project(plan, fairness_order)
+            if consecutive_enabled:
+                consecutive_order = project(plan, consecutive_order)
+        except ValueError as error:
+            raise SolverInputError(str(error)) from None
     lunch_enabled = student_lunch_config is not None
     if not lunch_enabled and (student_lunch_policy is not None or student_lunch_calendar is not None):
         raise SolverInputError("Student lunch policy/calendar require explicit StudentLunchEnforcementConfig.")
@@ -169,6 +224,13 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
     selected_alternatives = {}
     resource_choice_count = 0
     preference_terms = []
+    start_variables = {}
+    staff_start_ticks = {}  # (delivery, staff) -> start ticks already enforced when that staff member is selected
+    online_choice, lectures_on = {}, defaultdict(lambda: defaultdict(list))
+    for batch, indices in (online_days.candidates.items() if online_days is not None else ()):
+        online_choice[batch] = {index: model.new_bool_var(
+            f"batch_online_day:{batch[0]}:{batch[1]}:{batch[2].value}:{config.days[index].day}") for index in indices}
+        model.add_exactly_one(list(online_choice[batch].values()))
 
     def failed(reason, status=SolverStatus.INFEASIBLE):
         return SolverResult(status, (), perf_counter() - started, None, reason,
@@ -241,12 +303,17 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
                 continue
             return failed(f"Occurrence {identity} has no configured window that can contain its duration.")
         start = model.new_int_var_from_domain(cp_model.Domain.from_intervals(domains), f"start:{identity}")
+        start_variables[identity] = start
         end = model.new_int_var(min(item[0] for item in domains) + duration,
                                 max(item[1] for item in domains) + duration, f"end:{identity}")
         day_variable = model.new_int_var(0, len(config.days) - 1, f"day:{identity}")
         local_start = model.new_int_var(0, ticks_per_day - 1, f"local_start:{identity}")
         model.add_division_equality(day_variable, start, ticks_per_day)
         model.add_modulo_equality(local_start, start, ticks_per_day)
+        online_lecture = None
+        if online_days is not None and (batch := online_days.session_batches[session.occurrence_id]) in online_choice:
+            online_lecture = add_batch_online_day(model, config, session, day_variable, online_choice[batch],
+                                                  lectures_on[batch], identity)
         if lunch_enabled:
             add_student_lunch_constraint(model, start, domains, alternative.duration_minutes, presence, lunch_rules[identity], config)
         interval = (model.new_optional_interval_var(start, duration, end, presence, f"interval:{identity}")
@@ -256,6 +323,7 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
             for student in membership_students.get(group_id, ()):
                 intervals_by_student[student][identity] = interval
         choices = {}
+        available_staff = 0
         guard_resource_choices(len(candidates))
         for staff_id in candidates:
             selected = model.new_bool_var(f"staff:{identity}:{staff_id}")
@@ -265,6 +333,8 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
                     allowed_days=policy_days[staff_id]) if staff_id in policy_days else
                     staff_start_domains(session, staff_calendars[staff_id], config, staff_input.day_dates))
                 if staff_domains:
+                    available_staff += 1
+                    staff_start_ticks[identity, staff_id] = staff_domains
                     model.add_linear_expression_in_domain(start, cp_model.Domain.from_intervals(staff_domains)).only_enforce_if(selected)
                 else:
                     model.add(selected == 0)
@@ -276,11 +346,19 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         if combination_enabled:
             model.add(sum(choices.values()) == presence)
         else:
+            if staff_input is not None and not available_staff:
+                # Pre-solve proof: hard availability (windows, blocked periods, eligible dates) leaves no lecturer.
+                return failed(f"Occurrence {identity} (offering {session.offering_id}, {session.session_type.value}, "
+                              f"group {session.group_id}) has no eligible lecturer available in any configured window; "
+                              f"hard availability and blocked periods are not relaxed.")
             model.add_exactly_one(list(choices.values()))
         venue_choices = {}
         if venue_enabled:
             physical = None
-            if config.delivery_calendar is not None:
+            if online_lecture is not None:
+                physical = model.new_bool_var(f"physical:{identity}")
+                model.add(physical + online_lecture == 1)
+            elif config.delivery_calendar is not None:
                 physical = model.new_bool_var(f"physical:{identity}")
                 model.add_allowed_assignments([day_variable, physical], [
                     [index, int(mode_on_day(config, day.day, session.stream) == DeliveryMode.PHYSICAL)]
@@ -381,6 +459,9 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
                     if len(pair_intervals) > 1:
                         model.add_no_overlap(list(pair_intervals.values()))
                         guard_model()
+    for batch, choices in online_choice.items():
+        for index, chosen in choices.items():
+            model.add(sum(lectures_on[batch][index]) >= chosen)  # Decision 3: never an empty online day.
     if schedule_hints:
         expected={s.occurrence_id:s for s in prepared.sessions};seen_hints=set()
         day_indexes={d.day:i for i,d in enumerate(config.days)}
@@ -397,8 +478,27 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
             model.add_hint(local_var,hint.start_minute//granularity)
             for sid,chosen in choices.items():model.add_hint(chosen,int(sid==hint.assigned_staff_id))
             for vid,chosen in venue_choices.items():model.add_hint(chosen,int(vid==hint.assigned_venue_id))
+    staff_days_needed = compactness_enabled or (daily_enabled and DAILY_STAFF in daily_criteria)
+    day_usage, delivery_day_flags = ({} if staff_days_needed else None), {}
     if staff_input is not None:
-        add_teaching_caps(model, config, staff_input, staff_assignments, guard_model)
+        # The legacy call is unchanged unless P2.1/P2.2 ask for the existing staff-day variables.
+        add_teaching_caps(model, config, staff_input, staff_assignments, guard_model,
+                          **({"day_usage": day_usage, "day_flags": delivery_day_flags} if quality_enabled else {}))
+    thin_total = add_thin_day_flags(model, config, day_usage) if compactness_enabled else None
+    daily_maxima = {}
+    if daily_enabled:
+        from .staff_constraints import delivery_day_flag
+        if DAILY_STUDENT in daily_criteria:
+            daily_maxima[DAILY_STUDENT] = add_student_daily_maximum(model, config, prepared, [
+                (identity, alternative.group_ids, alternative.duration_minutes,
+                 selected_alternatives.get(identity) if combination_enabled else None, variables[identity][0],
+                 {covered.stream for covered in alternative.covered_sessions})
+                for alternative in alternatives if (identity := alternative.delivery_id) in variables],
+                lambda identity, index, day_variable: delivery_day_flag(
+                    model, delivery_day_flags, identity, index, day_variable, config.days[index].day))
+        if DAILY_STAFF in daily_criteria:
+            daily_maxima[DAILY_STAFF] = add_staff_daily_maximum(model, day_usage, staff_assignments)
+        guard_model()
     if preference_enabled:
         components = {
             "DELIVERIES": count_expression if combination_enabled else len(prepared.sessions),
@@ -421,17 +521,51 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
             selected_alternatives[identity] if combination_enabled else model.new_constant(1))
             for identity, (day, local_start, choices, _) in variables.items()}
         consecutive_variables, consecutive_penalty = add_consecutive_variables(model, prepared, config,
-            consecutive_context, alternatives, decisions, guard_model)
+            consecutive_context, alternatives, decisions, guard_model, start_variables=start_variables,
+            staff_start_ticks=staff_start_ticks if staff_input is not None else None)
         if not fairness_enabled:
             components = {"DELIVERIES": count_expression if combination_enabled else len(prepared.sessions),
                 "CONTACT_MINUTES": minutes_expression if combination_enabled else sum(row.duration_minutes for row in prepared.sessions),
                 "PREFERENCE_PENALTY": sum(row[-1] for row in preference_terms)}
         components["CONSECUTIVE_PENALTY"] = consecutive_penalty
+    if stage_plan_enabled:
+        if not fairness_enabled and not consecutive_enabled:
+            components = {"DELIVERIES": count_expression if combination_enabled else len(prepared.sessions),
+                "CONTACT_MINUTES": minutes_expression if combination_enabled else sum(row.duration_minutes for row in prepared.sessions),
+                "PREFERENCE_PENALTY": sum(row[-1] for row in preference_terms)}
+        if compactness_enabled:
+            components["THIN_TEACHING_DAYS"] = thin_total
+        components.update(daily_maxima if daily_enabled else {})
+        plan_model_size = (len(model.proto.variables), len(model.proto.constraints))
+        solver, status, compactness_stages = staged_minimize(model, config, thin_order, components,
+            skip_constant_stages=True, carry_incumbent_hints=True)
+        if fairness_enabled:
+            fairness_stages = tuple(row for row in compactness_stages if row.criterion in set(fairness_order))
+        if consecutive_enabled:
+            consecutive_stages = tuple(row for row in compactness_stages if row.criterion in set(consecutive_order))
+    elif consecutive_enabled:
         solver, status, consecutive_stages = staged_minimize(model, config, consecutive_order, components)
         if fairness_enabled:
             fairness_stages = tuple(row for row in consecutive_stages if row.criterion != "CONSECUTIVE_PENALTY")
+    elif quality_enabled:
+        if not fairness_enabled:
+            components = {"DELIVERIES": count_expression if combination_enabled else len(prepared.sessions),
+                "CONTACT_MINUTES": minutes_expression if combination_enabled else sum(row.duration_minutes for row in prepared.sessions)}
+        if compactness_enabled:
+            components["THIN_TEACHING_DAYS"] = thin_total
+        components.update(daily_maxima)
+        from .fairness_inputs import FairnessPriority
+        peak = fairness_enabled and fairness_context.config.priority is FairnessPriority.DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES
+        solver, status, compactness_stages = staged_minimize(model, config, thin_order, components,
+            skip_constant_stages=peak, carry_incumbent_hints=peak)
+        if fairness_enabled:
+            quality_criteria = {"THIN_TEACHING_DAYS", *daily_criteria}
+            fairness_stages = tuple(row for row in compactness_stages if row.criterion not in quality_criteria)
     elif fairness_enabled:
-        solver, status, fairness_stages = staged_minimize(model, config, fairness_order, components)
+        from .fairness_inputs import FairnessPriority
+        peak = fairness_context.config.priority is FairnessPriority.DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES
+        solver, status, fairness_stages = staged_minimize(model, config, fairness_order, components,
+            skip_constant_stages=peak, carry_incumbent_hints=peak)
     else:
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = config.max_time_seconds
@@ -460,6 +594,10 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
             reason += " Fixed student lunch restrictions were enabled."
         return failed(reason, status)
     schedule = []
+    selection = {batch: config.days[next(index for index, chosen in choices.items() if solver.value(chosen))].day
+                 for batch, choices in online_choice.items()}
+    selected_online_days = (tuple((year, semester, stream.value, day) for (year, semester, stream), day in sorted(selection.items()))
+                            if online_days is not None else None)
     for alternative in alternatives:
         identity = alternative.delivery_id
         if combination_enabled and not solver.value(selected_alternatives[identity]):
@@ -477,7 +615,8 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         else:
             schedule.append(ScheduledSession(session, day, start_minute, start_minute + session.duration_minutes,
                                              assigned_staff_id, assigned_venue_id,
-                                             mode_on_day(config, day, session.stream) if config.delivery_calendar else None))
+                                             (booking_mode(config, online_days, selection, session, day) if online_days is not None
+                                              else mode_on_day(config, day, session.stream)) if config.delivery_calendar else None))
 
     def attach_work_periods(result):
         if not work_period_enabled:
@@ -515,7 +654,8 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         assessment = assess_fairness(prepared, config, assessment_projection(result), fairness_context.calendar,
             fairness_context.policy, **original)
         report = fairness_report(prepared, result, fairness_context, assessment,
-            decode_fairness_workloads(solver, fairness_variables), fairness_stages, preference_context, combination_config)
+            decode_fairness_workloads(solver, fairness_variables), fairness_stages, preference_context, combination_config,
+            stage_plan=config.objective_stage_plan)
         result = replace(result, fairness_report=report)
         validate_fairness_result(prepared, config, result, fairness_policy=fairness_context.policy,
             fairness_calendar=fairness_context.calendar, fairness_config=fairness_context.config, **original)
@@ -544,13 +684,41 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         assessment = assess_consecutive_sessions(prepared, config, assessment_projection(result),
             consecutive_context.calendar, consecutive_context.policy, **original)
         report = consecutive_report(prepared, result, consecutive_context, assessment,
-            decode_consecutive_entities(solver, consecutive_variables), consecutive_stages, fairness_context, preference_context, combination_config)
+            decode_consecutive_entities(solver, consecutive_variables), consecutive_stages, fairness_context, preference_context, combination_config,
+            stage_plan=config.objective_stage_plan)
         result = replace(result, consecutive_report=report)
         validate_consecutive_result(prepared, config, result, consecutive_policy=consecutive_context.policy,
             consecutive_calendar=consecutive_context.calendar, consecutive_config=consecutive_context.config, **original)
         return result
 
+    def finish_fairness_staged(result):
+        if not (quality_enabled or stage_plan_enabled):
+            return finish_fairness(result)
+        # Fairness reports only its own stages; the extra P2.1/P2.2 stages keep the overall status.
+        overall = result.status
+        proven = len(fairness_stages) == len(fairness_order) and all(row.status == "OPTIMAL" for row in fairness_stages)
+        result = finish_fairness(replace(result, status=SolverStatus.OPTIMAL if proven else SolverStatus.FEASIBLE))
+        # The report keeps its own proof flag; its objective status follows the overall result, as recomputed.
+        return replace(result, status=overall, fairness_report=replace(result.fairness_report, objective_status=overall.value))
+
     def finish_lunch(result):
+        if compactness_enabled:
+            modeled = thin_total if isinstance(thin_total, int) else solver.value(thin_total)
+            result = replace(result, teaching_day_compactness_report=compactness_report(
+                prepared, config, result.schedule, thin_order, compactness_stages, modeled))
+        if daily_enabled:
+            modeled = {key: value if isinstance(value, int) else solver.value(value) for key, value in daily_maxima.items()}
+            result = replace(result, daily_load_report=daily_load_report(
+                prepared, config, result.schedule, thin_order, compactness_stages, modeled))
+        if stage_plan_enabled:
+            if result.preference_report is not None and result.preference_report.objective_status != "EVALUATED_COMPONENT":
+                # The composite preference objective is one evaluated stage of the shared plan, not the final objective.
+                result = replace(result, preference_report=replace(result.preference_report, objective_status="EVALUATED_COMPONENT"))
+            result = replace(result, objective_stage_report=stage_report(config, result, thin_order, compactness_stages, *plan_model_size))
+            issues = stage_report_issues(result, thin_order, result.objective_stage_report)
+            if issues:
+                from .results import ScheduleIssue, TimetableValidationError
+                raise TimetableValidationError([ScheduleIssue("objective_stage_plan_changed", issue) for issue in issues])
         if not lunch_enabled:
             return result
         from schedence_teaching.lunch import assess_student_lunch
@@ -586,7 +754,7 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         if consecutive_enabled:
             return finish_lunch(finish_consecutive(result))
         if fairness_enabled:
-            return finish_lunch(finish_fairness(result))
+            return finish_lunch(finish_fairness_staged(result))
         validate_delivery_result(prepared, config, result, combination_input=combination_input,
                                   combination_config=combination_config, venue_input=venue_input, staff_input=staff_input,
                                   **work_validation_inputs, **preference_validation_inputs)
@@ -594,7 +762,8 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
     if staff_input is not None:
         validation = validate_timetable(prepared, config, schedule, venue_input=venue_input, staff_input=staff_input)
         result = SolverResult(status, tuple(schedule), perf_counter() - started, validation, venue_enabled=venue_enabled,
-                              original_occurrence_count=len(prepared.sessions), staff_policy_enabled=True)
+                              original_occurrence_count=len(prepared.sessions), staff_policy_enabled=True,
+                              batch_online_days=selected_online_days)
         result = replace(result, workload_report=_assess_validated_schedule(
             prepared, result, staff_input.workload_input, staff_constraints_enforced=True))
         result = attach_work_periods(result)
@@ -602,14 +771,14 @@ def solve_timetable(prepared: PreparedTimetableInput, config: SolverConfig, *,
         if consecutive_enabled:
             return finish_lunch(finish_consecutive(result))
         if fairness_enabled:
-            return finish_lunch(finish_fairness(result))
+            return finish_lunch(finish_fairness_staged(result))
         validate_staff_policy_result(prepared, config, result, staff_input=staff_input, venue_input=venue_input,
                                      **work_validation_inputs, **preference_validation_inputs)
         return finish_lunch(result)
     validation = (validate_timetable(prepared, config, schedule, venue_input=venue_input) if venue_enabled
                   else validate_timetable(prepared, config, schedule))
     result = SolverResult(status, tuple(schedule), perf_counter() - started, validation, venue_enabled=venue_enabled,
-                          original_occurrence_count=len(prepared.sessions))
+                          original_occurrence_count=len(prepared.sessions), batch_online_days=selected_online_days)
     result = attach_preferences(result)
     if consecutive_enabled:
         return finish_lunch(finish_consecutive(result))

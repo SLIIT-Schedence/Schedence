@@ -30,6 +30,8 @@ def verify_config(config):
     if policy is None:
         if custom_modes:
             raise ValueError('Configured online mode permissions require a resolved institution policy.')
+        if config.batch_online_days is not None:
+            raise ValueError('Batch online-day policy requires a resolved institution policy.')
         return None
     policy.verify()
     effective = json.loads(policy.effective_json)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, model_serializer
 
 from schedence_teaching.schemas.models import InputContract, RequiredText
 from .results import SolverInputError
@@ -12,6 +12,13 @@ from .results import SolverInputError
 
 class ConsecutivePriority(StrEnum):
     EXISTING_OBJECTIVES_THEN_CONSECUTIVE = "EXISTING_OBJECTIVES_THEN_CONSECUTIVE"
+
+
+class ConsecutiveFormulation(StrEnum):
+    # Original exact model: one chronological circuit with a successor arc per candidate pair.
+    SUCCESSOR_CIRCUIT = "SUCCESSOR_CIRCUIT"
+    # P2.3 exact model: per-date time-indexed occupancy, linear in candidate start times.
+    TIME_INDEXED = "TIME_INDEXED"
 
 
 Limit = Annotated[int, Field(strict=True, gt=0, le=2**50)]
@@ -31,6 +38,15 @@ class ConsecutiveOptimizationConfig(InputContract):
     max_model_variables: Limit = 200_000
     max_model_constraints: Limit = 200_000
     max_integer_bound: Limit = 2**50
+    # Node/arc limits bound SUCCESSOR_CIRCUIT only; TIME_INDEXED builds no successor arcs.
+    formulation: ConsecutiveFormulation = ConsecutiveFormulation.SUCCESSOR_CIRCUIT
+
+    @model_serializer(mode="wrap")
+    def historical_payload(self, handler):
+        result = handler(self)
+        if self.formulation is ConsecutiveFormulation.SUCCESSOR_CIRCUIT:
+            result.pop("formulation", None)  # Existing configs and policy digests stay byte-identical.
+        return result
 
 
 @dataclass(frozen=True)
@@ -72,6 +88,7 @@ def checked_consecutive_inputs(prepared, config, policy, calendar, options, alte
         hard = policy.confirmed_hard_minimum_break
         if options.enforce_confirmed_hard_break and hard is None:
             raise ValueError("Hard-break enforcement requires an explicit confirmed minimum-break policy.")
+        circuit = options.formulation is ConsecutiveFormulation.SUCCESSOR_CIRCUIT
         participants = {}
         for person in prepared.input_snapshot.staff_members:
             if policy.score_lecturers or (options.enforce_confirmed_hard_break and "LECTURER" in hard.applies_to):
@@ -94,7 +111,7 @@ def checked_consecutive_inputs(prepared, config, policy, calendar, options, alte
         total_arcs, bounds, weighted = 0, [], 0
         for (kind, identity), ids in sorted(participants.items()):
             nodes = len(ids)
-            if nodes > options.max_nodes_per_participant:
+            if circuit and nodes > options.max_nodes_per_participant:
                 raise ValueError("Consecutive nodes-per-participant limit exceeded; narrow the input.")
             # Conservative preflight; incompatible coverage arcs are additionally pruned.
             arcs = nodes * (nodes - 1) + 2 * nodes + nodes + 1 if nodes else 0
@@ -108,16 +125,16 @@ def checked_consecutive_inputs(prepared, config, policy, calendar, options, alte
             weighted += bound * (options.lecturer_penalty_weight if kind == "LECTURER" else options.student_group_penalty_weight)
             if max(bound, weighted) > options.max_integer_bound:
                 raise ValueError("Consecutive integer expression bound exceeded; narrow inputs or explicit weights.")
-        if total_arcs > options.max_successor_arcs:
+        if circuit and total_arcs > options.max_successor_arcs:
             raise ValueError("Consecutive successor-arc limit exceeded; no pairs were silently dropped.")
         return CheckedConsecutiveOptimization(policy, calendar, options,
             tuple((kind, identity, tuple(sorted(ids))) for (kind, identity), ids in sorted(participants.items())),
-            tuple(bounds), weighted, total_arcs)
+            tuple(bounds), weighted, total_arcs if circuit else 0)
     except ValueError as error:
         raise SolverInputError(str(error)) from None
 
 
-def consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config):
+def consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config, *, stage_plan=None):
     if fairness_context is not None:
         from .fairness_inputs import fairness_objective_plan
         prefix, bounds = fairness_objective_plan(prepared, fairness_context, preference_context, combination_config)
@@ -131,5 +148,6 @@ def consecutive_objective_plan(prepared, context, fairness_context, preference_c
             DeliveryObjective.DELIVERIES: ("DELIVERIES",), DeliveryObjective.CONTACT_MINUTES: ("CONTACT_MINUTES",),
             DeliveryObjective.FEASIBILITY: ()}[mode]
         bounds = {"DELIVERIES": len(prepared.sessions), "CONTACT_MINUTES": sum(row.duration_minutes for row in prepared.sessions)}
-    order = (*prefix, "CONSECUTIVE_PENALTY")
+    from .objective_stage_plan import project
+    order = project(stage_plan, (*prefix, "CONSECUTIVE_PENALTY"))  # Identity without a P3.1 stage plan.
     return order, {key: (context.penalty_bound if key == "CONSECUTIVE_PENALTY" else bounds[key]) for key in order}

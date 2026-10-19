@@ -63,7 +63,7 @@ class FairnessOptimizationReport:
         return result
 
 
-def fairness_report(prepared, result, context, assessment, modeled, stages, preference_context, combination_config):
+def fairness_report(prepared, result, context, assessment, modeled, stages, preference_context, combination_config, *, stage_plan=None):
     from schedence_teaching.fairness.metrics import teaching_target_metrics
     teaching = {}
     for row in result.schedule:
@@ -73,9 +73,10 @@ def fairness_report(prepared, result, context, assessment, modeled, stages, pref
     weights = dict(context.integer_weights)
     maximum = max(deviations.values())
     aggregate = sum((weights[key] * value / context.weight_scale for key, value in deviations.items()), Fraction())
-    order, bounds = fairness_objective_plan(prepared, context, preference_context, combination_config)
+    order, bounds = fairness_objective_plan(prepared, context, preference_context, combination_config, stage_plan=stage_plan)
     components = {"DELIVERIES": len(result.schedule), "CONTACT_MINUTES": sum(teaching.values()),
         "TOTAL_OVER_TARGET_MINUTES":sum(max(0,teaching.get(sid,0)-target) for sid,target in context.targets),
+        "MAXIMUM_OVER_TARGET_MINUTES":max(max(0,teaching.get(sid,0)-target) for sid,target in context.targets),
         "PREFERENCE_PENALTY": result.preference_report.score.total_weighted_penalty if result.preference_report else 0,
         "MAXIMUM_TARGET_DEVIATION": int(maximum * context.normalization_scale),
         "AGGREGATE_TARGET_DEVIATION": int(aggregate * context.normalization_scale * context.weight_scale)}

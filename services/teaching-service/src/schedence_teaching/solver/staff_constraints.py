@@ -39,25 +39,36 @@ def staff_start_domains(session, calendar, config, day_dates, *, allowed_days=No
     return domains
 
 
-def add_teaching_caps(model, config, inputs, assignments, guard_model):
+def delivery_day_flag(model, cache, identity, index, day_variable, day_name):
+    """One reified "delivery is on this configured day" flag, shared by every consumer."""
+    key = (identity, index)
+    if key not in cache:
+        flag = model.new_bool_var(f"delivery_day:{identity}:{day_name}")
+        model.add(day_variable == index).only_enforce_if(flag)
+        model.add(day_variable != index).only_enforce_if(flag.Not())
+        cache[key] = flag
+    return cache[key]
+
+
+def add_teaching_caps(model, config, inputs, assignments, guard_model, *, day_usage=None, day_flags=None):
+    """day_usage, when supplied, receives (staff, day index) -> (teaching minutes, active-day flag).
+
+    day_flags, when supplied, is the shared (delivery, day index) -> "delivery on this day" cache.
+    """
     from .teaching_policy import teaching_day_limit
-    on_day = {}
+    on_day = day_flags if day_flags is not None else {}
     for calendar in inputs.availability:
         rows = assignments.get(calendar.staff_id, [])
         if calendar.weekly_teaching_max_minutes is not None:
             model.add(sum(minutes * chosen for _, chosen, _, minutes in rows) <= calendar.weekly_teaching_max_minutes)
         day_limit=teaching_day_limit(inputs,calendar.staff_id)
         used_days=[]
-        if calendar.daily_teaching_max_minutes is not None or day_limit is not None:
+        if calendar.daily_teaching_max_minutes is not None or day_limit is not None or day_usage is not None:
             for index, day in enumerate(config.days):
                 terms = []; chosen_on_day=[]
                 for identity, chosen, day_var, minutes in rows:
                     key = (identity, index)
-                    if key not in on_day:
-                        flag = model.new_bool_var(f"delivery_day:{identity}:{day.day}")
-                        model.add(day_var == index).only_enforce_if(flag)
-                        model.add(day_var != index).only_enforce_if(flag.Not())
-                        on_day[key] = flag
+                    delivery_day_flag(model, on_day, identity, index, day_var, day.day)
                     teaching = model.new_bool_var(f"staff_day:{identity}:{calendar.staff_id}:{day.day}")
                     model.add(teaching <= chosen)
                     model.add(teaching <= on_day[key])
@@ -66,11 +77,12 @@ def add_teaching_caps(model, config, inputs, assignments, guard_model):
                     chosen_on_day.append(teaching)
                 if calendar.daily_teaching_max_minutes is not None:
                     model.add(sum(terms) <= calendar.daily_teaching_max_minutes)
-                if day_limit is not None:
+                if day_limit is not None or day_usage is not None:
                     used=model.new_bool_var(f'staff_teaches_date:{calendar.staff_id}:{day.day}')
                     if chosen_on_day:model.add_max_equality(used,chosen_on_day)
                     else:model.add(used==0)
                     used_days.append(used)
+                    if day_usage is not None:day_usage[(calendar.staff_id,index)]=(sum(terms),used)
                 guard_model()
         if day_limit is not None:model.add(sum(used_days)<=day_limit)
         guard_model()

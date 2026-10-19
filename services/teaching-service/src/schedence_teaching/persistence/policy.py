@@ -33,6 +33,46 @@ def verify_snapshot_policy(document):
     return policy
 
 
+SCOPE_DEPENDENT_RULES = ("attendance_memberships", "attendance_required_group_ids")
+POLICY_CONTEXTS = ("fairness_policy", "fairness_config", "preference_policy", "preference_config", "consecutive_policy",
+                   "consecutive_config", "student_lunch_policy", "student_lunch_config", "work_period_config")
+
+
+def rebind_scoped_snapshot(document, parent):
+    """Seal a scoped generation snapshot with its parent's own approved revision (P3.2).
+
+    The scope is a subset of the parent's approved inputs. Every institution rule, policy
+    context and assignment policy must be identical; only scope-dependent attendance
+    differs. Parents with staff overrides need a separately approved scoped revision.
+    """
+    from schedence_teaching.policy import PolicyApproval
+    policy = verify_snapshot_policy(parent)
+    if policy is None:
+        raise ValueError('Only a sealed parent snapshot can seal a scoped generation snapshot.')
+    if json.loads(policy.staff_overrides_json):
+        raise ValueError('Scoped generation from a snapshot with staff policy overrides requires a separately approved scoped revision.')
+    revision = PolicyRevision(institution_id=policy.institution_id, policy_reference=policy.policy_reference,
+        revision=policy.revision, effective_from=policy.effective_from, effective_until=policy.effective_until,
+        approval=PolicyApproval.model_validate(json.loads(policy.approval_json)))
+    bound = resolve_snapshot_policy(document, revision)
+    scoped = bound.solver_config.resolved_policy
+    before, after = json.loads(policy.effective_json), json.loads(scoped.effective_json)
+    def rules(effective, drop_preference=False):
+        values = {key: value for key, value in effective['solver_rules'].items() if key not in SCOPE_DEPENDENT_RULES}
+        plan = values.get('objective_stage_plan')
+        if drop_preference and plan:  # The only permitted plan difference: the dropped preference stage.
+            values['objective_stage_plan'] = dict(plan, order=[key for key in plan['order'] if key != 'PREFERENCE_PENALTY'])
+        return values
+    staff = lambda effective: (effective.get('staff_input') or {}).get('assignment_policy')
+    # Existing scope selection drops preference contexts together when none applies in the scope; never alters them.
+    dropped = all(after.get(name) is None for name in ('preference_input', 'preference_policy', 'preference_config'))
+    checked = [name for name in POLICY_CONTEXTS if not (dropped and name.startswith('preference_'))]
+    if (scoped.rank_appointment_rules_json != policy.rank_appointment_rules_json or rules(before, dropped) != rules(after)
+            or staff(before) != staff(after) or any(before.get(name) != after.get(name) for name in checked)):
+        raise ValueError('Scoped generation would change sealed institution rules or policy contexts.')
+    return bound
+
+
 def version_policy_metadata(document):
     policy = verify_snapshot_policy(document)
     return (dict(resolved_policy_digest=policy.digest, institution_policy_revision=policy.revision,
@@ -122,6 +162,18 @@ def resolve_snapshot_policy(document, revision, *, staff_overrides=()):
     for day in (detached.solver_config.delivery_calendar.days if detached.solver_config.delivery_calendar else ()):
         if day.mode_policy_reference not in (None, revision.policy_reference):
             raise ValueError('Online mode policy reference must identify the approved revision policy.')
+    online_days = detached.solver_config.batch_online_days
+    if online_days is not None and online_days.policy_reference != revision.policy_reference:
+        raise ValueError('Batch online-day policy reference must identify the approved revision policy.')
+    compactness = detached.solver_config.teaching_day_compactness
+    if compactness is not None and compactness.policy_reference != revision.policy_reference:
+        raise ValueError('Teaching-day compactness policy reference must identify the approved revision policy.')
+    daily = detached.solver_config.daily_load_distribution
+    if daily is not None and daily.policy_reference != revision.policy_reference:
+        raise ValueError('Daily-load distribution policy reference must identify the approved revision policy.')
+    stage_plan = detached.solver_config.objective_stage_plan
+    if stage_plan is not None and stage_plan.plan_reference != revision.policy_reference:
+        raise ValueError('Objective stage plan reference must identify the approved revision policy.')
     policy = resolve_policy(revision, defaults=original_defaults, rank_appointment_rules=rank_rules,
         staff_overrides=overrides, effective=effective_inputs(detached))
     config = detached.solver_config.model_dump(round_trip=True)

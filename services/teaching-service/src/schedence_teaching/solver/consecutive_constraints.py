@@ -35,7 +35,8 @@ def _and(model, flags, name):
     return result
 
 
-def add_consecutive_variables(model, prepared, config, context, alternatives, decisions, guard_model):
+def add_consecutive_variables(model, prepared, config, context, alternatives, decisions, guard_model, *, start_variables=None,
+                              staff_start_ticks=None):
     """One chronological circuit per attendee, no all-triples adjacency encoding.
 
     Dummy node closes the path. Inactive alternatives self-loop. Real arcs are
@@ -58,6 +59,16 @@ def add_consecutive_variables(model, prepared, config, context, alternatives, de
         time_data[identity] = (day, start, choices, presence, applicable)
         guard_model()
     states, weighted_terms = [], []
+    from .consecutive_inputs import ConsecutiveFormulation
+    grid = context.config.formulation is ConsecutiveFormulation.TIME_INDEXED
+    if grid:
+        from .consecutive_time_indexed import start_literals, time_indexed_entity
+        from .results import SolverInputError
+        if start_variables is None:
+            raise SolverInputError("Time-indexed consecutive scoring requires the original start variables.")
+        if len(set(context.calendar.day_dates[day.day] for day in config.days)) != len(config.days):
+            raise SolverInputError("Time-indexed consecutive scoring requires one configured day per calendar date.")
+        ticks_per_day, start_cache = (1440 + config.granularity_minutes - 1) // config.granularity_minutes, {}
     bounds = {(kind, identity): bound for kind, identity, bound in context.entity_bounds}
     for kind, entity_id, possible_ids in context.participants:
         scoring = context.policy.score_lecturers if kind == "LECTURER" else context.policy.score_student_groups
@@ -76,6 +87,17 @@ def add_consecutive_variables(model, prepared, config, context, alternatives, de
             if scoring and context.policy.idle_gap_minute_penalty is not None:
                 zero_components["IDLE_GAP_MINUTES"] = 0
             states.append((kind, entity_id, {}, (), {}, {}, 0, zero_components, 0, 0))
+            continue
+        if grid:
+            # A lecturer selected for a delivery is already restricted to that pair's enforced start domain;
+            # start ticks outside it can never be chosen, so no literal is created for them (exact domain tightening).
+            allowed = ({identity: staff_start_ticks.get((identity, entity_id), ()) for identity in nodes}
+                       if kind == "LECTURER" and staff_start_ticks is not None else None)
+            state = time_indexed_entity(model, config, context, kind, entity_id, nodes, source,
+                {identity: start_literals(model, identity, start_variables[identity], ticks_per_day, start_cache)
+                 for identity in nodes}, applicability, bounds[kind, entity_id], guard_model, allowed_starts=allowed)
+            weighted_terms.append(state.weighted)
+            states.append(state)
             continue
         tag = f"consecutive:{kind}:{entity_id}"
         runs = {identity: model.new_int_var(0, 1440, f"{tag}:run:{identity}") for identity in nodes}
@@ -169,6 +191,15 @@ def add_consecutive_variables(model, prepared, config, context, alternatives, de
             value = model.new_int_var(0, bounds[kind, entity_id], f"{tag}:penalty:{criterion}")
             model.add(value == sum(terms))
             components[criterion] = value
+        if "EXCESS_CONTINUOUS_MINUTES" in components:
+            # Redundant and valid: a run's excess is at least the sum of its own deliveries' excesses.
+            limit = context.policy.maximum_preferred_continuous_minutes
+            everywhere = all(policy_applies(context.policy, context.calendar.day_dates[day.day]) for day in config.days)
+            floor = [(source[identity].duration_minutes - limit) * (selected if everywhere else
+                     _and(model, [selected, applicable], f"{tag}:excess_floor:{identity}"))
+                     for identity, (selected, _, _, applicable) in nodes.items() if source[identity].duration_minutes > limit]
+            if floor:
+                model.add(components["EXCESS_CONTINUOUS_MINUTES"] >= context.policy.excess_continuous_minute_penalty * sum(floor))
         raw = model.new_int_var(0, bounds[kind, entity_id], f"{tag}:raw_penalty")
         model.add(raw == sum(components.values()))
         weight = context.config.lecturer_penalty_weight if kind == "LECTURER" else context.config.student_group_penalty_weight
@@ -183,8 +214,13 @@ def add_consecutive_variables(model, prepared, config, context, alternatives, de
 
 
 def decode_consecutive_entities(solver, states):
+    from .consecutive_time_indexed import TimeIndexedState, decode_time_indexed
     output = []
-    for kind, identity, nodes, links, runs, terminals, maximum, components, raw, weighted in states:
+    for state in states:
+        if isinstance(state, TimeIndexedState):
+            output.append(decode_time_indexed(solver, state))
+            continue
+        kind, identity, nodes, links, runs, terminals, maximum, components, raw, weighted = state
         selected = tuple(sorted(key for key, row in nodes.items() if solver.value(row[0])))
         successors = []
         for first, second, chosen, comparable, applicable, gap, touch in links:

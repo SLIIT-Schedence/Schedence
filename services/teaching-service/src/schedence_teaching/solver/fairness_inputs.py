@@ -16,6 +16,13 @@ class FairnessPriority(StrEnum):
     EXISTING_OBJECTIVES_THEN_FAIRNESS = "EXISTING_OBJECTIVES_THEN_FAIRNESS"
     DELIVERY_COST_THEN_FAIRNESS_THEN_PREFERENCES = "DELIVERY_COST_THEN_FAIRNESS_THEN_PREFERENCES"
     DELIVERY_COST_THEN_OVERAGE_FAIRNESS_PREFERENCES = "DELIVERY_COST_THEN_OVERAGE_FAIRNESS_PREFERENCES"
+    # Severe individual overload first, then total overload, then target fairness.
+    DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES = (
+        "DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES")
+
+
+OVERAGE_PRIORITIES = frozenset({FairnessPriority.DELIVERY_COST_THEN_OVERAGE_FAIRNESS_PREFERENCES,
+    FairnessPriority.DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES})
 
 
 class FairnessCohortRule(StrEnum):
@@ -197,7 +204,7 @@ def checked_fairness_inputs(prepared, config, policy, calendar, options, *, staf
         raise SolverInputError(str(error)) from None
 
 
-def fairness_objective_plan(prepared, context, preference_context, combination_config):
+def fairness_objective_plan(prepared, context, preference_context, combination_config, *, stage_plan=None):
     from .deliveries import DeliveryObjective
     from .preference_inputs import objective_plan
     if preference_context is not None:
@@ -210,11 +217,15 @@ def fairness_objective_plan(prepared, context, preference_context, combination_c
         bounds = {"DELIVERIES": len(prepared.sessions), "CONTACT_MINUTES": sum(row.duration_minutes for row in prepared.sessions)}
     bounds = {**bounds, "MAXIMUM_TARGET_DEVIATION": context.maximum_bound,
               "AGGREGATE_TARGET_DEVIATION": context.aggregate_bound}
-    if context.config.priority is FairnessPriority.DELIVERY_COST_THEN_OVERAGE_FAIRNESS_PREFERENCES:
+    if context.config.priority in OVERAGE_PRIORITIES:
         overage_bound=sum(max(0,upper-dict(context.targets)[sid]) for sid,upper in context.workload_bounds)
         if overage_bound>context.config.max_integer_bound:raise SolverInputError('Teaching overage objective exceeds the configured integer limit.')
         bounds['TOTAL_OVER_TARGET_MINUTES']=overage_bound
-        order=(*[key for key in prefix if key!='PREFERENCE_PENALTY'], 'TOTAL_OVER_TARGET_MINUTES',
+        overage=('TOTAL_OVER_TARGET_MINUTES',)
+        if context.config.priority is FairnessPriority.DELIVERY_COST_THEN_PEAK_OVERAGE_TOTAL_OVERAGE_FAIRNESS_PREFERENCES:
+            bounds['MAXIMUM_OVER_TARGET_MINUTES']=max(max(0,upper-dict(context.targets)[sid]) for sid,upper in context.workload_bounds)
+            overage=('MAXIMUM_OVER_TARGET_MINUTES','TOTAL_OVER_TARGET_MINUTES')
+        order=(*[key for key in prefix if key!='PREFERENCE_PENALTY'], *overage,
             'MAXIMUM_TARGET_DEVIATION','AGGREGATE_TARGET_DEVIATION',
             *[key for key in prefix if key=='PREFERENCE_PENALTY'])
     elif context.config.priority is FairnessPriority.DELIVERY_COST_THEN_FAIRNESS_THEN_PREFERENCES:
@@ -223,4 +234,6 @@ def fairness_objective_plan(prepared, context, preference_context, combination_c
             *[key for key in prefix if key=='PREFERENCE_PENALTY'])
     else:
         order = (*prefix, "MAXIMUM_TARGET_DEVIATION", "AGGREGATE_TARGET_DEVIATION")
+    from .objective_stage_plan import project
+    order = project(stage_plan, order)  # Identity without a P3.1 stage plan.
     return order, {key: bounds[key] for key in order}

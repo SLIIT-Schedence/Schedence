@@ -164,6 +164,11 @@ class SolverResult:
     consecutive_report: ConsecutiveOptimizationReport | None = None
     student_lunch_enabled: bool = False
     student_lunch_report: StudentLunchEnforcementReport | None = None
+    # (academic_year, semester, stream, selected day) when batch online-day policy is enabled.
+    batch_online_days: tuple[tuple[int, int, str, str], ...] | None = None
+    teaching_day_compactness_report: object | None = None
+    daily_load_report: object | None = None
+    objective_stage_report: object | None = None
 
     @property
     def assigned_session_count(self) -> int:
@@ -201,6 +206,13 @@ class SolverResult:
             **({"student_lunch_enabled": self.student_lunch_enabled,
                 "student_lunch": self.student_lunch_report.to_dict(include_details=True) if self.student_lunch_report is not None else None}
                if self.student_lunch_enabled or self.student_lunch_report is not None else {}),
+            **({"batch_online_days": [dict(academic_year=year, semester=semester, stream=stream, online_day=day)
+                                      for year, semester, stream, day in self.batch_online_days]}
+               if self.batch_online_days is not None else {}),
+            **({"teaching_day_compactness": self.teaching_day_compactness_report.to_dict()}
+               if self.teaching_day_compactness_report is not None else {}),
+            **({"daily_load_distribution": self.daily_load_report.to_dict()} if self.daily_load_report is not None else {}),
+            **({"objective_stage_plan": self.objective_stage_report.to_dict()} if self.objective_stage_report is not None else {}),
             "limitations": [*(row.replace("Student lunch constraints are not implemented.",
                 "Fixed student lunch constraints are enabled under explicitly confirmed date/stream applicability.")
                 if self.student_lunch_enabled else row for row in LIMITATIONS), (

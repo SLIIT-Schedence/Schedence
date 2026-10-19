@@ -143,11 +143,13 @@ def teaching_distributions(result, context, assessment):
     return tuple(output)
 
 
-def consecutive_report(prepared, result, context, assessment, modeled, stages, fairness_context, preference_context, combination_config):
+def consecutive_report(prepared, result, context, assessment, modeled, stages, fairness_context, preference_context, combination_config,
+                       *, stage_plan=None):
     assessment = optimized_assessment(assessment, context.config.enforce_confirmed_hard_break)
     expected = expected_consecutive_entities(result, context, assessment)
     total = sum(row.weighted_penalty for row in expected)
-    order, bounds = consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config)
+    order, bounds = consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config,
+                                               stage_plan=stage_plan)
     components = {"DELIVERIES": len(result.schedule), "CONTACT_MINUTES": assessment.scheduled_teaching_minutes,
         "PREFERENCE_PENALTY": result.preference_report.score.total_weighted_penalty if result.preference_report else 0,
         "CONSECUTIVE_PENALTY": total}
