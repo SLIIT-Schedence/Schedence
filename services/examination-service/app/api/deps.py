@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.context import AuthContext
 from app.auth.dependencies import get_auth
 from app.database import get_session, get_write_session
+from app.exam_periods import DatabaseExamPeriodStore, ExamPeriodService
+from app.module_details import DatabaseModuleDetailsStore, ModuleDetailsService
 from app.generation.service import TimetableGenerator
 from app.saved_timetables import DatabaseTimetableStore, TimetableStore
 from app.scheduling.inputs import load_database_snapshot
@@ -70,6 +72,22 @@ def get_seating_writer(session: Annotated[AsyncSession, Depends(get_write_sessio
 
 SeatingReaderDep = Annotated[SeatingService, Depends(get_seating_reader)]
 SeatingWriterDep = Annotated[SeatingService, Depends(get_seating_writer)]
+
+
+def get_exam_period_writer(session: Annotated[AsyncSession, Depends(get_write_session)]) -> ExamPeriodService:
+    """Period changes on a writable session (read-only for dry runs); the service commits explicitly."""
+    return ExamPeriodService(DatabaseExamPeriodStore(session))
+
+
+ExamPeriodWriterDep = Annotated[ExamPeriodService, Depends(get_exam_period_writer)]
+
+
+def get_module_details_writer(session: Annotated[AsyncSession, Depends(get_write_session)]) -> ModuleDetailsService:
+    """Module detail changes on a writable session (read-only for dry runs); the service commits explicitly."""
+    return ModuleDetailsService(DatabaseModuleDetailsStore(session))
+
+
+ModuleDetailsWriterDep = Annotated[ModuleDetailsService, Depends(get_module_details_writer)]
 
 
 def get_scheduling_settings_store(

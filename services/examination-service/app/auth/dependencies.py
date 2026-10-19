@@ -9,7 +9,8 @@ Layering (same as the Identity and Academic Data services):
    of the permissions **in this service's institution**.
 
 Reading examination data requires ``examinations:read``; changing seating and
-scheduling settings requires ``examinations:manage``; generating a timetable
+scheduling settings, creating or updating exam periods and updating module
+exam details requires ``examinations:manage``; generating a timetable
 and saving it as a draft requires ``examinations:generate``. Saved timetables are
 listed and viewed with ``examinations:read``; their seat allocations (student
 IDs) need ``examinations:generate`` or ``examinations:approve``. Approving and

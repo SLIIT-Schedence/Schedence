@@ -277,6 +277,9 @@ def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
         ("PUT", f"{API}/settings/exam-seating/venues/F303"),
         ("DELETE", f"{API}/settings/exam-seating/venues/F303"),
         ("PUT", f"{API}/settings/scheduling"),  # access tests: test_scheduling_settings.py
+        ("POST", f"{API}/exam-periods"),  # access tests: test_exam_period_management.py
+        ("PUT", f"{API}/exam-periods/PP1-2026-S2-FINAL"),
+        ("PUT", f"{API}/modules/IT3041/exam-details"),  # access tests: test_module_details_management.py
         ("POST", f"{API}/timetables/generate"),  # access tests: test_timetable_generation.py
         ("POST", f"{API}/timetables/drafts"),  # access tests: test_saved_timetables.py
         ("POST", f"{API}/timetables/1/approve"),  # access tests: test_timetable_workflow.py

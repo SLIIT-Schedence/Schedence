@@ -8,10 +8,10 @@ for psycopg async; see the service README)::
 Security: ``/health`` and ``/health/db`` are public; every ``/api/v1`` route
 requires a Cognito access token. GET routes require ``examinations:read``
 (saved timetable seats: ``examinations:generate`` or ``examinations:approve``);
-seating and scheduling-settings PUT/DELETE routes require
-``examinations:manage``, and ``POST /api/v1/timetables/generate`` and
-``/drafts`` require ``examinations:generate``, in this service's institution
-(see ``app.auth``).
+seating and scheduling-settings PUT/DELETE routes, exam period POST/PUT
+routes and the module exam-details PUT require ``examinations:manage``, and
+``POST /api/v1/timetables/generate`` and ``/drafts`` require
+``examinations:generate``, in this service's institution (see ``app.auth``).
 """
 
 from __future__ import annotations
@@ -71,9 +71,11 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
 
     # Authenticate every data request; each route also has a permission check.
     api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(get_current_user)])
-    for module in (modules, students, venues, exam_periods):
+    for module in (students, venues):
         api.include_router(module.router, dependencies=[Depends(require_exam_data_access)])
-    # Settings mixes read and write operations, so it checks each operation.
+    # These mix read and write operations, so they check each operation.
+    api.include_router(modules.router)
+    api.include_router(exam_periods.router)
     api.include_router(settings.router)
     api.include_router(scheduling_settings.router)
     api.include_router(timetables.router)  # checks examinations:generate / :read per route

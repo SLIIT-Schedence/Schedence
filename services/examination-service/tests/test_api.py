@@ -236,6 +236,8 @@ def test_database_error_is_safe_503() -> None:
 def test_api_is_read_only(client: TestClient) -> None:
     for path in ("/modules", "/students", "/registrations", "/venues", "/venue-blocks", "/exam-periods"):
         for method in ("post", "put", "patch", "delete"):
+            if (path, method) == ("/exam-periods", "post"):
+                continue  # exam period management (examinations:manage): test_exam_period_management.py
             assert getattr(client, method)(f"{API}{path}").status_code == 405
 
 
@@ -246,6 +248,7 @@ def test_openapi_lists_every_endpoint(client: TestClient) -> None:
         "/health/db",
         f"{API}/modules",
         f"{API}/modules/{{module_code}}",
+        f"{API}/modules/{{module_code}}/exam-details",
         f"{API}/students",
         f"{API}/students/{{student_id}}",
         f"{API}/registrations",
@@ -258,7 +261,15 @@ def test_openapi_lists_every_endpoint(client: TestClient) -> None:
         f"{API}/settings/exam-seating/default",
         f"{API}/settings/exam-seating/venues/{{venue_id}}",
         f"{API}/settings/scheduling",
+        f"{API}/timetables",
+        f"{API}/timetables/drafts",
         f"{API}/timetables/generate",
+        f"{API}/timetables/{{timetable_id}}",
+        f"{API}/timetables/{{timetable_id}}/approve",
+        f"{API}/timetables/{{timetable_id}}/history",
+        f"{API}/timetables/{{timetable_id}}/publish",
+        f"{API}/timetables/{{timetable_id}}/regenerate",
+        f"{API}/timetables/{{timetable_id}}/seats",
     }
 
 

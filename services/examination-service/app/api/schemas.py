@@ -9,9 +9,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.deps import MODULE_CODE, PERIOD_CODE
+from app.exam_periods.rules import MAX_EXCLUSIONS, NEW_PERIOD_CODE, build_period
+from app.module_details.rules import ExamDetails
 from app.generation.service import MAX_API_TIME_LIMIT_SECONDS, MAX_MODULES
 from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
+from app.sources.types import ExamPeriod
 
 T = TypeVar("T")
 
@@ -39,6 +42,8 @@ class ModuleOut(_Out):
     block_category: Literal["pro_rata", "full_module"] | None = Field(
         description="Only for block modules (label from the data; not an official classification)")
     candidate_count: int
+    fingerprint: str | None = Field(
+        None, description="Version of the examination details; send it as expected_fingerprint with PUT exam-details")
 
 
 class StudentOut(_Out):
@@ -108,6 +113,8 @@ class ExamPeriodOut(_Out):
     include_sundays: bool
     exclusions: list[ExamPeriodExclusionOut]
     exam_days: list[dt.date]
+    fingerprint: str | None = Field(
+        None, description="Version of this definition; send it as expected_fingerprint with PUT")
 
 
 class ExamPeriodModuleOut(_Out):
@@ -270,6 +277,89 @@ class SchedulingSettingsChangeOut(_Out):
     changed_by: UUID | None
     fingerprint: str
     settings: dict[str, Any]
+
+
+# --- Examination period management ------------------------------------------------
+
+PeriodText = Annotated[str, Field(min_length=3, max_length=120, pattern=REASON_PATTERN)]
+# Dates and times arrive as JSON strings ("2027-03-01", "08:30"), so they are parsed, not strict.
+PeriodDate = Annotated[dt.date, Field(strict=False)]
+PeriodTime = Annotated[dt.time, Field(strict=False, description="Local time HH:MM (whole minutes, no time zone)")]
+
+
+class ExamPeriodExclusionIn(_In):
+    excluded_date: PeriodDate
+    reason: PeriodText
+
+
+class _ExamPeriodFieldsIn(_In):
+    period_name: PeriodText
+    academic_year_label: str = Field(min_length=9, max_length=9, description="Two consecutive years, e.g. 2026/2027")
+    semester: Literal[1, 2]
+    exam_kind: ExamKind
+    start_date: PeriodDate
+    end_date: PeriodDate
+    day_start_time: PeriodTime
+    day_end_time: PeriodTime
+    include_saturdays: bool
+    include_sundays: bool
+    exclusions: list[ExamPeriodExclusionIn] = Field(
+        max_length=MAX_EXCLUSIONS, description="Every non-exam date inside the period (replaces the stored list)")
+
+    def to_period(self, period_code: str) -> ExamPeriod:
+        fields = self.model_dump(exclude={"exclusions", "period_code", "expected_fingerprint"})
+        return build_period(period_code=period_code, **fields,
+                            exclusions=[(e.excluded_date, e.reason) for e in self.exclusions])
+
+
+class CreateExamPeriodIn(_ExamPeriodFieldsIn):
+    period_code: str = Field(max_length=32, pattern=NEW_PERIOD_CODE, description="e.g. PP1-2027-S1-MID")
+
+
+class UpdateExamPeriodIn(_ExamPeriodFieldsIn):
+    expected_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$",
+                                      description="The period's fingerprint you last read (409 if it changed)")
+
+
+class ExamPeriodChangeOut(_Out):
+    dry_run: bool
+    action: Literal["create", "update"]
+    changed: bool = Field(description="False when the period already had these values (nothing saved)")
+    changed_fields: list[str]
+    period: ExamPeriodOut
+    draft_timetables: int = Field(description="Saved DRAFT timetables of this period (stale after a change)")
+    notices: list[str]
+
+
+# --- Module examination details --------------------------------------------------
+
+
+class UpdateModuleExamDetailsIn(_In):
+    """The complete examination details of a module (every field required; ranges are checked by the service)."""
+
+    exam_type: Literal["written", "computer_based", "hybrid"]
+    duration_minutes: int = Field(description="FINAL examination writing time (15-480)")
+    reading_time_minutes: int = Field(description="Added to every sitting, MID and FINAL (0-60)")
+    difficulty: int = Field(description="1-5")
+    has_final_exam: bool
+    has_mid_exam: bool
+    mid_duration_minutes: int | None = Field(description="Required with a MID exam (15-480); null without one")
+    delivery_mode: Literal["regular", "block"]
+    block_category: Literal["pro_rata", "full_module"] | None = Field(description="Required for block modules only")
+    expected_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$",
+                                      description="The module's fingerprint you last read (409 if it changed)")
+
+    def to_details(self) -> ExamDetails:
+        return ExamDetails(**self.model_dump(exclude={"expected_fingerprint"}))
+
+
+class ModuleExamDetailsChangeOut(_Out):
+    dry_run: bool
+    changed: bool = Field(description="False when the module already had these values (nothing saved)")
+    changed_fields: list[str]
+    module: ModuleOut
+    draft_timetables: int = Field(description="Saved DRAFT timetables that use this module (stale after a change)")
+    notices: list[str]
 
 
 # --- Timetable generation (not saved) -------------------------------------------------
