@@ -99,7 +99,9 @@ def validate_consecutive_result(prepared, config, result, *, consecutive_policy,
     context = checked_consecutive_inputs(prepared, config, consecutive_policy, consecutive_calendar, consecutive_config,
         alternatives, staff_input=staff_input, work_periods=work_periods,
         preference_calendar=preference_calendar, fairness_calendar=fairness_calendar)
-    order, _ = consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config)
+    stage_plan = config.objective_stage_plan
+    order, _ = consecutive_objective_plan(prepared, context, fairness_context, preference_context, combination_config,
+                                          stage_plan=stage_plan)
     if not isinstance(result, SolverResult) or type(result.status) is not SolverStatus or result.consecutive_optimization_enabled is not True:
         _issue("consecutive_mode_changed", "Consecutive validation requires a typed explicitly enabled solver result.")
     if (type(result.runtime_seconds) not in {int, float} or not isfinite(result.runtime_seconds) or result.runtime_seconds < 0
@@ -148,7 +150,8 @@ def validate_consecutive_result(prepared, config, result, *, consecutive_policy,
     if (type(stages) is not tuple or not stages or len(stages) > len(order)
             or any(type(row) is not OptimizationStage or row.criterion != order[index] for index, row in enumerate(stages))):
         _issue("consecutive_stage_history_changed", "Stages must follow the exact configured objective order.")
-    canonical = consecutive_report(prepared, result, context, assessment, expected, stages, fairness_context, preference_context, combination_config)
+    canonical = consecutive_report(prepared, result, context, assessment, expected, stages, fairness_context, preference_context,
+                                   combination_config, stage_plan=stage_plan)
     components = dict(canonical.objective_components)
     for index, stage in enumerate(stages):
         if stage.status == "OPTIMAL":
@@ -158,7 +161,9 @@ def validate_consecutive_result(prepared, config, result, *, consecutive_policy,
                 or stage.status == "FEASIBLE" and (type(stage.objective_value) is not int or stage.objective_value != components[stage.criterion])
                 or stage.status != "FEASIBLE" and (stage.objective_value is not None or index == 0)):
             _issue("consecutive_stage_history_changed", "Only a final feasible/timed-out stage may stop optimization.")
-    if (result.status is SolverStatus.OPTIMAL) != canonical.all_stages_proven_optimal:
+    # Under a P3.1 stage plan a later non-consecutive stage may leave the result FEASIBLE after these are proven.
+    if ((result.status is SolverStatus.OPTIMAL) != canonical.all_stages_proven_optimal
+            and not (stage_plan is not None and result.status is SolverStatus.FEASIBLE and canonical.all_stages_proven_optimal)):
         _issue("consecutive_optimality_changed", "Overall lexicographic optimality requires every configured stage to be proven optimal.")
     if fairness_context is not None:
         prefix_history = tuple(row for row in stages if row.criterion != "CONSECUTIVE_PENALTY")

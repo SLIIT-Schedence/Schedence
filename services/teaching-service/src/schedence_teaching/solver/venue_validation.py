@@ -48,8 +48,11 @@ def venue_schedule_issues(prepared, inputs, schedule, *, delivery_ids=None, deli
             issues.append(ScheduleIssue(code, message, (identity,)))
 
         venue_id = item.assigned_venue_id
-        if config is not None and config.delivery_calendar is not None and type(item.day) is str and any(
-                row.day == item.day and row.stream == session.stream and row.mode.value == "ONLINE" for row in config.delivery_calendar.days):
+        # Under batch online days the core validator proves each stored booking mode.
+        if (config is not None and config.batch_online_days is not None and getattr(item, "delivery_mode", None) is not None
+                and item.delivery_mode.value == "ONLINE") or (
+                config is not None and config.delivery_calendar is not None and type(item.day) is str and any(
+                row.day == item.day and row.stream == session.stream and row.mode.value == "ONLINE" for row in config.delivery_calendar.days)):
             if venue_id is not None:
                 issue("online_physical_venue", "Online bookings must not consume physical venues.")
             continue

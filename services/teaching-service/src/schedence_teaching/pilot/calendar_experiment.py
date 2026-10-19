@@ -109,6 +109,8 @@ def _select(snapshot, settings, semester, *, cohort_id=None):
 def placement_diagnostics(enrolled):
     """Individual possible starts, before simultaneous resource/attendance checks."""
     batch = enrolled.batch
+    if batch.config.batch_online_days is not None:
+        raise ValueError('Calendar placement diagnostics do not yet support batch-specific online days.')
     groups = {row.group_id:row for row in batch.plan.groups}
     policy = batch.solver_inputs["student_lunch_policy"]
     if policy.applicable_dates is None or policy.applicable_streams is None:

@@ -47,6 +47,14 @@ def _validate_timetable(prepared, config, schedule, *, venue_input=None,
     rosters = {row.group_id: set(row.student_ids) for row in config.attendance_memberships}
     counts = Counter()
     timed = []
+    online_context, online_selection = None, {}
+    if config.batch_online_days is not None:
+        from .online_day_inputs import batch_online_issues, booking_mode, checked_batch_online_days
+        online_context = checked_batch_online_days(prepared, config, staff_input.day_dates if staff_input is not None else None)
+        online_issues, online_selection = batch_online_issues(config, online_context, [item for item in schedule
+            if isinstance(item, ScheduledSession) and isinstance(item.session, UnscheduledSession)
+            and expected.get(item.session.occurrence_id) == item.session])
+        issues.extend(ScheduleIssue(code, message, ids) for code, message, ids in online_issues)
     for item in schedule:
         if (not isinstance(item, ScheduledSession) or not isinstance(item.session, UnscheduledSession)
                 or not isinstance(item.session.occurrence_id, str)):
@@ -73,11 +81,12 @@ def _validate_timetable(prepared, config, schedule, *, venue_input=None,
         if not isinstance(item.day, str) or item.day not in days:
             issues.append(ScheduleIssue("invalid_day", "Day is not configured.", (identity,)))
         elif session.stream in days[item.day].windows:
-            mode = mode_on_day(config, item.day, session.stream)
+            mode = (booking_mode(config, online_context, online_selection, session, item.day) if online_context is not None
+                    else mode_on_day(config, item.day, session.stream))
             if not permitted_day(config, session, item.day):
                 issues.append(ScheduleIssue("delivery_type_not_allowed", "Session type is not permitted on this stream's delivery day.", (identity,)))
             if config.delivery_calendar is not None and (type(item.delivery_mode) is not DeliveryMode or item.delivery_mode != mode):
-                issues.append(ScheduleIssue("incorrect_delivery_mode", "Booking mode must match the explicit stream/day delivery calendar.", (identity,)))
+                issues.append(ScheduleIssue("incorrect_delivery_mode", "Booking mode must match the explicit delivery calendar and batch online day.", (identity,)))
             if config.delivery_calendar is None and item.delivery_mode is not None:
                 issues.append(ScheduleIssue("unexpected_delivery_mode", "An explicit booking mode requires its original delivery calendar.", (identity,)))
             if mode == DeliveryMode.ONLINE and item.assigned_venue_id is not None:
@@ -152,6 +161,8 @@ def _validate_timetable(prepared, config, schedule, *, venue_input=None,
         summary = replace(summary, checks=summary.checks + ("explicit_student_membership_clashes",))
     if config.delivery_calendar is not None:
         summary = replace(summary, checks=summary.checks + ("online_physical_delivery_calendar", "online_no_physical_venue"))
+    if online_context is not None:
+        summary = replace(summary, checks=summary.checks + ("batch_online_day_selection",))
     if venue_input is not None:
         summary = replace(summary, checks=summary.checks + VENUE_CHECKS, venue_enabled=True)
     if staff_input is not None:

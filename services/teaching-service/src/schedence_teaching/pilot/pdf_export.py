@@ -99,6 +99,8 @@ def export_main_group_pdf(batch, result, destination, *, academic_year, semester
             f'{escape(staff[booking.assigned_staff_id])} ({escape(booking.assigned_staff_id)})',escape(venue)]
         return Paragraph('<br/>'.join(lines),style), kind
 
+    if batch.config.batch_online_days is not None:
+        raise ValueError('Main-group PDF day modes do not yet support batch-specific online days.')
     day_modes = {(d.stream.value,d.day):d.mode.value for d in batch.config.delivery_calendar.days}
     def days_for(stream):
         return sorted([dict(day=d.day,date=calendar.day_dates[d.day],windows=d.windows[next(s for s in d.windows if s.value==stream)],

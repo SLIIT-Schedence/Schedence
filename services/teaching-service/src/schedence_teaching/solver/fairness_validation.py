@@ -92,7 +92,8 @@ def validate_fairness_result(prepared, config, result, *, fairness_policy, fairn
             preference_policy, preference_config, staff_input=staff_input, work_periods=work_periods)
         if context.calendar != preference_context.calendar:
             _issue("fairness_week_changed", "Fairness and preference optimization calendars differ.")
-    order, _ = fairness_objective_plan(prepared, context, preference_context, combination_config)
+    stage_plan = getattr(config, "objective_stage_plan", None)
+    order, _ = fairness_objective_plan(prepared, context, preference_context, combination_config, stage_plan=stage_plan)
     if not isinstance(result, SolverResult) or type(result.status) is not SolverStatus or result.fairness_optimization_enabled is not True:
         _issue("fairness_mode_changed", "Fairness validation requires a typed, explicitly enabled result.")
     if (type(result.runtime_seconds) not in {int, float} or not isfinite(result.runtime_seconds) or result.runtime_seconds < 0
@@ -146,7 +147,8 @@ def validate_fairness_result(prepared, config, result, *, fairness_policy, fairn
     if (type(stages) is not tuple or not stages or len(stages) > len(order)
             or any(type(row) is not OptimizationStage or row.criterion != order[index] for index, row in enumerate(stages))):
         _issue("fairness_stage_history_changed", "Fairness stages must follow the original objective order.")
-    canonical = fairness_report(prepared, result, context, assessment, expected_modeled, stages, preference_context, combination_config)
+    canonical = fairness_report(prepared, result, context, assessment, expected_modeled, stages, preference_context, combination_config,
+                                stage_plan=stage_plan)
     components = dict(canonical.objective_components)
     for index, stage in enumerate(stages):
         if stage.status == "OPTIMAL":
@@ -156,7 +158,12 @@ def validate_fairness_result(prepared, config, result, *, fairness_policy, fairn
                 or (stage.status == "FEASIBLE" and (type(stage.objective_value) is not int or stage.objective_value != components[stage.criterion]))
                 or (stage.status != "FEASIBLE" and (stage.objective_value is not None or index == 0))):
             _issue("fairness_stage_history_changed", "Only a final feasible/timed-out stage may stop lexicographic progress.")
-    if (result.status is SolverStatus.OPTIMAL) != canonical.all_stages_proven_optimal:
+    # Opt-in P2.1/P2.2 stages may follow proven fairness stages; only they may then leave the result FEASIBLE.
+    # P2.1/P2.2 or P3.1 stages may follow proven fairness stages; only they may then leave the result FEASIBLE.
+    later_quality = (getattr(config, "teaching_day_compactness", None) is not None
+                     or getattr(config, "daily_load_distribution", None) is not None or stage_plan is not None)
+    if ((result.status is SolverStatus.OPTIMAL) != canonical.all_stages_proven_optimal
+            and not (later_quality and result.status is SolverStatus.FEASIBLE and canonical.all_stages_proven_optimal)):
         _issue("fairness_optimality_changed", "Overall lexicographic optimality requires all objective stages to be proven optimal.")
     try:
         matches = json.dumps(_json(report), sort_keys=True) == json.dumps(_json(canonical), sort_keys=True)
