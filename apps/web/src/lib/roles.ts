@@ -34,8 +34,8 @@ export const INSTITUTION_ROLES: RoleInfo[] = [
   { code: "STUDENT", name: "Student", description: "Uses the student portal.", icon: "backpack" },
 ];
 
-/** The roles an Institution Admin can invite people into from the console, for now. */
-export const INVITABLE_ROLE_CODES = ["EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER"] as const;
+/** The roles an Institution Admin can invite people into from the console. */
+export const INVITABLE_ROLE_CODES = ["ACADEMIC_ADMIN", "EXAMINATION_ADMIN", "VENUE_MANAGER", "LECTURER"] as const;
 
 export type InvitableRole = (typeof INVITABLE_ROLE_CODES)[number];
 

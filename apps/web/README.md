@@ -72,11 +72,11 @@ Users who hold `INSTITUTION_ADMIN` in an institution are sent from `/` to `/admi
 
 | Page | What it does |
 |---|---|
-| `/admin` | KPI tiles (people, active share, lecturers, open invitations), quick-invite tiles for Examination Admins, Venue Managers and Lecturers, a **People by role** bar chart, a **New accounts** chart (weekly, last 12 weeks, from `user.created` audit events, weeks start Monday in Colombo time), recent invitations and recent activity |
+| `/admin` | KPI tiles (people, active share, lecturers, open invitations), quick-invite tiles for Academic Admins, Examination Admins, Venue Managers and Lecturers, a **People by role** bar chart, a **New accounts** chart (weekly, last 12 weeks, from `user.created` audit events, weeks start Monday in Colombo time), recent invitations and recent activity |
 | `/admin/users` | Search by name or email, filter by role and status, 20 per page, and resend an invitation |
 | `/admin/invitations` | Onboarding records: *Needs attention* (pending or failed), *Sent*, *Cancelled*, *All*. Retry or cancel, with the Cognito failure reason in words |
 
-**Invite** (`POST /api/v1/identity/users`) offers only `EXAMINATION_ADMIN`, `VENUE_MANAGER` and `LECTURER` for now (`INVITABLE_ROLE_CODES` in `src/lib/roles.ts`). Cognito emails a temporary password that works for 7 days. If Cognito fails, identity-service keeps the record as `FAILED`, and the dialog tells the admin to retry it from Invitations.
+**Invite** (`POST /api/v1/identity/users`) offers `ACADEMIC_ADMIN`, `EXAMINATION_ADMIN`, `VENUE_MANAGER` and `LECTURER` (`INVITABLE_ROLE_CODES` in `src/lib/roles.ts`). Cognito emails a temporary password that works for 7 days. If Cognito fails, identity-service keeps the record as `FAILED`, and the dialog tells the admin to retry it from Invitations.
 
 Charts (`src/components/console/charts.tsx`) are single-series and drawn with plain HTML in the primary blue, which is 4.2:1 on the white cards. Every value is reachable without hovering: bars carry their values, columns label the latest and the peak, and each chart has a **View as table** twin. Hover and keyboard focus show the same tooltip.
 

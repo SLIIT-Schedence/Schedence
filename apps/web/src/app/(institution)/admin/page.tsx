@@ -147,14 +147,14 @@ async function Overview() {
         <h2 id="quick-invite" className="sr-only">
           Quick invite
         </h2>
-        <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
           {INVITABLE_ROLE_CODES.map((code) => {
             const role = roleInfo(code);
             const people = roleCount(code);
             return (
               <div
                 key={code}
-                className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-center sm:p-5 xl:flex-col xl:items-stretch"
+                className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-center sm:p-5 lg:flex-col lg:items-stretch 2xl:flex-row 2xl:items-center"
               >
                 <div className="flex min-w-0 flex-1 items-start gap-3">
                   <ToneIcon icon={role.icon} tone="primary" />
@@ -226,7 +226,7 @@ async function Overview() {
             <LoadError error={recentInvites.error} what="invitations" retryHref="/admin" />
           ) : recentInvites.data.items.length === 0 ? (
             <EmptyState icon="mail" title="No invitations yet" action={<InviteDialog institutions={institutions} variant="secondary" />}>
-              Invite your examination admins, venue managers and lecturers to get started.
+              Invite your academic admins, examination admins, venue managers and lecturers to get started.
             </EmptyState>
           ) : (
             <ul className="divide-y divide-line">
@@ -297,8 +297,8 @@ function OverviewSkeleton() {
           <Skeleton key={key} className="h-[8.5rem] rounded-2xl" />
         ))}
       </div>
-      <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
-        {[0, 1, 2].map((key) => (
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+        {[0, 1, 2, 3].map((key) => (
           <Skeleton key={key} className="h-28 rounded-2xl" />
         ))}
       </div>
