@@ -134,8 +134,11 @@ async def database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> str:
         _admin(f"CREATE DATABASE {TEMPLATE}")
         _query(_db_url(TEMPLATE), "CREATE SCHEMA examinations")
         _use_database(monkeypatch, tmp_path, TEMPLATE)
-        _alembic("upgrade", "0004")
+        # The seeder writes the current model columns and needs the 0009 cycle table, so
+        # seed at 0009, then go back to 0004 (the template's columns from 0005-0009 are dropped).
+        _alembic("upgrade", "0009")
         await _seed()
+        _alembic("downgrade", "0004", "drop_module_exam_settings=true")
         _template_ready = True
     name = f"exam_seating_{uuid.uuid4().hex[:10]}"
     _admin(f"CREATE DATABASE {name} TEMPLATE {TEMPLATE}")
@@ -148,6 +151,19 @@ async def database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> str:
 async def migrated(database: str) -> str:
     _alembic("upgrade", "0005")
     return database
+
+
+@pytest.fixture
+async def current(migrated: str) -> str:
+    """The seeded database at the current schema (head): what today's API, restore and generator need."""
+    _alembic("upgrade", "head")
+    return migrated
+
+
+def _drop_seating_tables(url: str) -> None:
+    """Current schema without the 0005 tables. Migration 0005 comes before 0007-0009, which today's code
+    needs, so this is the only way to test the 'seating tables missing' answers with current code."""
+    _query(url, "DROP TABLE examinations.exam_seating_rule_history, examinations.exam_seating_rules")
 
 
 @pytest.fixture
@@ -403,7 +419,8 @@ def test_http_api_on_postgres(migrated: str) -> None:
     assert _query(migrated, "SELECT count(*) FROM examinations.exam_seating_rule_history") == [(4,)]
 
 
-def test_http_api_without_migration_0005_is_503(database: str) -> None:
+def test_http_api_without_migration_0005_is_503(current: str) -> None:
+    _drop_seating_tables(current)
     with _api_client() as client:
         response = client.get("/api/v1/settings/exam-seating")
         assert response.status_code == 503 and "not configured" in response.json()["detail"]
@@ -427,7 +444,7 @@ def _alembic_at(url: str, direction: str, revision: str, *x: str) -> None:
 
 @pytest.fixture
 def new_database(database: str):
-    """Factory for more databases from the template (0004 + seed data), optionally upgraded to 0005."""
+    """Factory for more databases from the template (0004 + seed data), optionally upgraded (e.g. "head")."""
     names: list[str] = []
 
     def make(revision: str = "0004") -> str:
@@ -435,8 +452,8 @@ def new_database(database: str):
         _admin(f"CREATE DATABASE {name} TEMPLATE {TEMPLATE}")
         names.append(name)
         url = _db_url(name)
-        if revision == "0005":
-            _alembic_at(url, "upgrade", "0005")
+        if revision != "0004":
+            _alembic_at(url, "upgrade", revision)
         return url
 
     yield make
@@ -516,15 +533,13 @@ async def test_backup_at_0004_has_no_seating_tables(database: str, new_database,
     assert list(manifest["tables"]) == list(SEED_TABLES)
     assert verify_backup(tmp_path / "b") == []
 
-    # Into a 0004 database: the seed rows are already there, nothing is inserted.
-    result, seating = await _restore(new_database("0004"), tmp_path / "b")
+    # Into a current database (restore writes the current model): the seed rows are already
+    # there, nothing is inserted, and the seating rules are left exactly as they are.
+    target = new_database("head")
+    before = _seating_rows(target)
+    result, seating = await _restore(target, tmp_path / "b")
     assert seating.mode == "not_in_backup", seating
     assert all(inserted == 0 for _, inserted in result.values()), result
-
-    # Into a 0005 database: the seating rules are left exactly as they are.
-    target = new_database("0005")
-    before = _seating_rows(target)
-    _, seating = await _restore(target, tmp_path / "b")
     assert seating.mode == "not_in_backup" and _seating_rows(target) == before
 
 
@@ -542,6 +557,10 @@ async def test_backup_restores_seating_after_downgrade_and_upgrade(migrated: str
     _alembic("downgrade", "0004", "drop_seating_history=true")
     _alembic("upgrade", "0005")
     assert len(_seating_rows(migrated)["history"]) == 1
+    assert _seed_fingerprint(migrated) == seed  # the rollback kept every seed row
+    # Restore writes the current model: upgrade first. New columns change the row text, so compare from here.
+    _alembic("upgrade", "head")
+    seed = _seed_fingerprint(migrated)
 
     _, seating = await _restore(migrated, tmp_path / "b")
     assert seating.mode == "replaced_initial"
@@ -564,7 +583,8 @@ async def test_backup_restores_seating_after_downgrade_and_upgrade(migrated: str
         await _restore(migrated, tmp_path / "b")
 
 
-async def test_restore_is_idempotent_and_adds_only_missing_rows(migrated: str, tmp_path: Path) -> None:
+async def test_restore_is_idempotent_and_adds_only_missing_rows(current: str, tmp_path: Path) -> None:
+    migrated = current
     await _make_changes(migrated)
     source = _seating_rows(migrated)
     await _export(migrated, tmp_path / "b")
@@ -580,10 +600,11 @@ async def test_restore_is_idempotent_and_adds_only_missing_rows(migrated: str, t
     assert _seating_rows(migrated) == source
 
 
-async def test_restore_into_a_fresh_0005_database(migrated: str, new_database, tmp_path: Path) -> None:
+async def test_restore_into_a_fresh_0005_database(current: str, new_database, tmp_path: Path) -> None:
+    migrated = current
     await _make_changes(migrated)
     await _export(migrated, tmp_path / "b")
-    target = new_database("0005")
+    target = new_database("head")  # fresh: only the default rule created by 0005
 
     await _restore(target, tmp_path / "b", dry_run=True)
     assert len(_seating_rows(target)["history"]) == 1  # dry run: nothing kept
@@ -592,7 +613,8 @@ async def test_restore_into_a_fresh_0005_database(migrated: str, new_database, t
     assert seating.mode == "replaced_initial" and _seating_rows(target) == _seating_rows(migrated)
 
 
-async def test_restore_refuses_newer_changes_and_changes_nothing(migrated: str, tmp_path: Path) -> None:
+async def test_restore_refuses_newer_changes_and_changes_nothing(current: str, tmp_path: Path) -> None:
+    migrated = current
     await _make_changes(migrated)
     await _export(migrated, tmp_path / "b")
     await _change_default(migrated, 65, expected_version=2)
@@ -608,7 +630,8 @@ async def test_restore_refuses_newer_changes_and_changes_nothing(migrated: str, 
 async def test_0005_backup_into_0004_database_needs_skip_seating(migrated: str, new_database, tmp_path: Path) -> None:
     await _make_changes(migrated)
     await _export(migrated, tmp_path / "b")
-    target = new_database("0004")
+    target = new_database("head")
+    _drop_seating_tables(target)  # as a database without 0005, but with today's seed columns
     _query(target, "DELETE FROM examinations.seed_exam_period_exclusions")
 
     with pytest.raises(RestoreError, match="upgrade 0005"):
@@ -810,6 +833,7 @@ def test_0006_settings_survive_a_service_restart(migrated: str) -> None:
 # --- Timetable generation reads inputs and settings from PostgreSQL ------------------------------------------
 
 async def test_generation_uses_database_inputs_and_saved_settings(settings_engine) -> None:
+    _alembic("upgrade", "head")  # the generator reads the 0007-0009 columns and the cycle table
     import asyncio
     from types import SimpleNamespace
 

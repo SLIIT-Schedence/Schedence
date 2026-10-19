@@ -468,6 +468,107 @@ class GeneratedTimetableOut(_Out):
                     "not scheduled. Some may belong to another cycle. Empty for periods without a mapping")
 
 
+# --- Saved timetables (drafts) ------------------------------------------------------------------------------
+
+TimetableStatus = Literal["DRAFT", "APPROVED", "PUBLISHED", "ARCHIVED"]
+
+
+class SavedTimetableSummaryOut(_Out):
+    """One saved timetable without sessions or student data (list rows)."""
+
+    timetable_id: int
+    period_code: str
+    period_name: str
+    exam_kind: ExamKind
+    draft_number: int = Field(description="1, 2, 3 ... per examination cycle; older drafts are never overwritten")
+    status: TimetableStatus = Field(description="DRAFT for every saved timetable until Approve / Publish exist")
+    revision: int
+    mode: Literal["feasibility", "optimized"]
+    selection: Literal["full_cycle", "partial_cycle", "listed_modules"]
+    solver_status: Literal["OPTIMAL", "FEASIBLE"]
+    solver_version: str | None
+    input_fingerprint: str
+    settings_version: int = Field(description="Scheduling settings version used (0 = built-in defaults)")
+    settings_fingerprint: str
+    seating_ruleset_version: int
+    capacity_fingerprint: str
+    validation_passed: bool
+    summary: GenerationSummaryOut
+    created_by: UUID
+    created_at: dt.datetime
+    approved_by: UUID | None
+    approved_at: dt.datetime | None
+    published_by: UUID | None
+    published_at: dt.datetime | None
+    content_fingerprint: str | None = Field(
+        None, description="SHA-256 of the saved sessions, rooms and seats; null if saved before migration 0011")
+    source_timetable_id: int | None = Field(None, description="The timetable this draft was regenerated from")
+
+
+class SavedTimetableOut(SavedTimetableSummaryOut):
+    """A saved timetable with its sessions and rooms (seat counts only, no student IDs)."""
+
+    module_codes: list[str] | None = Field(description="Modules requested; null = the full configured cycle")
+    solver: SolverRunOut
+    inputs: GenerationInputsOut
+    validation: GenerationValidationOut
+    sessions: list[GeneratedSessionOut]
+    workload: WorkloadMetricsOut | None
+    optimization: OptimizationOut | None
+    excluded_registrations: ExcludedRegistrationsOut
+    notices: list[str]
+
+
+WorkflowReason = Annotated[str, Field(min_length=REASON_MIN, max_length=REASON_MAX, pattern=REASON_PATTERN,
+                                      description="Why (kept in the timetable history)")]
+
+
+class ApproveTimetableIn(_In):
+    expected_revision: Version = Field(description="The timetable revision you last read (409 if it changed)")
+    reason: WorkflowReason
+
+
+class PublishTimetableIn(ApproveTimetableIn):
+    replace_published: bool = Field(
+        False, description="Archive the cycle's currently published timetable and publish this one instead")
+
+
+class RegenerateTimetableIn(_In):
+    mode: Literal["feasibility", "optimized"] | None = Field(
+        None, description="Optional; defaults to the mode of the timetable being regenerated")
+    time_limit_seconds: float | None = Field(
+        None, gt=0, le=MAX_API_TIME_LIMIT_SECONDS,
+        description="Optional; may only lower the saved solver time limit")
+
+
+class TimetableHistoryOut(_Out):
+    history_id: int
+    action: Literal["create", "approve", "publish", "archive"]
+    from_status: TimetableStatus | None
+    to_status: TimetableStatus
+    revision: int = Field(description="Timetable revision after the change")
+    changed_by: UUID | None
+    changed_at: dt.datetime
+    reason: str
+    details: dict[str, Any] = Field(description="What was checked (fingerprints, versions, rules)")
+
+
+class TimetableStatusChangeOut(_Out):
+    timetable: SavedTimetableSummaryOut
+    history: TimetableHistoryOut
+    archived_timetable: SavedTimetableSummaryOut | None = Field(
+        description="The previously published timetable, archived by replace_published")
+    checks: list[str] = Field(description="What was verified before the change")
+
+
+class SavedSeatOut(_Out):
+    session_id: str
+    venue_id: str
+    seat_number: int = Field(description="Logical seat, not a physical room layout")
+    student_id: str
+    registration_type: Literal["normal", "repeat"]
+
+
 class PageOut(_Out, Generic[T]):
     items: list[T]
     total: int

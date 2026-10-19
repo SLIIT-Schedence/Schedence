@@ -1004,6 +1004,65 @@ POST /api/v1/timetables/generate
   fails independent validation is never returned (`MODEL_INVALID`).
 * Requires the `[solver]` extra (`ortools`) on the API server; without it `503`.
 
+## Saved draft timetables (migration 0010)
+
+`POST /api/v1/timetables/drafts` takes the same body as `/generate`, generates,
+validates the result again (H1-H11) and saves it as a new `DRAFT` (`201`).
+Only `OPTIMAL`/`FEASIBLE` and validated timetables are saved; otherwise `422`
+and nothing is stored. `/generate` is unchanged and still saves nothing.
+
+* Tables: `exam_timetables` (cycle, MID/FINAL, `draft_number`, status, solver
+  status and run, input fingerprint, settings version, seating rule version,
+  validation, summaries), `exam_timetable_sessions`, `exam_timetable_rooms`,
+  `exam_timetable_seats` (every candidate's logical seat).
+* Every save gets the next `draft_number` of its institution and cycle (an
+  advisory lock serialises saves); older drafts are never overwritten.
+* Names are copied, not foreign keys to the temporary seed tables.
+* Statuses `APPROVED`/`PUBLISHED`/`ARCHIVED`, `approved_*`/`published_*`
+  columns, `revision`, and at most one `PUBLISHED` timetable per cycle are used
+  by the workflow below (migration 0011).
+* Reads (`examinations:read`): `GET /api/v1/timetables` (newest first; filters
+  `period_code`, `exam_kind`, `status`; no sessions, no student IDs) and
+  `GET /api/v1/timetables/{timetable_id}` (sessions, venues, seat counts).
+* Seats (`examinations:generate` or `examinations:approve`):
+  `GET /api/v1/timetables/{timetable_id}/seats` (paged; `session_id`).
+* Every query is limited to this service's institution; another institution's
+  timetable is `404`. Downgrade refuses to drop saved timetables unless
+  `-x drop_saved_timetables=true`.
+
+## Approval and publishing workflow (migration 0011)
+
+DRAFT -> APPROVED -> PUBLISHED (-> ARCHIVED when replaced). Approve and publish
+need `examinations:approve`; body `expected_revision`, `reason` (5-500 chars);
+publish also takes `replace_published`.
+
+* `POST /api/v1/timetables/{id}/approve`: DRAFT only. `POST .../publish`:
+  APPROVED only (a DRAFT is refused). Wrong status, revision, or an already
+  published cycle: `409` with `detail[0].rule` = `STATUS`, `REVISION`,
+  `ALREADY_PUBLISHED`, `INTEGRITY` or `STALE`.
+* Before each change, with the row locked: the stored sessions, rooms and seats
+  must match `content_fingerprint` (taken at save); the active settings, seating
+  capacities and a fresh input snapshot must equal those used at generation;
+  and H1-H11 must pass on the current inputs. Otherwise `409 STALE` lists
+  `STALE_SETTINGS`, `STALE_CAPACITIES`, `STALE_INPUTS` and H-rule problems, and
+  nothing changes. Timetables saved before 0011 have no content fingerprint and
+  must be regenerated.
+* One published timetable per cycle: publishing another needs
+  `replace_published=true`, which archives the old one in the same transaction.
+* `POST /api/v1/timetables/{id}/regenerate` (`examinations:generate`): a new
+  DRAFT with the same cycle, modules and mode (`mode`, `time_limit_seconds`
+  optional), from the current inputs; `source_timetable_id` links it. The old
+  timetable is kept unchanged.
+* `GET /api/v1/timetables/{id}/history` (`examinations:read`): create, approve,
+  publish and archive rows with who, when, why and what was checked.
+* Database triggers enforce the rules too: content columns never change; only
+  the transitions above, each with revision + 1; approval and publication
+  details are fixed once set; sessions, rooms and seats are never updated and
+  are locked once a timetable leaves DRAFT; only drafts may be deleted;
+  history rows are never updated.
+* No notifications are sent yet. Downgrade refuses to drop workflow history
+  unless `-x drop_timetable_workflow=true`.
+
 ## API
 
 Start the server from `services/examination-service` (Windows needs the
@@ -1052,11 +1111,11 @@ stays off until a secure user -> student ID mapping exists.
 |---|---|
 | `examinations:read` | Current data/settings GET routes; future timetable views, report views, comparisons and exports |
 | `examinations:manage` | Seating and scheduling-settings changes; future period, daily hours and draft edits |
-| `examinations:generate` | `POST /api/v1/timetables/generate`: CP-SAT generation, S1-S5 optimization and validation (not saved yet) |
-| `examinations:approve` | Future approval and publication |
+| `examinations:generate` | `POST /api/v1/timetables/generate` (not saved) and `POST /api/v1/timetables/drafts` (saved as a draft); seat allocations of saved timetables |
+| `examinations:approve` | Approve and publish saved timetables; their seat allocations |
 
 Generation and approval alone do not grant reads or settings changes, and
-generation does not need them. Approval is not used by any route yet.
+generation does not need them.
 
 **Rollout:** deploy these checks only after a separately approved Identity RBAC
 data update has added `examinations:read` and `examinations:manage` and granted
@@ -1096,6 +1155,14 @@ sign in as an examination admin, and paste the **access token** into Swagger's
 | `DELETE /api/v1/settings/exam-seating/venues/{venue_id}` | remove an override | `expected_version`, `reason`, `dry_run` |
 | `GET /api/v1/settings/scheduling` | scheduling settings (defaults until saved), `status` (`valid`/`invalid`) and `problems`, mandatory rules H1-H11, recent history | `history_limit` (0-500, default 20) |
 | `POST /api/v1/timetables/generate` | generate and validate a timetable, not saved (`examinations:generate`) | body `period_code`, `module_codes` (required), `mode`, `time_limit_seconds` |
+| `POST /api/v1/timetables/drafts` | generate, validate and save as a new draft (`examinations:generate`) | body as `/generate` |
+| `GET /api/v1/timetables` | saved timetables, newest first, no student IDs (`examinations:read`) | `period_code`, `exam_kind`, `status`, `limit`, `offset` |
+| `GET /api/v1/timetables/{timetable_id}` | one saved timetable with sessions and venues (`examinations:read`) | |
+| `GET /api/v1/timetables/{timetable_id}/seats` | seat allocations with student IDs (`examinations:generate` or `examinations:approve`) | `session_id`, `limit`, `offset` |
+| `POST /api/v1/timetables/{timetable_id}/approve` | DRAFT -> APPROVED after integrity, stale-input and H1-H11 checks (`examinations:approve`) | body `expected_revision`, `reason` |
+| `POST /api/v1/timetables/{timetable_id}/publish` | APPROVED -> PUBLISHED, same checks (`examinations:approve`) | body `expected_revision`, `reason`, `replace_published` |
+| `POST /api/v1/timetables/{timetable_id}/regenerate` | new DRAFT from the same request (`examinations:generate`) | body `mode`, `time_limit_seconds` (optional) |
+| `GET /api/v1/timetables/{timetable_id}/history` | status history (`examinations:read`) | |
 | `PUT /api/v1/settings/scheduling` | replace the settings (`examinations:manage`) | body `settings` (complete document), `reason`, `expected_version` (0 = first save); `dry_run`; `replace_invalid` (only to repair invalid saved settings) |
 
 Settings input rules: `percentage` is a whole number 1-100 (`50.5`, `"50"` and

@@ -6,10 +6,12 @@ for psycopg async; see the service README)::
     uvicorn app.main:create_app --factory --port 8003 --loop asyncio:SelectorEventLoop
 
 Security: ``/health`` and ``/health/db`` are public; every ``/api/v1`` route
-requires a Cognito access token. GET routes require ``examinations:read``;
+requires a Cognito access token. GET routes require ``examinations:read``
+(saved timetable seats: ``examinations:generate`` or ``examinations:approve``);
 seating and scheduling-settings PUT/DELETE routes require
-``examinations:manage``, and ``POST /api/v1/timetables/generate`` requires
-``examinations:generate``, in this service's institution (see ``app.auth``).
+``examinations:manage``, and ``POST /api/v1/timetables/generate`` and
+``/drafts`` require ``examinations:generate``, in this service's institution
+(see ``app.auth``).
 """
 
 from __future__ import annotations
@@ -49,7 +51,7 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
     app = FastAPI(
         title="Schedence Examination Service",
         version="0.1.0",
-        description="Examination input data, settings and timetable generation (not saved yet) for examination administrators.",
+        description="Examination input data, settings, timetable generation and saved draft timetables for examination administrators.",
         lifespan=lifespan,
         docs_url=None if production else "/docs",
         redoc_url=None if production else "/redoc",
@@ -74,6 +76,6 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
     # Settings mixes read and write operations, so it checks each operation.
     api.include_router(settings.router)
     api.include_router(scheduling_settings.router)
-    api.include_router(timetables.router)  # checks examinations:generate
+    api.include_router(timetables.router)  # checks examinations:generate / :read per route
     app.include_router(api)
     return app

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Annotated, Literal
 
 from fastapi import Depends, Query, Request
@@ -11,6 +13,7 @@ from app.auth.context import AuthContext
 from app.auth.dependencies import get_auth
 from app.database import get_session, get_write_session
 from app.generation.service import TimetableGenerator
+from app.saved_timetables import DatabaseTimetableStore, TimetableStore
 from app.scheduling.inputs import load_database_snapshot
 from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
 from app.scheduling_settings.service import SchedulingSettingsService
@@ -116,3 +119,26 @@ def get_timetable_generator(
 
 
 TimetableGeneratorDep = Annotated[TimetableGenerator, Depends(get_timetable_generator)]
+
+
+def get_saved_timetable_reader(session: Annotated[AsyncSession, Depends(get_session)]) -> TimetableStore:
+    """Saved timetables on the request's read-only session."""
+    return DatabaseTimetableStore(session)
+
+
+TimetableStoreOpener = Callable[[], AbstractAsyncContextManager[TimetableStore]]
+
+
+def get_saved_timetable_writer(request: Request) -> TimetableStoreOpener:
+    """Opens a writable session only when called: after the solver, never during it. The caller commits."""
+
+    @asynccontextmanager
+    async def open_store() -> AsyncIterator[TimetableStore]:
+        async with session_scope(request.app.state.write_session_factory, commit=False) as session:
+            yield DatabaseTimetableStore(session)
+
+    return open_store
+
+
+SavedTimetableReaderDep = Annotated[TimetableStore, Depends(get_saved_timetable_reader)]
+SavedTimetableWriterDep = Annotated[TimetableStoreOpener, Depends(get_saved_timetable_writer)]

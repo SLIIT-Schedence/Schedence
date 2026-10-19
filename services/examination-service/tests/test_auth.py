@@ -264,18 +264,24 @@ def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
     """Fail if an API route is added without adding it to the access tests."""
     paths = client.get("/openapi.json").json()["paths"]
     sample_values = {"module_code": "IT3041", "student_id": "IT30129034",
-                     "period_code": "PP1-2026-S2-FINAL", "venue_id": "F303"}
+                     "period_code": "PP1-2026-S2-FINAL", "venue_id": "F303", "timetable_id": "1"}
     gets = {path.format(**sample_values) for path, operations in paths.items()
             if path.startswith(API + "/") and "get" in operations}
     writes = {(method.upper(), path.format(**sample_values)) for path, operations in paths.items()
               if path.startswith(API + "/") for method in operations if method != "get"}
-    assert gets == set(DATA_ENDPOINTS)
+    assert gets == set(DATA_ENDPOINTS) | {  # saved timetables; access tests: test_saved_timetables.py
+        f"{API}/timetables", f"{API}/timetables/1", f"{API}/timetables/1/seats",
+        f"{API}/timetables/1/history"}  # access tests: test_timetable_workflow.py
     assert writes == {
         ("PUT", f"{API}/settings/exam-seating/default"),
         ("PUT", f"{API}/settings/exam-seating/venues/F303"),
         ("DELETE", f"{API}/settings/exam-seating/venues/F303"),
         ("PUT", f"{API}/settings/scheduling"),  # access tests: test_scheduling_settings.py
         ("POST", f"{API}/timetables/generate"),  # access tests: test_timetable_generation.py
+        ("POST", f"{API}/timetables/drafts"),  # access tests: test_saved_timetables.py
+        ("POST", f"{API}/timetables/1/approve"),  # access tests: test_timetable_workflow.py
+        ("POST", f"{API}/timetables/1/publish"),
+        ("POST", f"{API}/timetables/1/regenerate"),
     }
 
 

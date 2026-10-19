@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.db.base import Base
-from app.db import scheduling_settings_models, seating_models, seed_models  # noqa: F401
+from app.db import scheduling_settings_models, seating_models, seed_models, timetable_models  # noqa: F401
 
 from conftest import SERVICE_DIR
 
@@ -84,8 +84,11 @@ def test_migrations_are_not_destructive(upgrade_sql: str) -> None:
 
 
 def test_migrations_touch_only_examinations(upgrade_sql: str) -> None:
+    triggers = re.findall(r"CREATE TRIGGER \w+ BEFORE [A-Z ]+? ON (\S+)", upgrade_sql)  # 0011
+    assert triggers and all(name.startswith("examinations.") for name in triggers)
+    without_triggers = re.sub(r"CREATE TRIGGER [^;]*;", "", upgrade_sql)
     pattern = r"(?:CREATE TABLE|CREATE (?:UNIQUE )?INDEX \w+ ON|REFERENCES|ALTER TABLE|UPDATE|INSERT INTO|FROM) (\S+)"
-    for name in re.findall(pattern, upgrade_sql):
+    for name in re.findall(pattern, without_triggers):
         assert name.startswith("examinations."), name
 
 
@@ -254,14 +257,16 @@ def test_url_is_never_written_to_output(upgrade_sql: str) -> None:
 # --- 0007: examination period kind (MID / FINAL) ---------------------------------------------
 
 
-def test_revisions_form_one_chain_ending_at_0009() -> None:
+def test_revisions_form_one_chain_ending_at_0011() -> None:
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(Config(str(SERVICE_DIR / "alembic.ini")))
-    assert script.get_heads() == ["0009"]
+    assert script.get_heads() == ["0011"]
     assert script.get_revision("0007").down_revision == "0006"
     assert script.get_revision("0008").down_revision == "0007"
     assert script.get_revision("0009").down_revision == "0008"
+    assert script.get_revision("0010").down_revision == "0009"
+    assert script.get_revision("0011").down_revision == "0010"
 
 
 def test_0007_adds_exam_kind_and_existing_periods_become_final(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -361,3 +366,59 @@ def test_0009_downgrade_refuses_to_lose_mappings(monkeypatch: pytest.MonkeyPatch
     assert sql.index("RAISE EXCEPTION") < sql.index("DROP TABLE examinations.seed_exam_period_modules")
     skipped = _sql(monkeypatch, "0009:0008", downgrade=True, x=["drop_exam_cycle_modules=true"])
     assert "RAISE EXCEPTION" not in skipped and "DROP TABLE examinations.seed_exam_period_modules" in skipped
+
+
+# --- 0010: saved examination timetables ----------------------------------------------------------------------
+
+TIMETABLE_TABLES = {"exam_timetables", "exam_timetable_sessions", "exam_timetable_rooms", "exam_timetable_seats"}
+
+
+def test_0010_only_adds_the_saved_timetable_tables(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0009:0010")
+    body = _between(sql)
+    assert set(re.findall(r"CREATE TABLE examinations\.(\w+)", body)) == TIMETABLE_TABLES
+    assert "status VARCHAR(10) DEFAULT 'DRAFT' NOT NULL" in body
+    assert "CONSTRAINT uq_exam_timetables_institution_id_period_code_draft_number UNIQUE "            "(institution_id, period_code, draft_number)" in body
+    assert _inline_check(sql, "ck_exam_timetables_solver_status_valid") == ["solver_status IN ('OPTIMAL', 'FEASIBLE')"]
+    assert _inline_check(sql, "ck_exam_timetables_validation_passed") == ["validation_passed"]
+    assert "CREATE UNIQUE INDEX ux_exam_timetables_one_published ON examinations.exam_timetables "            "(institution_id, period_code) WHERE status = 'PUBLISHED'" in body
+    assert "ON DELETE CASCADE" in body and "REFERENCES examinations.seed_" not in body  # names are copied
+    for forbidden in ("ALTER TABLE", "DROP ", "DELETE FROM", "TRUNCATE", "UPDATE ", "INSERT INTO"):
+        assert forbidden not in body.upper()  # no existing table or row changes
+    assert sql.count("BEGIN;") == 1
+
+
+def test_0010_downgrade_refuses_to_lose_saved_timetables(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0010:0009", downgrade=True)
+    assert sql.index("RAISE EXCEPTION") < sql.index("DROP TABLE examinations.exam_timetable_seats")
+    skipped = _sql(monkeypatch, "0010:0009", downgrade=True, x=["drop_saved_timetables=true"])
+    assert "RAISE EXCEPTION" not in skipped
+    for table in TIMETABLE_TABLES:
+        assert f"DROP TABLE examinations.{table}" in skipped
+
+
+# --- 0011: approval and publishing workflow ------------------------------------------------------------------
+
+
+def test_0011_adds_history_columns_and_guards_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _upgrade_sql(monkeypatch, "0010:0011")
+    body = _between(sql)
+    assert set(re.findall(r"CREATE TABLE examinations\.(\w+)", body)) == {"exam_timetable_history"}
+    assert re.findall(r"ALTER TABLE examinations\.exam_timetables ADD COLUMN (\w+)", body) == [
+        "content_fingerprint", "source_timetable_id"]
+    assert "content_fingerprint VARCHAR(64)" in body and "source_timetable_id BIGINT" in body  # nullable
+    for trigger in ("exam_timetables_guard", "exam_timetable_sessions_guard", "exam_timetable_rooms_guard",
+                    "exam_timetable_seats_guard", "exam_timetable_history_guard"):
+        assert f"CREATE TRIGGER {trigger} " in body
+    for forbidden in ("DROP ", "DELETE FROM", "TRUNCATE", "UPDATE examinations", "INSERT INTO"):
+        assert forbidden not in body  # no existing row changes, no row inserted
+    assert sql.count("BEGIN;") == 1
+
+
+def test_0011_downgrade_refuses_to_lose_workflow_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0011:0010", downgrade=True)
+    assert sql.index("RAISE EXCEPTION 'examination timetable workflow") < sql.index("DROP TABLE")
+    skipped = _sql(monkeypatch, "0011:0010", downgrade=True, x=["drop_timetable_workflow=true"])
+    assert "workflow history exists" not in skipped
+    assert "DROP TABLE examinations.exam_timetable_history" in skipped
+    assert "DROP COLUMN content_fingerprint" in skipped

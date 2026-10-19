@@ -145,6 +145,17 @@ class TimetableGenerator:
         async with self._lock:
             return await self._generate(request)
 
+    async def current_inputs(self, period_code: str, module_codes: tuple[str, ...] | None
+                             ) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
+        """The active settings and a fresh input snapshot, loaded as for a generation (no solver, no lock).
+
+        Used to check that a saved timetable still matches its inputs. Raises
+        :class:`SnapshotError` when the inputs can no longer be loaded.
+        """
+        configuration, version = await self._load_settings()
+        snapshot = await self._load_snapshot(period_code, configuration.scheduling, module_codes)
+        return configuration, version, snapshot
+
     async def _generate(self, request: GenerationRequest) -> GenerationOutcome:
         configuration, version = await self._load_settings()
         solver_settings = _solver_settings(configuration.solver, request)
