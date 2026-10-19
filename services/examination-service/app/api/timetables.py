@@ -72,10 +72,11 @@ from app.auth.dependencies import (
     require_exam_seat_access,
 )
 from app.auth.principal import Principal
+from app.exam_periods.rules import saved_calendar
 from app.generation.service import GenerationOutcome, GenerationRequest
 from app.saved_timetables import ListFilter, NewTimetable, TimetableDetail, workflow
 from app.saved_timetables.content import content_fingerprint
-from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableNotSavedError
+from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableNotSavedError, TimetableWorkflowError
 from app.scheduling.optimization import OptimizationResult
 from app.scheduling.validation import validate_timetable
 
@@ -153,8 +154,12 @@ def _present(outcome: GenerationOutcome) -> GeneratedTimetableOut:
         ),
         inputs=GenerationInputsOut(
             period_code=period.period_code, period_name=period.period_name, exam_kind=period.exam_kind,
-            start_date=period.start_date,
-            end_date=period.end_date, exam_days=list(period.exam_days), selection=selection,
+            calendar_source="period" if outcome.request.calendar is None else "selected",
+            start_date=period.start_date, end_date=period.end_date,
+            day_start_time=period.day_start_time, day_end_time=period.day_end_time,
+            include_saturdays=period.include_saturdays, include_sundays=period.include_sundays,
+            exclusions=[{"excluded_date": e.excluded_date, "reason": e.reason} for e in period.exclusions],
+            exam_days=list(period.exam_days), selection=selection,
             modules=len(snapshot.modules),
             repeat_only_modules=sum(c.candidate_scope == "repeat_only" for c in snapshot.cycle_modules),
             students=len({r.student_id for r in snapshot.registrations}), registrations=len(snapshot.registrations),
@@ -219,7 +224,7 @@ def _request(body: GenerateTimetableIn) -> GenerationRequest:
     return GenerationRequest(
         period_code=body.period_code,
         module_codes=None if body.module_codes is None else tuple(body.module_codes), mode=body.mode,
-        time_limit_seconds=body.time_limit_seconds,
+        time_limit_seconds=body.time_limit_seconds, calendar=None if body.calendar is None else body.calendar.to_calendar(),
     )
 
 
@@ -425,10 +430,14 @@ async def regenerate_timetable(
     if source is None:
         raise SavedTimetableNotFoundError()
     header = source.header
+    try:
+        calendar = saved_calendar(header["inputs"])  # the same calendar as the source timetable
+    except ValueError:
+        raise TimetableWorkflowError("INTEGRITY", "The stored exam calendar of this timetable cannot be read.") from None
     request = GenerationRequest(
         period_code=header["period_code"],
         module_codes=None if header["module_codes"] is None else tuple(header["module_codes"]),
-        mode=body.mode or header["mode"], time_limit_seconds=body.time_limit_seconds,
+        mode=body.mode or header["mode"], time_limit_seconds=body.time_limit_seconds, calendar=calendar,
     )
     return await _generate_and_save(request, generator, auth, open_store, admin, source_timetable_id=timetable_id)
 

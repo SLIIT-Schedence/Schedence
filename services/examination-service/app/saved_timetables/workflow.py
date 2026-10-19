@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from app.exam_periods.rules import saved_calendar
 from app.generation.service import TimetableGenerator
 from app.saved_timetables.content import content_fingerprint, rebuild_timetable
 from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableWorkflowError
@@ -61,7 +62,12 @@ async def current_problems(generator: TimetableGenerator, header: Row, sessions:
     module_codes = None if header["module_codes"] is None else tuple(header["module_codes"])
     problems = []
     try:
-        configuration, version, snapshot = await generator.current_inputs(header["period_code"], module_codes)
+        # A timetable generated with a selected calendar is checked against that calendar, never the saved period's.
+        calendar = saved_calendar(header.get("inputs"))
+    except ValueError:
+        return [_problem("STALE_INPUTS", "The stored exam calendar of this timetable cannot be read.")]
+    try:
+        configuration, version, snapshot = await generator.current_inputs(header["period_code"], module_codes, calendar)
     except SnapshotError as exc:
         return [_problem("STALE_INPUTS", "The inputs of this timetable can no longer be loaded."),
                 *(_problem(v.constraint, v.message) for v in exc.violations)]

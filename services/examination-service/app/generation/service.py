@@ -36,6 +36,7 @@ from typing import Literal
 
 from fastapi import HTTPException, status
 
+from app.exam_periods.rules import ExamCalendar
 from app.scheduling.configuration import SchedulingConfiguration
 from app.scheduling.contracts import SchedulingValidationError, Violation
 from app.scheduling.evaluation import TimetableEvaluation, evaluate_timetable
@@ -59,7 +60,8 @@ MAX_REGISTRATIONS = 20_000
 MAX_VENUES = 500
 
 # (period_code, policy, module_codes or None); must read with from_cycle=True.
-SnapshotLoader = Callable[[str, SchedulingPolicy, tuple[str, ...] | None], Awaitable[InputSnapshot]]
+# (period_code, policy, module_codes[, calendar=...]); the calendar is passed only when one was selected.
+SnapshotLoader = Callable[..., Awaitable[InputSnapshot]]
 SettingsLoader = Callable[[], Awaitable[tuple[SchedulingConfiguration, int]]]
 
 
@@ -90,6 +92,7 @@ class GenerationRequest:
     module_codes: tuple[str, ...] | None  # None = the full configured cycle
     mode: Mode = "feasibility"
     time_limit_seconds: float | None = None  # may only lower the saved limit
+    calendar: ExamCalendar | None = None  # None = the saved period's calendar
 
 
 @dataclass(frozen=True)
@@ -145,22 +148,27 @@ class TimetableGenerator:
         async with self._lock:
             return await self._generate(request)
 
-    async def current_inputs(self, period_code: str, module_codes: tuple[str, ...] | None
-                             ) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
+    async def current_inputs(self, period_code: str, module_codes: tuple[str, ...] | None,
+                             calendar: ExamCalendar | None = None) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
         """The active settings and a fresh input snapshot, loaded as for a generation (no solver, no lock).
 
         Used to check that a saved timetable still matches its inputs. Raises
         :class:`SnapshotError` when the inputs can no longer be loaded.
         """
         configuration, version = await self._load_settings()
-        snapshot = await self._load_snapshot(period_code, configuration.scheduling, module_codes)
+        snapshot = await self._snapshot(period_code, configuration.scheduling, module_codes, calendar)
         return configuration, version, snapshot
+
+    async def _snapshot(self, period_code, policy, module_codes, calendar) -> InputSnapshot:
+        extra = {} if calendar is None else {"calendar": calendar}
+        return await self._load_snapshot(period_code, policy, module_codes, **extra)
 
     async def _generate(self, request: GenerationRequest) -> GenerationOutcome:
         configuration, version = await self._load_settings()
         solver_settings = _solver_settings(configuration.solver, request)
         try:
-            snapshot = await self._load_snapshot(request.period_code, configuration.scheduling, request.module_codes)
+            snapshot = await self._snapshot(request.period_code, configuration.scheduling, request.module_codes,
+                                            request.calendar)
         except SnapshotError as exc:
             raise GenerationInputError(exc.violations) from None
         errors = _scope_errors(snapshot)

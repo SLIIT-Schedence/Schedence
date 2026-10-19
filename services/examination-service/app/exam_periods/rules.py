@@ -14,7 +14,7 @@ import json
 import re
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from app.seed.generator import exam_days
 from app.sources.types import ExamPeriod, ExamPeriodExclusion
@@ -132,3 +132,67 @@ def changed_fields(old: ExamPeriod, new: ExamPeriod) -> list[str]:
         return getattr(period, name)
 
     return [name for name in EDITABLE_FIELDS if comparable(old, name) != comparable(new, name)]
+
+
+# --- Per-generation exam calendar -------------------------------------------------------------------------------
+# An admin may generate with dates, hours, weekends and excluded dates chosen for that run, without editing the
+# saved period. The calendar replaces those fields of the period inside the generation snapshot only, so the solver
+# (H6-H8), the independent validator, venue blocks and the input fingerprint all use exactly the chosen calendar.
+
+@dataclass(frozen=True)
+class ExamCalendar:
+    start_date: dt.date
+    end_date: dt.date
+    day_start_time: dt.time
+    day_end_time: dt.time
+    include_saturdays: bool
+    include_sundays: bool
+    exclusions: tuple[tuple[dt.date, str], ...] = ()
+
+
+# Calendar problems reported with the hard rule they protect.
+CALENDAR_RULES = {"PERIOD_YEAR": "H6", "PERIOD_DATES": "H6", "PERIOD_HOURS": "H7",
+                  "PERIOD_EXCLUSIONS": "H8", "PERIOD_CALENDAR": "H8"}
+
+
+def apply_calendar(period: ExamPeriod, calendar: ExamCalendar) -> tuple[ExamPeriod, list[Problem]]:
+    """The period with the selected calendar, and every problem with it (the same rules as a saved period)."""
+    selected = build_period(
+        period_code=period.period_code, period_name=period.period_name, academic_year_label=period.academic_year_label,
+        semester=period.semester, exam_kind=period.exam_kind, start_date=calendar.start_date, end_date=calendar.end_date,
+        day_start_time=calendar.day_start_time, day_end_time=calendar.day_end_time,
+        include_saturdays=calendar.include_saturdays, include_sundays=calendar.include_sundays,
+        exclusions=calendar.exclusions,
+    )
+    return selected, period_problems(selected)
+
+
+def calendar_document(calendar: ExamCalendar) -> dict:
+    return {"start_date": calendar.start_date.isoformat(), "end_date": calendar.end_date.isoformat(),
+            "day_start_time": calendar.day_start_time.isoformat(), "day_end_time": calendar.day_end_time.isoformat(),
+            "include_saturdays": calendar.include_saturdays, "include_sundays": calendar.include_sundays,
+            "exclusions": [{"excluded_date": day.isoformat(), "reason": reason} for day, reason in calendar.exclusions]}
+
+
+def saved_calendar(inputs: dict | None) -> ExamCalendar | None:
+    """The calendar a saved timetable was generated with; None when it used its saved period (older timetables too).
+
+    Raises ValueError when the stored calendar cannot be read.
+    """
+    if not isinstance(inputs, dict) or inputs.get("calendar_source", "period") == "period":
+        return None
+    if inputs.get("calendar_source") != "selected":
+        raise ValueError("unknown calendar source")
+    try:
+        flags = (inputs["include_saturdays"], inputs["include_sundays"])
+        if any(type(flag) is not bool for flag in flags):
+            raise ValueError("weekend flags must be booleans")
+        return ExamCalendar(
+            start_date=dt.date.fromisoformat(inputs["start_date"]), end_date=dt.date.fromisoformat(inputs["end_date"]),
+            day_start_time=dt.time.fromisoformat(inputs["day_start_time"]),
+            day_end_time=dt.time.fromisoformat(inputs["day_end_time"]),
+            include_saturdays=flags[0], include_sundays=flags[1],
+            exclusions=tuple((dt.date.fromisoformat(e["excluded_date"]), str(e["reason"])) for e in inputs["exclusions"]),
+        )
+    except (KeyError, TypeError) as exc:
+        raise ValueError("incomplete stored calendar") from exc

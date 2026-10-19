@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.deps import MODULE_CODE, PERIOD_CODE
-from app.exam_periods.rules import MAX_EXCLUSIONS, NEW_PERIOD_CODE, build_period
+from app.exam_periods.rules import MAX_EXCLUSIONS, NEW_PERIOD_CODE, ExamCalendar, build_period
 from app.module_details.rules import ExamDetails
 from app.generation.service import MAX_API_TIME_LIMIT_SECONDS, MAX_MODULES
 from app.scheduling.configuration import SchedulingConfiguration
@@ -367,8 +367,29 @@ class ModuleExamDetailsChangeOut(_Out):
 ModuleCode = Annotated[str, Field(pattern=MODULE_CODE)]
 
 
+class GenerationCalendarIn(_In):
+    """Dates, daily hours, weekends and excluded dates for one generation; the saved period is not changed."""
+
+    start_date: PeriodDate
+    end_date: PeriodDate
+    day_start_time: PeriodTime
+    day_end_time: PeriodTime
+    include_saturdays: bool
+    include_sundays: bool
+    exclusions: list[ExamPeriodExclusionIn] = Field(max_length=MAX_EXCLUSIONS, description="Non-exam dates inside the range")
+
+    def to_calendar(self) -> ExamCalendar:
+        return ExamCalendar(start_date=self.start_date, end_date=self.end_date, day_start_time=self.day_start_time,
+                            day_end_time=self.day_end_time, include_saturdays=self.include_saturdays,
+                            include_sundays=self.include_sundays,
+                            exclusions=tuple((e.excluded_date, e.reason) for e in self.exclusions))
+
+
 class GenerateTimetableIn(_In):
     period_code: str = Field(pattern=PERIOD_CODE, description="Exam period, e.g. PP1-2026-S2-FINAL")
+    calendar: GenerationCalendarIn | None = Field(
+        None, description="Optional exam calendar for this generation (validated like a period). Omit to use the "
+                          "saved period's calendar. Saved drafts keep it, and approval re-checks against it.")
     module_codes: list[ModuleCode] | None = Field(
         None, min_length=1, max_length=MAX_MODULES,
         description="Optional. Omit to schedule the full examination cycle (the period's configured module "
@@ -492,8 +513,15 @@ class GenerationInputsOut(_Out):
     period_code: str
     period_name: str
     exam_kind: ExamKind
+    calendar_source: Literal["period", "selected"] = Field(
+        "period", description="period: the saved period's calendar; selected: the calendar sent with the request")
     start_date: dt.date
     end_date: dt.date
+    day_start_time: dt.time | None = Field(None, description="Daily exam hours used (null in older saved timetables)")
+    day_end_time: dt.time | None = None
+    include_saturdays: bool | None = None
+    include_sundays: bool | None = None
+    exclusions: list[ExamPeriodExclusionOut] = Field(default_factory=list, description="Excluded dates used")
     exam_days: list[dt.date]
     selection: Literal["full_cycle", "partial_cycle", "listed_modules"] = Field(
         description="full_cycle / partial_cycle: from the period's module mapping; listed_modules: no mapping")

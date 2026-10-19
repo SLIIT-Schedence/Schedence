@@ -128,10 +128,10 @@ def get_timetable_generator(
             return await SchedulingSettingsService(
                 DatabaseSchedulingSettingsStore(session), auth.settings.institution_id).active()
 
-    async def load_snapshot(period_code, policy, module_codes):
+    async def load_snapshot(period_code, policy, module_codes, calendar=None):
         # One REPEATABLE READ, READ ONLY transaction for every input table.
         return await load_database_snapshot(state.engine, period_code=period_code, policy=policy,
-                                            module_codes=module_codes, from_cycle=True)
+                                            module_codes=module_codes, from_cycle=True, calendar=calendar)
 
     return TimetableGenerator(load_snapshot, load_settings, request.app.state.generation_lock)
 

@@ -14,6 +14,7 @@ from dataclasses import replace
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.seed_models import EXAM_KINDS
+from app.exam_periods.rules import CALENDAR_RULES, ExamCalendar, apply_calendar
 from app.scheduling.policy import SchedulingPolicy, minute_time, whole_number
 from app.scheduling.contracts import SchedulingValidationError, data_shape_errors, frozen_sequence, text_errors
 from app.scheduling.sessions import required_sessions, sitting_capacity
@@ -162,8 +163,12 @@ async def load_snapshot(
     policy: SchedulingPolicy = SchedulingPolicy(),
     module_codes: tuple[str, ...] | None = None,
     from_cycle: bool = False,
+    calendar: ExamCalendar | None = None,
 ) -> InputSnapshot:
     """Read a coherent source. Database callers must use load_database_snapshot.
+
+    calendar (optional) replaces the period's dates, daily hours, weekends and excluded dates for this
+    snapshot only; the saved period is not changed. Every rule, venue blocks and the fingerprint use it.
 
     from_cycle=True (the generation API) uses the period's cycle module mapping:
     module_codes=None schedules every mapped module; listed modules must all be
@@ -191,6 +196,13 @@ async def load_snapshot(
         period = replace(period,
             exclusions=frozen_sequence(period.exclusions, "period exclusions", ExamPeriodExclusion),
             exam_days=frozen_sequence(period.exam_days, "exam_days", dt.date))
+        if calendar is not None:
+            if type(calendar) is not ExamCalendar:
+                raise SnapshotError((Violation("H11", "calendar must be an ExamCalendar."),))
+            period, problems = apply_calendar(period, calendar)
+            if problems:
+                raise SnapshotError(tuple(Violation(CALENDAR_RULES.get(p["rule"], "H8"), f"Selected calendar: {p['message']}")
+                                          for p in problems))
         all_modules = frozen_sequence(await source.list_modules(), "modules", Module)
         all_modules = tuple(replace(m, specializations=frozen_sequence(m.specializations, "module specializations", str))
                             for m in all_modules)
