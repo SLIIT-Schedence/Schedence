@@ -94,6 +94,25 @@ def _gini(values: list[int]) -> float:
     return (2 * weighted) / (len(values) * total) - (len(values) + 1) / len(values)
 
 
+def fairness_objective(data: DutyAllocationInput, inputs: FairnessInputs, policy: DutyFairnessPolicy,
+                       assignments: tuple[DutyAssignment, ...]) -> int:
+    """The Step 5 CP-SAT objective evaluated for a given roster (same terms and weights):
+    balance x sum_{s<t}|L_s - L_t| + peak x max L + back_to_back x pairs + preference x breaches.
+    With hard_avoid_days, avoided-day duties are hard constraints, not preference penalties."""
+    metrics = measure_fairness(data, inputs, policy, assignments)
+    loads = sorted(load for _, load in metrics.total_loads)
+    # sum over pairs of |difference| for sorted values: sum_i (2i - n + 1) x value_i
+    pairwise = sum((2 * i - len(loads) + 1) * value for i, value in enumerate(loads))
+    sessions = {s.session_id: s for s in data.timetable.sessions}
+    breaches = sum(1 for a in assignments
+                   if is_preference_breach(a.staff_id, sessions[a.session_id].start.date(), inputs)
+                   and not (policy.hard_avoid_days and is_avoided_day(a.staff_id, sessions[a.session_id].start.date(), inputs)))
+    w = policy.weights
+    return (w.balance * pairwise + w.peak * metrics.max_load
+            + (w.back_to_back * metrics.back_to_back_pairs if policy.back_to_back_minutes else 0)
+            + w.preference * breaches)
+
+
 def measure_fairness(data: DutyAllocationInput, inputs: FairnessInputs, policy: DutyFairnessPolicy,
                      assignments: tuple[DutyAssignment, ...]) -> FairnessMetrics:
     sessions = {s.session_id: s for s in data.timetable.sessions}
