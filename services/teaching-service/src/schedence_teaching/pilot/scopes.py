@@ -78,6 +78,15 @@ def select_complete_scope(batch, scopes, *, max_time_seconds=None, retain_applic
             for key in ("preference_input", "preference_calendar", "preference_policy", "preference_config"):
                 del contexts[key]
             preference_scope = "NO_APPLICABLE_ELIGIBLE_STAFF_CRITERIA_IN_SELECTED_SCOPE"
+            stage_plan = configuration.solver_config.objective_stage_plan
+            if stage_plan is not None and any(row.value == "PREFERENCE_PENALTY" for row in stage_plan.order):
+                # P3.2: the scope's plan projects out exactly the dropped preference stage; nothing else changes.
+                order = [row.value for row in stage_plan.order if row.value != "PREFERENCE_PENALTY"]
+                if not order:
+                    raise SolverInputError("The selected scope leaves no applicable objective in the institution's stage plan.")
+                raw = configuration.model_dump(round_trip=True)
+                raw["solver_config"]["objective_stage_plan"]["order"] = order
+                configuration = type(configuration).model_validate(raw)
     else:
         preference_scope = "NO_SOURCE_DAY_PREFERENCES"
     metadata = dict(batch.metadata, groups=plan.summary(), session_requirements=len(requirements),

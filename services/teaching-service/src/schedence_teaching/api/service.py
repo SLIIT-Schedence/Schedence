@@ -7,6 +7,8 @@ from schedence_teaching.persistence.ports import PersistenceConflict
 from schedence_teaching.persistence.snapshots import content_digest
 from schedence_teaching.solver.attendance_inputs import mode_on_day
 
+from schedence_teaching.generation.contracts import optimization_summary
+
 from .contracts import CalendarOut, IssueOut, Page, ScopeOut, SessionOut, TimetableOut, ValidationOut
 from .errors import ApiError
 
@@ -213,7 +215,8 @@ class TimetableReadService:
             unresolved_issues=issues(record), blocked_scopes=[dict(academic_year=row["academic_year"], semester=row["semester"],
                 stream=row["stream"], specialization=row["specialization"], student_count=row.get("student_count"),
                 scope_status=row["scope_status"]) for row in record.limitations["blocked_scopes"]],
-            research_pending=record.limitations["research_pending"], experimental_calendar=record.limitations["experimental_calendar"])
+            research_pending=record.limitations["research_pending"], experimental_calendar=record.limitations["experimental_calendar"],
+            optimization=optimization_summary((record.run.get("result_metadata") or {}).get("objective_stage_plan")))
 
     async def versions(self, access, version_id, query):
         if access.mode != "ADMIN":

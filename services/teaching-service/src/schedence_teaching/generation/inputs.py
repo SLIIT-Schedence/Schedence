@@ -38,13 +38,20 @@ def check_references(document, request):
 def scoped_document(evidence, loaded):
     """A scoped result needs its own exact demand snapshot, never the full one."""
     original = evidence.document
+    seal = None
+    if original.solver_config.resolved_policy is not None:
+        from schedence_teaching.persistence.policy import rebind_scoped_snapshot
+        seal = lambda document: rebind_scoped_snapshot(document, original)  # P3.2: same approved revision.
     generated_labels = {"PP1:calendar-configuration", "PP1:synthetic-elective-registration-evidence",
                         "PP1:preparation-source-bindings"}
     document = capture_pp1_snapshot(loaded.enrolled, institution_id=original.institution_id,
         sources=tuple(row for row in original.sources if row.label not in generated_labels),
         blocked_scopes=loaded.blocked_scopes, academic_term_reference=original.academic_term_reference,
         timezone_name=original.timezone_name,
-        registration_policy=evidence_source(original, "PP1:synthetic-elective-registration-evidence")["policy"])
+        registration_policy=evidence_source(original, "PP1:synthetic-elective-registration-evidence")["policy"],
+        # Sealed parents: defer the seal until the derived sources are canonical, so the seal (and its recorded
+        # parent digest) is identical in the accepting process and in the spawned worker, whatever the hash seed.
+        seal=(lambda document: document) if seal is not None else None)
     # model_dump(mode="json") represents sets as arrays in hash-seed order.
     # Canonicalize the typed configuration before hashing NEW derived evidence;
     # preserve every historical source document and its original checksum.
@@ -62,8 +69,9 @@ def scoped_document(evidence, loaded):
         normalized_sources.append(SourceDocument.model_validate(source.model_dump() | dict(
             provenance=provenance, sha256=content_digest(provenance))))
     # Preserve authoritative owner links; these do not issue replacement master IDs.
-    return SnapshotDocument.model_validate(document.model_dump() | dict(sources=normalized_sources,
+    document = SnapshotDocument.model_validate(document.model_dump() | dict(sources=normalized_sources,
         external_references=original.external_references))
+    return seal(document) if seal is not None else document  # The seal replays and validates the bound document.
 
 
 def prepare_database_work(evidence, request):

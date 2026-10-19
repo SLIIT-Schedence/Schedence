@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from schedence_teaching.schemas import Stream
 from schedence_teaching.persistence.lifecycle import TimetableStatus
+from schedence_teaching.generation.contracts import OptimizationSummaryOut
 
 
 class TimetableQuery(BaseModel):
@@ -133,6 +134,8 @@ class ValidationOut(BaseModel):
     blocked_scopes: list[dict]
     research_pending: bool
     experimental_calendar: bool
+    # Stored P3.1 stage history of the validated run, when it used a combined objective plan.
+    optimization: OptimizationSummaryOut | None = None
 
 
 T = TypeVar("T")

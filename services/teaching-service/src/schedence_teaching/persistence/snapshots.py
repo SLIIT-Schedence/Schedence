@@ -140,7 +140,12 @@ def prepare_attempt(document: SnapshotDocument, result: SolverResult) -> Attempt
     summary = None
     rows = []
     if success:
-        summary = validate_evaluation_result(prepared, config, result, **contexts)
+        if config.objective_stage_plan is not None:
+            # P3.1/P3.2: a combined solve is published only after every enabled component is recomputed.
+            from schedence_teaching.solver.objective_stage_plan import validate_combined_result
+            summary = validate_combined_result(prepared, config, result, **contexts)
+        else:
+            summary = validate_evaluation_result(prepared, config, result, **contexts)
         if (not summary.valid_for_implemented_constraints or summary.assigned_occurrences != len(prepared.sessions)):
             raise ValueError("only complete independently validated results can become timetable versions")
         groups = {group.group_id: group for group in snapshot.teaching_input.student_groups}
@@ -151,7 +156,9 @@ def prepare_attempt(document: SnapshotDocument, result: SolverResult) -> Attempt
                 "delivery_reference": booking.delivery_id if combined else booking.session.occurrence_id,
                 "teaching_date": snapshot.calendar.day_dates[booking.day],
                 "start_minute": booking.start_minute, "end_minute": booking.end_minute,
-                "delivery_mode": mode_on_day(config, booking.day, coverage[0].stream).value,
+                # Stored mode equals the calendar mode for legacy results (validated above).
+                "delivery_mode": (booking.delivery_mode if getattr(booking, "delivery_mode", None) is not None
+                                  else mode_on_day(config, booking.day, coverage[0].stream)).value,
                 "staff_reference": booking.assigned_staff_id, "venue_reference": booking.assigned_venue_id,
                 "student_count": booking.combined_student_count if combined else groups[booking.session.group_id].student_count,
                 "coverage": [{

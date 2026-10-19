@@ -12,7 +12,7 @@ from .snapshots import canonical_json, content_digest, replay_snapshot
 
 def capture_pp1_snapshot(enrolled, *, institution_id: UUID, sources: tuple[SourceDocument, ...],
                          blocked_scopes: tuple[dict, ...], academic_term_reference: str,
-                         timezone_name: str, registration_policy: dict) -> SnapshotDocument:
+                         timezone_name: str, registration_policy: dict, seal=None) -> SnapshotDocument:
     """Preserve source-local IDs and pending requirements; never issue master IDs."""
     batch = enrolled.batch
     if enrolled.allocation_label != "PP1_TEST_ELECTIVE_ALLOCATION":
@@ -78,5 +78,7 @@ def capture_pp1_snapshot(enrolled, *, institution_id: UUID, sources: tuple[Sourc
         solver_config=batch.config, contexts=raw,
         group_specializations={key: value for key, value in batch.group_specializations.items() if key in group_ids},
         scopes=tuple(scopes), sources=sources + additional_sources, issues=tuple(issues))
-    # Existing independent input checks, no CP-SAT execution or database access.
-    return replay_snapshot(document)[0]
+    # Existing independent input checks, no CP-SAT execution or database access. A sealed
+    # institution policy (for example batch online days) is validated by its sealing step,
+    # which replays the bound document; nothing is solved or written here.
+    return seal(document) if seal is not None else replay_snapshot(document)[0]

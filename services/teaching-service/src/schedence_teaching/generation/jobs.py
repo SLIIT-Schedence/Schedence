@@ -17,7 +17,7 @@ from schedence_teaching.persistence.lifecycle import academic_limitations
 from schedence_teaching.persistence.ports import PersistenceConflict
 from schedence_teaching.persistence.snapshots import content_digest, prepare_attempt
 
-from .contracts import GenerationJobOut, JobError
+from .contracts import GenerationJobOut, JobError, optimization_summary
 from .persistence import NoDraftPersistence
 from .worker import WorkerFailure
 
@@ -144,6 +144,8 @@ class DevelopmentGenerationJobs:
                 result = outcome.result
                 job.public.solver_status = result.status.value
                 job.public.solver_runtime_seconds = result.runtime_seconds
+                # Solver completion and stage proofs are reported before, and separately from, validation/publication.
+                job.public.optimization = optimization_summary(getattr(result, "objective_stage_report", None))
                 try:
                     # Recompute in the parent. Never trust worker-attached validation.
                     attempt = await asyncio.to_thread(prepare_attempt, job.work.document, result)

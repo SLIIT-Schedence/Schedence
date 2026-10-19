@@ -38,6 +38,36 @@ class GenerationRequest(DatabaseGenerationRequest):
             for key in DatabaseGenerationRequest.model_fields})
 
 
+class OptimizationStageOut(InputContract):
+    criterion: str
+    status: Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN", "MODEL_INVALID", "NOT_RUN_TIME_LIMIT"]
+    objective_value: int | None = None
+
+
+class OptimizationSummaryOut(InputContract):
+    """P3.1/P3.2 shared stage history; unlisted planned stages were not run."""
+    plan_reference: str
+    priority_order: tuple[str, ...]
+    stages: tuple[OptimizationStageOut, ...]
+    proven_stage_count: int
+    all_stages_proven_optimal: bool
+
+
+def optimization_summary(report):
+    """From a solver ObjectiveStageReport or its stored run-metadata dictionary; None when no plan ran."""
+    if report is None:
+        return None
+    if isinstance(report, dict):
+        return OptimizationSummaryOut(plan_reference=report["plan_reference"], priority_order=tuple(report["priority_order"]),
+            stages=tuple(OptimizationStageOut(criterion=row["criterion"], status=row["status"], objective_value=row["objective_value"])
+                         for row in report["stages"]),
+            proven_stage_count=report["proven_stage_count"], all_stages_proven_optimal=report["all_stages_proven_optimal"])
+    return OptimizationSummaryOut(plan_reference=report.plan_reference, priority_order=tuple(report.priority_order),
+        stages=tuple(OptimizationStageOut(criterion=row.criterion, status=row.status, objective_value=row.objective_value)
+                     for row in report.stages),
+        proven_stage_count=report.proven_stage_count, all_stages_proven_optimal=report.all_stages_proven_optimal)
+
+
 class JobError(InputContract):
     category: str
     message: str
@@ -73,3 +103,5 @@ class GenerationJobOut(InputContract):
     max_attempts: int = 1
     last_heartbeat_at: datetime | None = None
     error: JobError | None = None
+    # Development registry only; durable jobs expose stage history through the stored version's run metadata.
+    optimization: OptimizationSummaryOut | None = None

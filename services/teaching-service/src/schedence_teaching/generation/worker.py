@@ -71,6 +71,10 @@ def execute_work(work, directory):
         result = solve_timetable(prepared, config, **contexts)
     if enrolled is not None and result.status in {SolverStatus.FEASIBLE, SolverStatus.OPTIMAL}:
         from schedence_teaching.pilot.elective_validation import validate_elective_result
+        if work.request.strategy == "MONOLITHIC" and work.document.solver_config.resolved_policy is not None:
+            # P3.2: a sealed generation snapshot is validated with the sealed inputs it was solved with.
+            from dataclasses import replace
+            enrolled = replace(enrolled, batch=replace(enrolled.batch, prepared=prepared, config=config, solver_inputs=contexts))
         validate_elective_result(enrolled, result)
     (directory / "solver-result.json").write_text(json.dumps(result.to_dict(), indent=2), encoding="utf-8")
     assessment = prepare_attempt(work.document, result)
