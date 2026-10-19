@@ -4,7 +4,7 @@ import { Icon, type IconName } from "@/components/icon";
 import type { Tone } from "@/lib/audit-events";
 import type { ApiError } from "@/lib/identity-api";
 
-// Building blocks shared by the System Admin pages. Server-safe: no hooks, no client state.
+// Building blocks shared by the console pages. Server-safe: no hooks, no client state.
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Asia/Colombo" });
 const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
@@ -183,10 +183,21 @@ export function EmptyState({
 }
 
 /** Shown in place of data that failed to load. */
-export function LoadError({ error, what, retryHref }: { error: ApiError; what: string; retryHref: string }) {
+export function LoadError({
+  error,
+  what,
+  retryHref,
+  service = "identity",
+}: {
+  error: ApiError;
+  what: string;
+  retryHref: string;
+  /** The backend that failed, as in "The identity service didn't respond". */
+  service?: string;
+}) {
   const message =
     error.status === 0 || error.status >= 500
-      ? "The identity service didn't respond. Check that it's running, then try again."
+      ? `The ${service} service didn't respond. Check that it's running, then try again.`
       : error.status === 403
         ? "Your account doesn't have permission to view this."
         : error.message;

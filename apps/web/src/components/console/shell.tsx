@@ -33,6 +33,7 @@ function crumbsFor(pathname: string, nav: ConsoleNavItem[], home: string): strin
 export function ConsoleShell({
   section,
   nav,
+  links,
   footer,
   user,
   children,
@@ -41,6 +42,8 @@ export function ConsoleShell({
   section: string;
   /** The first item is the console's home. */
   nav: ConsoleNavItem[];
+  /** A second sidebar group linking to other consoles, such as Rescheduling. */
+  links?: { label: string; items: ConsoleNavItem[] };
   footer?: ReactNode;
   user: ReactNode;
   children: ReactNode;
@@ -93,6 +96,14 @@ export function ConsoleShell({
             <Suspense fallback={<NavLinks nav={nav} home={home} onNavigate={close} />}>
               <ActiveNavLinks nav={nav} home={home} onNavigate={close} />
             </Suspense>
+            {links && (
+              <>
+                <p className="px-3 pb-2 pt-6 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-secondary">
+                  {links.label}
+                </p>
+                <NavLinks nav={links.items} home={home} onNavigate={close} />
+              </>
+            )}
           </nav>
 
           {footer && <div className="m-3">{footer}</div>}

@@ -22,6 +22,7 @@ Fill in the rest of `.env.local` (see [.env.example](.env.example)). Every varia
 | `AUTH_COGNITO_SECRET` | Client secret of `Schedence-Web`. Keep it only in `.env.local`, never in the root `.env` |
 | `AUTH_COGNITO_ISSUER` | `https://cognito-idp.<region>.amazonaws.com/<user pool id>` |
 | `IDENTITY_SERVICE_URL` | `http://localhost:8001` |
+| `ACADEMIC_SERVICE_URL` | `http://localhost:8002` (Academic Admin console) |
 
 In the Cognito console, open **App clients → Schedence-Web → App client information → Edit** and, under **Authentication flows**, make sure these are selected:
 
@@ -79,6 +80,22 @@ Users who hold `INSTITUTION_ADMIN` in an institution are sent from `/` to `/admi
 **Invite** (`POST /api/v1/identity/users`) offers `ACADEMIC_ADMIN`, `EXAMINATION_ADMIN`, `VENUE_MANAGER` and `LECTURER` (`INVITABLE_ROLE_CODES` in `src/lib/roles.ts`). Cognito emails a temporary password that works for 7 days. If Cognito fails, identity-service keeps the record as `FAILED`, and the dialog tells the admin to retry it from Invitations.
 
 Charts (`src/components/console/charts.tsx`) are single-series and drawn with plain HTML in the primary blue, which is 4.2:1 on the white cards. Every value is reachable without hovering: bars carry their values, columns label the latest and the peak, and each chart has a **View as table** twin. Hover and keyboard focus show the same tooltip.
+
+## Academic Admin console
+
+Users who hold `ACADEMIC_ADMIN` in an institution are sent from `/` to `/academic` (Institution Admins go to `/admin` first). It uses the same shell and cards as the other consoles. Pages call academic-data-service (`ACADEMIC_SERVICE_URL`, `/api/v1/academic/*`) from the server with the user's own token, through the same request helper as identity-service (`src/lib/service-api.ts`). The service checks each permission and scopes every list to the user's institutions.
+
+The console is **view only**, because the role only reads academic data (`academic:staff:read`, `academic:positions:read`, `academic:appointments:read`, `academic:workload:read`). Staff, positions and appointments are maintained by the Institution Admin.
+
+Academic Admins also hold rescheduling permissions, so the sidebar has a **Scheduling** group and the overview has a button, both labelled **Adaptive rescheduling**, that open `/adaptive`. That console lives on `feat/adaptive-service`, so on a branch without it the link shows Next.js's 404 page until both are merged.
+
+| Page | What it does |
+|---|---|
+| `/academic` | KPI tiles (staff, staff with a Schedence login, active positions, positions without hours in force), **Administrative hours by position** and **Staff by academic rank** bar charts, recently added staff, and a teaching-timetables card. The timetables card is a placeholder until the teaching service is connected |
+| `/academic/staff` | The staff register, searchable by name, staff number or email, 20 per page |
+| `/academic/staff/[id]` | Rank, email, login link, the administrative workload contract as of today (total protected hours, or each appointment's hours when policies don't combine), and current appointments or the full history |
+| `/academic/positions` | Position types with their unit, weekly hours in force and combination rule; *Active* or *All* (including disabled) |
+| `/academic/positions/[id]` | The position's definition and its versioned hours-policy history |
 
 ## Layout
 

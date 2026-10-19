@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
+import { isAcademicAdmin } from "@/lib/academic";
 import { type Account, getAccount, isSystemAdmin } from "@/lib/identity";
 import { isInstitutionAdmin } from "@/lib/institution";
 
@@ -29,6 +30,7 @@ async function AccountOverview() {
       // Admins work in their consoles, which have their own navigation.
       if (isSystemAdmin(result.account)) redirect("/platform");
       if (isInstitutionAdmin(result.account)) redirect("/admin");
+      if (isAcademicAdmin(result.account)) redirect("/academic");
       return <Welcome account={result.account} />;
     case "not-provisioned":
       return (

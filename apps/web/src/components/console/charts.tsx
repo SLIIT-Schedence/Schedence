@@ -85,10 +85,16 @@ export function BarChart({
   caption,
   bars,
   unit,
+  shares = true,
+  head = ["Category", "Count"],
 }: {
   caption: string;
   bars: { key: string; label: string; value: number }[];
   unit: Unit;
+  /** Show each bar's share of the total; turn off when the values aren't parts of a whole. */
+  shares?: boolean;
+  /** Column headings of the table view. */
+  head?: [string, string];
 }) {
   const { tip, show, hide } = useTooltip();
   const max = Math.max(0, ...bars.map((bar) => bar.value));
@@ -103,7 +109,7 @@ export function BarChart({
             <li
               key={bar.key}
               tabIndex={0}
-              aria-label={`${bar.label}: ${bar.value} ${unitFor(bar.value, unit)}, ${share(bar.value)}%`}
+              aria-label={`${bar.label}: ${bar.value} ${unitFor(bar.value, unit)}${shares ? `, ${share(bar.value)}%` : ""}`}
               onPointerEnter={show(index)}
               onFocus={show(index)}
               onBlur={hide}
@@ -125,14 +131,14 @@ export function BarChart({
           <Tooltip
             tip={tip}
             value={`${bars[tip.index].value} ${unitFor(bars[tip.index].value, unit)}`}
-            label={`${bars[tip.index].label} · ${share(bars[tip.index].value)}%`}
+            label={shares ? `${bars[tip.index].label} · ${share(bars[tip.index].value)}%` : bars[tip.index].label}
           />
         )}
       </div>
       <TableView
         caption={caption}
-        head={["Category", "Count"]}
-        rows={bars.map((bar) => [bar.label, `${bar.value} (${share(bar.value)}%)`])}
+        head={head}
+        rows={bars.map((bar) => [bar.label, shares ? `${bar.value} (${share(bar.value)}%)` : String(bar.value)])}
       />
     </div>
   );
