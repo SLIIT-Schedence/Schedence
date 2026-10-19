@@ -25,6 +25,11 @@ from app.duty_allocation.fairness_policy import (
 )
 from app.duty_allocation.fairness_metrics import FairnessMetrics, measure_fairness
 from app.duty_allocation.fairness import DutyFairnessComparison, allocate_fair_duties, compare_duty_fairness
+from app.duty_allocation.academic_client import (
+    AcademicDataClient, AcademicDataError, AcademicDataForbidden, AcademicDataInstitutionMismatch, AcademicDataMalformed,
+    AcademicDataNotFound, AcademicDataUnauthenticated, AcademicDataUnavailable, MissingWorkload, WorkloadFetch,
+)
+from app.duty_allocation.academic_adapter import AcademicStaffData, load_academic_staff_data, load_staff
 from app.duty_allocation.duty_changes import (
     Candidate, ChangeProposal, ChangeStatus, RejectedCandidate, check_proposal, propose_replacement, propose_swap,
 )
@@ -44,4 +49,7 @@ __all__ = [
     "DutyFairnessComparison", "allocate_fair_duties", "compare_duty_fairness",
     "Candidate", "ChangeProposal", "ChangeStatus", "RejectedCandidate", "check_proposal", "propose_replacement",
     "propose_swap",
+    "AcademicDataClient", "AcademicDataError", "AcademicDataForbidden", "AcademicDataInstitutionMismatch",
+    "AcademicDataMalformed", "AcademicDataNotFound", "AcademicDataUnauthenticated", "AcademicDataUnavailable",
+    "MissingWorkload", "WorkloadFetch", "AcademicStaffData", "load_academic_staff_data", "load_staff",
 ]
