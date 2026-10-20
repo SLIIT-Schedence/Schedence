@@ -4,7 +4,7 @@
 * ``POST /timetables/drafts`` (``examinations:generate``): generate, validate again and
   save as a new DRAFT (201). Nothing is saved without a validated timetable (422).
 * ``GET /timetables`` and ``GET /timetables/{id}`` (``examinations:read``): saved
-  timetables of this institution, without student IDs.
+  timetables of the caller's institution, without student IDs.
 * ``GET /timetables/{id}/seats`` (``examinations:generate`` or ``examinations:approve``):
   the individual seat allocations, with student IDs.
 * ``POST /timetables/{id}/approve`` and ``/publish`` (``examinations:approve``):
@@ -64,15 +64,13 @@ from app.api.schemas import (
     TimetableStatus,
     WorkloadMetricsOut,
 )
-from app.auth.context import AuthContext
 from app.auth.dependencies import (
-    get_auth,
+    ExamAccess,
     require_exam_approval,
     require_exam_data_access,
     require_exam_generation,
     require_exam_seat_access,
 )
-from app.auth.principal import Principal
 from app.exam_periods.rules import saved_calendar
 from app.generation.service import GenerationOutcome, GenerationRequest
 from app.saved_timetables import ListFilter, NewTimetable, TimetableDetail, workflow
@@ -83,14 +81,19 @@ from app.scheduling.optimization import OptimizationResult
 from app.scheduling.validation import validate_timetable
 from app.api.analysis_schemas import EvaluationAnalysisOut
 from app.generation.analysis import build_analysis
+from app.generation.protected_summary import protected_summary
+from app.scheduling.protected import cross_timetable_violations
+from app.scheduling.protected import PROTECTED_STATUSES, ProtectedSchedule
+from app.api.both_semester_schemas import BothGeneratedOut, BothSavedOut, BothSemestersIn, PairValidationOut
+from app.generation.both_semesters import NOTICE as BOTH_NOTICE, pair_violations, policy_order
 
 router = APIRouter(prefix="/timetables", tags=["timetables"])
 
-Generator = Annotated[Principal, Depends(require_exam_generation)]
-Reader = Annotated[Principal, Depends(require_exam_data_access)]
-SeatReader = Annotated[Principal, Depends(require_exam_seat_access)]
-Approver = Annotated[Principal, Depends(require_exam_approval)]
-Auth = Annotated[AuthContext, Depends(get_auth)]
+# Each returns the caller and the institution the request acts in (saved timetables are stored per institution).
+Generator = Annotated[ExamAccess, Depends(require_exam_generation)]
+Reader = Annotated[ExamAccess, Depends(require_exam_data_access)]
+SeatReader = Annotated[ExamAccess, Depends(require_exam_seat_access)]
+Approver = Annotated[ExamAccess, Depends(require_exam_approval)]
 TimetableId = Annotated[int, Path(ge=1, le=2**63 - 1)]
 HARD_RULES = [f"H{i}" for i in range(1, 12)]
 NOTICES = [
@@ -157,6 +160,7 @@ def _present(outcome: GenerationOutcome) -> GeneratedTimetableOut:
             solver_version=solver_version,
         ),
         inputs=GenerationInputsOut(
+            cross_timetable=protected_summary(snapshot, outcome.status, timetable is not None, outcome.validation_violations),
             scheduling_preferences=outcome.preferences_snapshot,
             period_code=period.period_code, period_name=period.period_name, exam_kind=period.exam_kind,
             calendar_source="period" if outcome.request.calendar is None else "selected",
@@ -238,6 +242,90 @@ def _request(body: GenerateTimetableIn) -> GenerationRequest:
     )
 
 
+def _both_requests(body: BothSemestersIn):
+    return tuple(GenerationRequest(c.period_code, None, mode=body.mode, time_limit_seconds=body.time_limit_seconds,
+        calendar=c.calendar.to_calendar() if c.calendar else None, scheduling_preferences=body.scheduling_preferences)
+        for c in body.cycles)
+
+
+async def _present_both(batch, *, include_analysis=False) -> BothGeneratedOut:
+    results = []
+    for outcome in batch.outcomes:
+        # Temporary peers are not APPROVED/PUBLISHED records and must never acquire fake public IDs/statuses.
+        protected = outcome.snapshot.protected or ProtectedSchedule()
+        public_snapshot = dataclasses.replace(outcome.snapshot, protected=ProtectedSchedule(
+            tuple(t for t in protected.timetables if t.status in PROTECTED_STATUSES), protected.overlapping_drafts))
+        item = _present(dataclasses.replace(outcome, snapshot=public_snapshot))
+        item.inputs.batch = {"batch_id": batch.batch_id, "peer_period_code": next(
+            code for code in batch.period_codes if code != outcome.request.period_code), "strategy": "semester_1_then_2",
+            "policy_order": policy_order(outcome.configuration)}
+        item.notices.append(BOTH_NOTICE)
+        if outcome.snapshot.period.semester == 2:
+            item.notices.append("This result also respected the actual room and sitting assignments of the temporary Semester 1 result.")
+        if include_analysis:
+            item.analysis = EvaluationAnalysisOut.model_validate(await asyncio.to_thread(build_analysis, outcome))
+        results.append(item)
+    shared = None
+    if len(batch.outcomes) == 2:
+        first, second = batch.outcomes
+        shared = len({r.student_id for r in first.snapshot.registrations} & {r.student_id for r in second.snapshot.registrations})
+    return BothGeneratedOut(batch_id=batch.batch_id, generated=batch.generated, sequential_order=list(batch.period_codes),
+        skipped_period_codes=[code for code in batch.period_codes if all(o.request.period_code != code for o in batch.outcomes)],
+        results=results, pair_validation=PairValidationOut(passed=True if batch.generated else False if batch.violations else None,
+            violations=_problems(batch.violations)), shared_candidates=shared, notices=[BOTH_NOTICE])
+
+
+@router.post("/generate/both-semesters", response_model=BothGeneratedOut)
+async def generate_both_semesters(_: Generator, body: BothSemestersIn, generator: TimetableGeneratorDep):
+    batch = await generator.generate_both(_both_requests(body))
+    return await _present_both(batch, include_analysis=body.include_analysis)
+
+
+@router.post("/drafts/both-semesters", response_model=BothSavedOut, status_code=status.HTTP_201_CREATED)
+async def save_both_semester_drafts(admin: Generator, body: BothSemestersIn, generator: TimetableGeneratorDep,
+                                   open_store: SavedTimetableWriterDep):
+    """Fresh coordinated generation, then two drafts in ONE transaction. Never approve or publish either."""
+    batch = await generator.generate_both(_both_requests(body))
+    presented = await _present_both(batch)
+    if not batch.generated:
+        problems = [p.model_dump() for result in presented.results for p in result.validation.violations + result.violations]
+        raise TimetableNotSavedError("BOTH_SEMESTERS_INCOMPLETE", problems)
+    records = []
+    for outcome, item in zip(batch.outcomes, presented.results):
+        violations = validate_timetable(outcome.snapshot, outcome.timetable)
+        if violations:
+            raise TimetableNotSavedError("MODEL_INVALID", _problems_dicts(violations))
+        records.append(_new_timetable(outcome, item, admin.user_id))
+    violations = pair_violations(batch.outcomes)
+    if violations:
+        raise TimetableNotSavedError("MODEL_INVALID", _problems_dicts(violations))
+    institution = admin.institution_id
+    async with open_store() as store:
+        try:
+            await store.lock_protected(institution)
+            for code in sorted(batch.period_codes):
+                await store.lock_cycle(institution, code)
+            # Reload current source inputs and validate every saved sitting before inserting either row.
+            for outcome, record in zip(batch.outcomes, records):
+                problems = await workflow.current_problems(generator, record.header, record.sessions, record.rooms, record.seats)
+                if problems:
+                    raise TimetableWorkflowError("STALE", "The inputs changed. Neither semester was saved; generate both again.", problems)
+                await _recheck_protected(store, institution, outcome)
+            ids = []
+            for record in records:
+                header = await store.save(institution, record)
+                ids.append(header["timetable_id"])
+            # Serialize successfully BEFORE committing; a second insert/detail/commit failure rolls back both.
+            details = [_detail(await store.get(institution, timetable_id)) for timetable_id in ids]
+            response = BothSavedOut(batch_id=batch.batch_id, timetables=details,
+                notices=["Both drafts saved atomically from a fresh generation. Approval and publication remain separate.", BOTH_NOTICE])
+            await store.commit()
+        except BaseException:
+            await store.rollback()
+            raise
+    return response
+
+
 # --- Saved timetables -----------------------------------------------------------------------------------------
 
 SAVED_NOTICE = "Saved as a draft: not approved or published."
@@ -304,7 +392,7 @@ def _detail(detail: TimetableDetail) -> SavedTimetableOut:
 
 @router.post("/drafts", response_model=SavedTimetableOut, status_code=status.HTTP_201_CREATED)
 async def save_timetable_draft(
-    admin: Generator, body: GenerateTimetableIn, generator: TimetableGeneratorDep, auth: Auth,
+    admin: Generator, body: GenerateTimetableIn, generator: TimetableGeneratorDep,
     open_store: SavedTimetableWriterDep,
 ) -> SavedTimetableOut:
     """Generate a timetable (as ``/generate``), validate it again and save it as a new DRAFT.
@@ -312,10 +400,10 @@ async def save_timetable_draft(
     Every save is a new draft with the next ``draft_number`` of the cycle; older drafts
     are kept. Without a validated timetable nothing is saved (422).
     """
-    return await _generate_and_save(_request(body), generator, auth, open_store, admin)
+    return await _generate_and_save(_request(body), generator, open_store, admin)
 
 
-async def _generate_and_save(request: GenerationRequest, generator, auth: AuthContext, open_store, admin: Principal,
+async def _generate_and_save(request: GenerationRequest, generator, open_store, admin: ExamAccess,
                              source_timetable_id: int | None = None) -> SavedTimetableOut:
     outcome = await generator.generate(request)
     presented = _present(outcome)
@@ -327,24 +415,46 @@ async def _generate_and_save(request: GenerationRequest, generator, auth: AuthCo
     if violations:
         raise TimetableNotSavedError("MODEL_INVALID", [p.model_dump() for p in _problems(violations)])
     record = _new_timetable(outcome, presented, admin.user_id, source_timetable_id)
-    institution = auth.settings.institution_id
+    institution = admin.institution_id
     async with open_store() as store:  # opened only now: no transaction is held during the solve
+        await _recheck_protected(store, institution, outcome)
         header = await store.save(institution, record)
         await store.commit()
         detail = await store.get(institution, header["timetable_id"])
     return _detail(detail)
 
 
+async def _recheck_protected(store, institution, outcome: GenerationOutcome) -> None:
+    """The solve can take minutes: read the protected timetables again and refuse to save a timetable that
+    clashes with one that changed meanwhile. Nothing is written in that case."""
+    period, snapshot = outcome.snapshot.period, outcome.snapshot
+    # Hold the same institution lock as approval/publication until this save commits.
+    await store.lock_protected(institution)
+    fresh = await store.protected_schedule(
+        institution, exclude_period_code=period.period_code, start_date=period.start_date, end_date=period.end_date,
+        student_ids={r.student_id for r in snapshot.registrations}, minimum_break_minutes=snapshot.policy.minimum_break_minutes)
+    clashes = cross_timetable_violations(fresh, outcome.timetable.sessions,
+                                         minimum_break_minutes=snapshot.policy.minimum_break_minutes)
+    if clashes:
+        raise TimetableWorkflowError(
+            "PROTECTED_CHANGED", "An approved or published timetable of another cycle changed while this timetable was "
+                                 "being generated, and it now clashes. Nothing was saved: generate again.", _problems_dicts(clashes))
+
+
+def _problems_dicts(violations) -> list[dict[str, str]]:
+    return [{"rule": v.constraint, "message": v.message} for v in violations]
+
+
 @router.get("", response_model=PageOut[SavedTimetableSummaryOut])
 async def list_saved_timetables(
-    _: Reader, auth: Auth, store: SavedTimetableReaderDep,
+    reader: Reader, store: SavedTimetableReaderDep,
     period_code: Annotated[str | None, Query(pattern=PERIOD_CODE, description="Examination cycle")] = None,
     exam_kind: Annotated[ExamKind | None, Query(description="MID or FINAL")] = None,
     timetable_status: Annotated[TimetableStatus | None, Query(alias="status")] = None,
     limit: Limit = 50, offset: Offset = 0,
 ) -> PageOut[SavedTimetableSummaryOut]:
-    """Saved timetables of this institution, newest first. No sessions and no student IDs."""
-    rows, total = await store.list(auth.settings.institution_id,
+    """Saved timetables of the caller's institution, newest first. No sessions and no student IDs."""
+    rows, total = await store.list(reader.institution_id,
                                    ListFilter(period_code=period_code, exam_kind=exam_kind, status=timetable_status),
                                    limit=limit, offset=offset)
     return PageOut(items=[SavedTimetableSummaryOut.model_validate(r) for r in rows], total=total, limit=limit,
@@ -353,10 +463,10 @@ async def list_saved_timetables(
 
 @router.get("/{timetable_id}", response_model=SavedTimetableOut)
 async def get_saved_timetable(
-    _: Reader, timetable_id: TimetableId, auth: Auth, store: SavedTimetableReaderDep,
+    reader: Reader, timetable_id: TimetableId, store: SavedTimetableReaderDep,
 ) -> SavedTimetableOut:
     """One saved timetable with its sessions, venues and seat counts (no student IDs)."""
-    detail = await store.get(auth.settings.institution_id, timetable_id)
+    detail = await store.get(reader.institution_id, timetable_id)
     if detail is None:
         raise SavedTimetableNotFoundError()
     return _detail(detail)
@@ -364,12 +474,12 @@ async def get_saved_timetable(
 
 @router.get("/{timetable_id}/seats", response_model=PageOut[SavedSeatOut])
 async def list_saved_timetable_seats(
-    _: SeatReader, timetable_id: TimetableId, auth: Auth, store: SavedTimetableReaderDep,
+    reader: SeatReader, timetable_id: TimetableId, store: SavedTimetableReaderDep,
     session_id: Annotated[str | None, Query(max_length=64, pattern=r"^[A-Z0-9:-]+$")] = None,
     limit: Limit = 500, offset: Offset = 0,
 ) -> PageOut[SavedSeatOut]:
     """Individual seat allocations of a saved timetable (student IDs; restricted permission)."""
-    found = await store.seats(auth.settings.institution_id, timetable_id, session_id=session_id,
+    found = await store.seats(reader.institution_id, timetable_id, session_id=session_id,
                               limit=limit, offset=offset)
     if found is None:
         raise SavedTimetableNotFoundError()
@@ -380,7 +490,8 @@ async def list_saved_timetable_seats(
 # --- Approval and publication ------------------------------------------------------------------------------
 
 CHECKS = ["status and revision", "stored content fingerprint", "scheduling settings unchanged",
-          "seating capacities unchanged", "input snapshot unchanged", "H1-H11 on the current inputs"]
+          "seating capacities unchanged", "input snapshot unchanged", "H1-H11 on the current inputs",
+          "no venue or student clash with approved or published timetables of other cycles (X1, X2)"]
 
 
 def _status_change(change: workflow.StatusChange) -> TimetableStatusChangeOut:
@@ -395,7 +506,7 @@ def _status_change(change: workflow.StatusChange) -> TimetableStatusChangeOut:
 @router.post("/{timetable_id}/approve", response_model=TimetableStatusChangeOut)
 async def approve_timetable(
     approver: Approver, timetable_id: TimetableId, body: ApproveTimetableIn, generator: TimetableGeneratorDep,
-    auth: Auth, open_store: SavedTimetableWriterDep,
+    open_store: SavedTimetableWriterDep,
 ) -> TimetableStatusChangeOut:
     """DRAFT -> APPROVED.
 
@@ -403,7 +514,7 @@ async def approve_timetable(
     settings or inputs changed since generation: then regenerate a new draft.
     """
     async with open_store() as store:
-        change = await workflow.approve(store, generator, auth.settings.institution_id, timetable_id,
+        change = await workflow.approve(store, generator, approver.institution_id, timetable_id,
                                         expected_revision=body.expected_revision, user_id=approver.user_id,
                                         reason=body.reason)
     return _status_change(change)
@@ -412,7 +523,7 @@ async def approve_timetable(
 @router.post("/{timetable_id}/publish", response_model=TimetableStatusChangeOut)
 async def publish_timetable(
     approver: Approver, timetable_id: TimetableId, body: PublishTimetableIn, generator: TimetableGeneratorDep,
-    auth: Auth, open_store: SavedTimetableWriterDep,
+    open_store: SavedTimetableWriterDep,
 ) -> TimetableStatusChangeOut:
     """APPROVED -> PUBLISHED, after the same checks as approval.
 
@@ -420,7 +531,7 @@ async def publish_timetable(
     Nobody is notified yet.
     """
     async with open_store() as store:
-        change = await workflow.publish(store, generator, auth.settings.institution_id, timetable_id,
+        change = await workflow.publish(store, generator, approver.institution_id, timetable_id,
                                         expected_revision=body.expected_revision, user_id=approver.user_id,
                                         reason=body.reason, replace_published=body.replace_published)
     return _status_change(change)
@@ -429,14 +540,14 @@ async def publish_timetable(
 @router.post("/{timetable_id}/regenerate", response_model=SavedTimetableOut, status_code=status.HTTP_201_CREATED)
 async def regenerate_timetable(
     admin: Generator, timetable_id: TimetableId, body: RegenerateTimetableIn, generator: TimetableGeneratorDep,
-    auth: Auth, open_store: SavedTimetableWriterDep,
+    open_store: SavedTimetableWriterDep,
 ) -> SavedTimetableOut:
     """A new DRAFT for the same cycle and modules, from the current inputs and settings.
 
     The old timetable (any status) is kept unchanged; the new one records it as its source.
     """
     async with open_store() as store:  # read and closed before the solver runs
-        source = await store.get(auth.settings.institution_id, timetable_id)
+        source = await store.get(admin.institution_id, timetable_id)
     if source is None:
         raise SavedTimetableNotFoundError()
     header = source.header
@@ -452,15 +563,15 @@ async def regenerate_timetable(
         stored_preferences=preferences[1] if preferences else None,
         stored_settings_version=header["settings_version"],
     )
-    return await _generate_and_save(request, generator, auth, open_store, admin, source_timetable_id=timetable_id)
+    return await _generate_and_save(request, generator, open_store, admin, source_timetable_id=timetable_id)
 
 
 @router.get("/{timetable_id}/history", response_model=list[TimetableHistoryOut])
 async def get_timetable_history(
-    _: Reader, timetable_id: TimetableId, auth: Auth, store: SavedTimetableReaderDep,
+    reader: Reader, timetable_id: TimetableId, store: SavedTimetableReaderDep,
 ) -> list[TimetableHistoryOut]:
     """Every status change of a saved timetable, oldest first: who, when, why and what was checked."""
-    rows = await store.history(auth.settings.institution_id, timetable_id)
+    rows = await store.history(reader.institution_id, timetable_id)
     if rows is None:
         raise SavedTimetableNotFoundError()
     return [TimetableHistoryOut.model_validate(r) for r in rows]
