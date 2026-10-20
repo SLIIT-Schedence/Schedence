@@ -143,7 +143,8 @@ def summary(record, access, filters):
         policy_sources=[dict(label=row.label, sha256=row.sha256, provenance_kind=row.provenance_kind.value) for row in doc.sources]
             if access.mode == "ADMIN" else None,
         unresolved_issues=issues(record) if access.mode == "ADMIN" else None,
-        full_scope_expected_occurrences=record.run["expected_occurrences"] if access.mode == "ADMIN" else None)
+        full_scope_expected_occurrences=record.run["expected_occurrences"] if access.mode == "ADMIN" else None,
+        preview_label=version.get("preview_label"))
 
 
 def session_out(record, booking):

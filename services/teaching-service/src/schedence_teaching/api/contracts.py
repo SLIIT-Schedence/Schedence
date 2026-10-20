@@ -74,6 +74,8 @@ class TimetableOut(BaseModel):
     policy_sources: list[dict[str, str]] | None = None
     unresolved_issues: list[IssueOut] | None = None
     full_scope_expected_occurrences: int | None = None
+    # Set only for local development previews of unpublished experimental drafts.
+    preview_label: str | None = None
 
 
 class LecturerOut(BaseModel):
@@ -87,7 +89,8 @@ class VenueOut(BaseModel):
     venue_type: str
     capacity: int
     building: str | None
-    floor: str | None
+    # The source venue schema records a floor as a number or as text; both are returned unchanged.
+    floor: int | str | None
     lab_specialization: str | None
 
 

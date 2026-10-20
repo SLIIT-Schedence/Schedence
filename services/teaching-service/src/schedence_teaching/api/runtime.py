@@ -28,6 +28,9 @@ class TeachingSettings(CognitoSettings):
     teaching_generation_max_timeout_seconds: float = Field(default=600, gt=0, le=3600)
     teaching_generation_preflight_timeout_seconds: float = Field(default=90, gt=0, le=180)
     teaching_generation_per_institution_limit: int = Field(default=2, ge=1, le=10)
+    # LOCAL_PREVIEW serves saved, gate-validated local runs read-only (development only, never production).
+    teaching_read_store: Literal["DATABASE", "LOCAL_PREVIEW"] = "DATABASE"
+    teaching_local_preview_manifest: Path | None = None
 
     @field_validator("identity_service_url")
     @classmethod
@@ -52,11 +55,28 @@ class TeachingRuntime:
     generations: object | None = None
 
 
+def local_preview_runtime(settings):
+    """Development-only read runtime over saved local runs: no database connection and no generation."""
+    from .local_preview import LocalPreviewTimetableStore
+    if settings.app_env == "production" or settings.teaching_generation_mode != "DISABLED":
+        raise ValueError("the local preview store is for development reads only")
+    if settings.teaching_local_preview_manifest is None:
+        raise ValueError("the local preview store requires an explicit manifest")
+    store = LocalPreviewTimetableStore(settings.teaching_local_preview_manifest)
+    store.start()  # Re-validate the saved runs in the background from the first API use.
+    http = httpx.AsyncClient(follow_redirects=False)
+    return TeachingRuntime(build_verifier(settings),
+        IdentityPermissionsClient(settings.identity_service_url, http, timeout=settings.identity_timeout_seconds),
+        store, shutdown_hooks=(http.aclose,))
+
+
 def build_runtime():
     from schedence_db import create_db_engine, create_session_factory, find_env_file, load_settings
     from .store import DatabaseTimetableStore
     shared_env = os.environ.get("SCHEDENCE_ENV_FILE") or find_env_file()
     settings = load_settings_model(TeachingSettings, shared_env)
+    if settings.teaching_read_store == "LOCAL_PREVIEW":
+        return local_preview_runtime(settings)
     db = load_settings(env_prefix="TEACHING_", env_file=settings.teaching_database_env_file or shared_env, db_echo=False)
     engine = create_db_engine(db, direct=True, hide_parameters=True)
     http = httpx.AsyncClient(follow_redirects=False)
