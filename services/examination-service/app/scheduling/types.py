@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 
 from app.seating.snapshot import CapacitySnapshot
+from app.scheduling.protected import ProtectedSchedule
 from app.scheduling.contracts import SchedulingValidationError, Violation, data_shape_errors, frozen_sequence, text_errors
 from app.scheduling.policy import SchedulingPolicy, SolverSettings
 from app.sources.types import ExamPeriod, ExamPeriodModule, Module, Registration, Student, Venue, VenueBlock
@@ -46,6 +47,10 @@ class InputSnapshot:
     cycle_modules: tuple[ExamPeriodModule, ...] = ()
     # Report only, not a scheduling input: never part of the fingerprint.
     excluded_modules: tuple[ExcludedModule, ...] = ()
+    # APPROVED / PUBLISHED timetables of other cycles: fixed constraints for the solver and the validator.
+    # Not part of the fingerprint: approval re-reads and re-checks them, so a protected timetable that
+    # changes (and does not clash) never makes a clash-free draft stale.
+    protected: ProtectedSchedule | None = None
     fingerprint: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -58,6 +63,8 @@ class InputSnapshot:
             object.__setattr__(self, name, frozen_sequence(getattr(self, name), name, record))
         if type(self.period) is not ExamPeriod or type(self.capacities) is not CapacitySnapshot or type(self.policy) is not SchedulingPolicy:
             raise SchedulingValidationError((Violation("H11", "Snapshot requires an ExamPeriod, CapacitySnapshot and SchedulingPolicy."),))
+        if self.protected is not None and type(self.protected) is not ProtectedSchedule:
+            raise SchedulingValidationError((Violation("H11", "Protected timetables must be a ProtectedSchedule."),))
         object.__setattr__(self, "modules", tuple(replace(m, specializations=frozen_sequence(
             m.specializations, "module specializations", str)) for m in self.modules))
         object.__setattr__(self, "period", replace(self.period,

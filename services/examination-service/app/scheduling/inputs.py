@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import datetime as dt
 from collections import Counter
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import replace
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db.seed_models import EXAM_KINDS
 from app.exam_periods.rules import CALENDAR_RULES, ExamCalendar, apply_calendar
 from app.scheduling.policy import SchedulingPolicy, minute_time, whole_number
+from app.scheduling.protected import ProtectedSchedule
 from app.scheduling.contracts import SchedulingValidationError, data_shape_errors, frozen_sequence, text_errors
 from app.scheduling.sessions import required_sessions, sitting_capacity
 from app.scheduling.types import ExcludedModule, InputSnapshot, Violation
@@ -28,6 +31,10 @@ from app.sources.types import ExamPeriod, ExamPeriodExclusion, ExamPeriodModule,
 
 class SnapshotError(SchedulingValidationError):
     """Structured error at the data-source loading boundary."""
+
+
+# (the snapshot's period, its candidate student ids) -> the protected timetables overlapping that period
+ProtectedLoader = Callable[[ExamPeriod, Collection[str]], Awaitable[ProtectedSchedule]]
 
 
 def permitted_days(period: ExamPeriod) -> tuple[dt.date, ...]:
@@ -165,8 +172,13 @@ async def load_snapshot(
     from_cycle: bool = False,
     calendar: ExamCalendar | None = None,
     seating_preferences: dict | None = None,
+    protected: ProtectedLoader | None = None,
 ) -> InputSnapshot:
     """Read a coherent source. Database callers must use load_database_snapshot.
+
+    protected (optional) reads the APPROVED / PUBLISHED timetables of other cycles that overlap the
+    period's dates. They become fixed constraints of the solver and of the independent validator. Without
+    it (library, command line, older tests) nothing outside this cycle is considered.
 
     calendar (optional) replaces the period's dates, daily hours, weekends and excluded dates for this
     snapshot only; the saved period is not changed. Every rule, venue blocks and the fingerprint use it.
@@ -274,6 +286,11 @@ async def load_snapshot(
                              and cycle_candidate(r, scopes.get(r.module_code, "all"))),
                             key=lambda r: (r.student_id, r.module_code)))
     counts = Counter(r.module_code for r in included)
+    protected_schedule = None
+    if protected is not None:
+        protected_schedule = await protected(period, {r.student_id for r in included})
+        if type(protected_schedule) is not ProtectedSchedule:
+            raise SnapshotError((Violation("H11", "Protected timetables must be a ProtectedSchedule."),))
     snapshot = InputSnapshot(
         period=replace(period, exclusions=tuple(period.exclusions), exam_days=tuple(period.exam_days)),
         # duration_minutes becomes the duration of the period's kind (MID or FINAL),
@@ -290,6 +307,7 @@ async def load_snapshot(
         blocks=tuple(sorted(blocks, key=lambda b: (b.venue_id, b.block_date, b.start_time, b.source))),
         capacities=replace(capacities, venues=tuple(capacities.venues)),
         policy=policy,
+        protected=protected_schedule,
     )
     errors = validate_inputs(snapshot)
     if errors:
@@ -354,7 +372,21 @@ def _cycle_selection(period, all_modules, members, module_codes, registrations):
     return selected, chosen
 
 
-async def load_database_snapshot(engine: AsyncEngine, **kwargs) -> InputSnapshot:
-    """Read-only input adapter; not used by the synthetic CLI. Opens no other service."""
+async def load_database_snapshot(engine: AsyncEngine, *, institution_id: UUID | None = None, **kwargs) -> InputSnapshot:
+    """Read-only input adapter; not used by the synthetic CLI. Opens no other service.
+
+    With institution_id the protected timetables of that institution's other cycles are read in the
+    same REPEATABLE READ transaction as every other input.
+    """
     async with snapshot_session(engine) as session:
+        if institution_id is not None:
+            from app.saved_timetables.store import DatabaseTimetableStore  # local: the store imports app.scheduling, whose package imports this module
+
+            async def protected(period, students):
+                return await DatabaseTimetableStore(session).protected_schedule(
+                    institution_id, exclude_period_code=period.period_code, start_date=period.start_date,
+                    end_date=period.end_date, student_ids=students,
+                    minimum_break_minutes=kwargs.get("policy", SchedulingPolicy()).minimum_break_minutes)
+
+            kwargs["protected"] = protected
         return await load_snapshot(DatabaseSource(session), DatabaseSeatingStore(session), **kwargs)

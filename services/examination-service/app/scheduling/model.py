@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from ortools.sat.python import cp_model
 
-from app.scheduling.availability import allowed_starts, merged_blocks, origin
+from app.scheduling.availability import allowed_starts, merged_blocks, origin, protected_student_spans
 from app.scheduling.sessions import session_counts
 from app.scheduling.types import (
     DraftTimetable, ExamSession, InputSnapshot, RoomAllocation, SeatAllocation,
@@ -45,7 +45,8 @@ def build_hard_model(snapshot: InputSnapshot):
     student_intervals = {}
     split_intervals: dict[str, list] = defaultdict(list)  # student -> optional intervals of split modules
     room_intervals: dict[str, list] = defaultdict(list)
-    for venue, blocks in merged_blocks(snapshot).items():
+    # Fixed blocks and the venues held by protected timetables of other cycles (never moved by the solver).
+    for venue, blocks in merged_blocks(snapshot, protected=True).items():
         for index, (start, end) in enumerate(blocks):
             room_intervals[venue].append(model.new_fixed_size_interval_var(start, end - start, f"block:{venue}:{index}"))
     candidates: dict[str, list[str]] = defaultdict(list)
@@ -120,6 +121,13 @@ def build_hard_model(snapshot: InputSnapshot):
     for student in sorted(s for s, codes in by_student.items() if len(codes) > 1 and codes & split):
         model.add_no_overlap([student_intervals[c] for c in sorted(by_student[student] - split)]
                              + split_intervals[student])
+    # Candidates who also sit an exam of a protected timetable (another cycle, repeat students included):
+    # their own exams may not overlap those fixed exams or break the minimum break after them.
+    for student, spans in sorted(protected_student_spans(snapshot, break_minutes).items()):
+        own = [student_intervals[c] for c in sorted(by_student.get(student, set()) - split)] + split_intervals.get(student, [])
+        if own:
+            model.add_no_overlap(own + [model.new_fixed_size_interval_var(start, end - start, f"protected:{student}:{index}")
+                                        for index, (start, end) in enumerate(spans)])
     return model, layout, layout.allocated
 
 

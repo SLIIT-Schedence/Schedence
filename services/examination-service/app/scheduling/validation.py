@@ -8,6 +8,7 @@ from itertools import combinations
 
 from app.scheduling.inputs import validate_inputs
 from app.scheduling.policy import whole_number
+from app.scheduling.protected import cross_timetable_violations
 from app.scheduling.contracts import SchedulingValidationError, frozen_sequence, record_errors, text_errors
 from app.scheduling.types import DraftTimetable, ExamSession, InputSnapshot, RoomAllocation, SeatAllocation, Violation
 
@@ -154,6 +155,10 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
         for a, b in combinations(sorted(sessions, key=lambda s: s.start), 2):
             if b.start - a.end < dt.timedelta(minutes=policy.minimum_break_minutes):
                 error("H1", f"Student {student} has overlapping exams or insufficient break.")
+    # Protected timetables of other cycles (X1 venue, X2 student): independent of the solver and of H1-H11.
+    errors.extend(cross_timetable_violations(
+        snapshot.protected, [s for s, _ in normalized if isinstance(s.start, dt.datetime) and isinstance(s.end, dt.datetime)],
+        minimum_break_minutes=policy.minimum_break_minutes))
     return tuple(errors)
 
 
