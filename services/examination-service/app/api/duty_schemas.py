@@ -104,6 +104,9 @@ class RoomOut(_Out):
     venue_type: str | None
     building: str | None
     students: int
+    full_capacity: int | None = Field(None, description="The room's normal capacity.")
+    capacity_percentage: int | None = Field(None, description="Exam percentage for the room type; null when none is configured.")
+    exam_capacity: int | None = Field(None, description="Seats usable in an exam; null when no percentage is configured.")
 
 
 class SessionOut(_Out):

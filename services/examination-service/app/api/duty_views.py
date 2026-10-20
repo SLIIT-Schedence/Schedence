@@ -8,6 +8,7 @@ from app.api import duty_schemas as s
 from app.duty_allocation.demo_service import DemoContext, Snapshot, StoredAllocation, StoredSeating
 from app.duty_allocation.duty_changes import ChangeProposal
 from app.duty_allocation.fairness_metrics import FairnessMetrics
+from app.duty_allocation.student_seating import PROJECT_CAPACITY_RULES
 from app.duty_allocation.types import DutyAssignment
 from app.scheduling.contracts import Violation
 
@@ -215,15 +216,22 @@ def periods(records) -> list[s.PeriodOut]:
             for p in sorted(records.rows("exam_periods"), key=lambda r: r["period_code"])]
 
 
+def _room(lookup: Lookup, room) -> s.RoomOut:
+    venue = lookup.venues.get(room.venue_id)
+    kind = getattr(venue, "venue_type", None)
+    full = getattr(venue, "normal_capacity", None)
+    return s.RoomOut(venue_id=room.venue_id, venue_name=getattr(venue, "venue_name", None), venue_type=kind,
+                     building=getattr(venue, "building", None), students=len(room.seats), full_capacity=full,
+                     capacity_percentage=None if kind is None else PROJECT_CAPACITY_RULES.percentage(kind),
+                     exam_capacity=None if kind is None or full is None else PROJECT_CAPACITY_RULES.exam_capacity(kind, full))
+
+
 def sessions(context: DemoContext) -> list[s.SessionOut]:
     lookup = Lookup(context)
     status = {r["session_id"]: r.get("publication_status") for r in context.snapshot.records.rows("exam_sessions")}
     out = []
     for x in sorted(context.inputs.timetable.draft.sessions, key=lambda x: (x.start, x.session_id)):
-        rooms = [s.RoomOut(venue_id=r.venue_id, venue_name=getattr(lookup.venues.get(r.venue_id), "venue_name", None),
-                           venue_type=getattr(lookup.venues.get(r.venue_id), "venue_type", None),
-                           building=getattr(lookup.venues.get(r.venue_id), "building", None), students=len(r.seats))
-                 for r in x.rooms]
+        rooms = [_room(lookup, r) for r in x.rooms]
         out.append(s.SessionOut(session_id=x.session_id, module_code=x.module_code,
                                 module_name=lookup.modules.get(x.module_code), period_code=x.period_code,
                                 date=x.start.date(), start=x.start, end=x.end,
