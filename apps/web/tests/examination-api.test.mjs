@@ -224,6 +224,9 @@ function generationAction(options = {}) {
   const calls = [];
   let reads = 0;
   const actions = load("src/lib/examination-generation-actions.ts", {
+    "@/lib/examination-protection": load("src/lib/examination-protection.ts", {
+      "@/lib/examination-timetables": load("src/lib/examination-timetables.ts", {}),
+    }),
     "@/lib/examination-evaluation": load("src/lib/examination-evaluation.ts", {}),
     "@/lib/examination-settings": load("src/lib/examination-settings.ts", {}),
     "@/lib/examination-calendar": load("src/lib/examination-calendar.ts", {}),
@@ -385,6 +388,28 @@ test("optimized results retain actual baseline, selected and aggregate fairness 
   assert.deepEqual(result.result.optimization, raw.optimization);
 });
 
+test("generation retains the service cross-cycle snapshot for successful and infeasible results", async () => {
+  for (const generated of [true, false]) {
+    const cross = { protected_timetables: [{ timetable_id: 7, period_code: "P-S1-FINAL", period_name: "Semester 1",
+      status: "PUBLISHED", draft_number: 1, start_date: "2026-11-16", end_date: "2026-11-28", sessions_in_range: 1, occupied_venue_slots: 1 }],
+      occupied_slots: [{ timetable_id: 7, period_code: "P-S1-FINAL", module_code: "IT1001", venue_id: "R1", date: "2026-11-16", start_time: "08:30:00", end_time: "10:30:00" }],
+      occupied_slot_total: 1, shared_students: 12, student_conflict_status: generated ? "clear" : "blocked", venue_conflicts: 0,
+      student_conflicts: 0, overlapping_drafts: 2, protected_fingerprint: "frozen", blocking_issues: generated ? [] : ["No timetable fits the protected examinations."] };
+    const raw = generationFixture();
+    raw.generated = generated;
+    if (!generated) { raw.status = "INFEASIBLE"; raw.validation.passed = null; raw.sessions = []; }
+    raw.inputs.cross_timetable = { ...cross, student_ids: ["IT30123456"] };
+    const answer = await generationAction({ response: { ok: true, data: raw } }).submit();
+    assert.equal(answer.status, "complete");
+    assert.deepEqual(answer.result.inputs.cross_timetable, cross);
+    assert.ok(!JSON.stringify(answer).includes("IT30123456"));
+    const html = resultsView(answer.result);
+    assert.match(html, /Semester 1/);
+    assert.match(html, /Occupied exam slots/);
+    assert.ok(html.includes(generated ? "passed cross-cycle validation" : cross.blocking_issues[0]));
+  }
+});
+
 function renderModules() {
   const icons = load("src/components/icon.tsx", { "react/jsx-runtime": jsxRuntime });
   const ui = load("src/components/console/ui.tsx", {
@@ -413,7 +438,11 @@ function renderModules() {
   const preferencesSummary = load("src/app/(examination)/exams/generate/_components/preferences-summary.tsx", { ...common, "@/lib/examination-settings": settingsLib });
   const panels = load("src/app/(examination)/exams/generate/_components/result-panels.tsx", { ...common, "./period-calendar": styles,
     "@/lib/examination-evaluation": evaluationLib, "@/lib/examination-results": resultsLib, "./evaluation-dashboard": evaluation, "./preferences-summary": preferencesSummary });
+  const protectedTables = load("src/app/(examination)/exams/generate/_components/protected-timetables.tsx", {
+    ...common, "next/link": { default: (props) => createElement("a", props) },
+  });
   const results = load("src/app/(examination)/exams/generate/_components/generation-results.tsx", { ...common, "./period-calendar": styles,
+    "./protected-timetables": protectedTables,
     "@/lib/examination-evaluation": evaluationLib, "@/lib/examination-results": resultsLib, "./result-panels": panels, "./timetable-browser": browser });
   const link = { default: (props) => createElement("a", props) };
   const saveDraft = load("src/app/(examination)/exams/generate/_components/save-draft.tsx", {
@@ -430,7 +459,8 @@ function renderModules() {
     ...common, "./period-calendar": { ...styles, CalendarGrid: () => null },
   });
   return { ...common, ...results, ...panels, ...evaluation, ...preferencesSummary, ...groups, ...settings, ...browser, icons, "@/lib/examination-settings": settingsLib, "@/lib/examination-results": resultsLib, "@/lib/examination-evaluation": evaluationLib, "next/navigation": navigation, "./save-draft": saveDraft,
-    "@/lib/examination-selection": selection, "./exam-selection": examSelection, "./generation-calendar": generationCalendar };
+    "@/lib/examination-selection": selection, "./exam-selection": examSelection, "./generation-calendar": generationCalendar,
+    "./protection-preview": { ProtectionPreview: () => null }, "./protected-timetables": protectedTables };
 }
 
 // One real-shaped period option (the server builds these from /exam-periods and each /modules mapping).
