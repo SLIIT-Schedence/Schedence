@@ -1,0 +1,208 @@
+Module_Code,Module_Name,Lecturer_Name,Year,Semester,Specialization,Module_Credits,Exam_Type,Exam_Duration_Minutes,Extra_Reading_Time,Difficulty_Level,Original_Module_Code,Code_Status,Source_Row,Review_Notes
+IE1004,Computational Thinking,Dr. Kodagoda G. N.,1,1,COMPUTER_SCIENCE,4,computer_based,90,yes,1,IE1004,ORIGINAL_UNIQUE,2,
+IE1010,Engineering Mathematics,Unverified - select lecturer,1,2,CSNE,3,computer_based,60,no,1,IE1010,ORIGINAL_UNIQUE,3,
+IE1014,Engineering Mathematics - I,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,3,hybrid,60,no,2,IE1014,ORIGINAL_UNIQUE,4,
+IE1020,Network Fundamentals,Unverified - select lecturer,1,2,CSNE,4,hybrid,60,no,2,IE1020,ORIGINAL_UNIQUE,5,
+IE1024,Computer Organization and Architecture,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,3,written,60,no,1,IE1024,ORIGINAL_UNIQUE,6,
+IE1034,Engineering Mathematics - II,Dr. Kodagoda G. N.,1,2,COMPUTER_SCIENCE,3,computer_based,60,no,1,IE1034,ORIGINAL_UNIQUE,7,
+IE1044,Digital Electronics,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,3,hybrid,60,yes,2,IE1044,ORIGINAL_UNIQUE,8,
+ZX0001,Computer Networks,Unverified - select lecturer,1,2,COMPUTER_SCIENCE,3,hybrid,60,no,2,IE2004,TEMPORARY_RECODED,9,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0002,Systems and Network Programming,Unverified - select lecturer,1,1,CYBER,4,computer_based,90,yes,1,IE2012,TEMPORARY_RECODED,10,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0003,Routing & Switching,Unverified - select lecturer,1,2,CSNE,4,written,60,no,1,IE2020,TEMPORARY_RECODED,11,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0004,Object Oriented Programming,Unverified - select lecturer,1,1,ISE,4,computer_based,90,yes,1,IE2021,TEMPORARY_RECODED,12,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0005,Introduction to Cyber Security,Professor Abeygunawardhana P.K.W.,1,2,CYBER,4,hybrid,60,no,2,IE2022,TEMPORARY_RECODED,13,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0006,Analog Electronics,Unverified - select lecturer,1,1,CSNE,2,computer_based,60,yes,1,IE2030,TEMPORARY_RECODED,14,Temporary code assigned for prototype; confirm real module identity before production.
+IT1010,Introduction to Programming,Unverified - select lecturer,1,2,"CSNE, CYBER, DS, IM, ISE, IT, SE",4,computer_based,60,yes,1,IT1010,ORIGINAL_UNIQUE,15,
+IT1020,Introduction to Computer Systems,Unverified - select lecturer,1,1,"CSNE, CYBER, DS, IM, ISE, IT, SE",4,hybrid,60,no,2,IT1020,ORIGINAL_UNIQUE,16,
+IT1030,Mathematics for Computing,Unverified - select lecturer,1,2,"CSNE, CYBER, DS, IM, ISE, IT, SE",4,written,60,no,1,IT1030,ORIGINAL_UNIQUE,17,
+IT1040,Communication Skills,Unverified - select lecturer,1,1,"CSNE, CYBER, DS, IM, ISE, IT, SE",3,computer_based,90,no,1,IT1040,ORIGINAL_UNIQUE,18,
+IT1050,Object Oriented Concepts,Unverified - select lecturer,1,2,"CSNE, CYBER, DS, IM, ISE, IT, SE",2,hybrid,60,yes,2,IT1050,ORIGINAL_UNIQUE,19,
+IT1060,Software Process Modeling,Unverified - select lecturer,1,1,"CYBER, DS, IM, ISE, IT, SE",3,written,60,no,1,IT1060,ORIGINAL_UNIQUE,20,
+IT1080,English for Academic Purposes,Unverified - select lecturer,1,2,"CSNE, CYBER, DS, IM, ISE, IT, SE",3,hybrid,60,no,2,IT1080,ORIGINAL_UNIQUE,21,
+IT1090,Information Systems and Data Modeling,Unverified - select lecturer,1,1,"CSNE, CYBER, DS, IM, ISE, IT, SE",4,written,90,yes,1,IT1090,ORIGINAL_UNIQUE,22,
+IT1100,Internet and Web Technologies,Unverified - select lecturer,1,2,"CYBER, DS, IM, ISE, IT, SE",4,computer_based,60,yes,1,IT1100,ORIGINAL_UNIQUE,23,
+ZX0007,Software Engineering,Unverified - select lecturer,1,1,"DS, IM, IT, SE",4,written,60,no,1,IT2020,TEMPORARY_RECODED,24,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0008,Object Oriented Programming,Unverified - select lecturer,1,2,"DS, IM, IT, SE",4,computer_based,90,no,1,IT2030,TEMPORARY_RECODED,25,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0009,DataBase Management Systems,Unverified - select lecturer,1,1,ISE,4,hybrid,60,yes,2,IT2040,TEMPORARY_RECODED,26,Temporary code assigned for prototype; confirm real module identity before production.
+SE1012,Programming Methodology,Unverified - select lecturer,1,2,COMPUTER_SCIENCE,3,computer_based,60,no,1,SE1012,ORIGINAL_UNIQUE,27,
+SE1022,Discrete Mathematics,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,3,hybrid,90,no,2,SE1022,ORIGINAL_UNIQUE,28,
+SE1032,Communication Skills,Unverified - select lecturer,1,2,COMPUTER_SCIENCE,3,written,60,no,1,SE1032,ORIGINAL_UNIQUE,29,
+SE1042,English for Academic Purposes,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,3,computer_based,60,yes,1,SE1042,ORIGINAL_UNIQUE,30,
+SE1052,Data Structures and Algorithms,Unverified - select lecturer,1,2,COMPUTER_SCIENCE,4,hybrid,60,no,2,SE1052,ORIGINAL_UNIQUE,31,
+ZX0010,Object Oriented Analysis and Design,Unverified - select lecturer,1,1,COMPUTER_SCIENCE,4,hybrid,90,no,2,SE2012,TEMPORARY_RECODED,32,Temporary code assigned for prototype; confirm real module identity before production.
+IE2004,Computer Networks,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,3,written,90,no,1,IE2004,DUPLICATE_ORIGINAL_RETAINED,33,Original duplicate code retained; confirm catalogue details before production.
+IE2010,Digital Electronics,Unverified - select lecturer,2,1,CSNE,2,written,60,no,1,IE2010,ORIGINAL_UNIQUE,34,
+IE2012,Systems and Network Programming,Unverified - select lecturer,2,2,CYBER,4,hybrid,90,no,3,IE2012,DUPLICATE_ORIGINAL_RETAINED,35,Original duplicate code retained; confirm catalogue details before production.
+IE2020,Routing & Switching,Unverified - select lecturer,2,1,CSNE,4,computer_based,120,yes,2,IE2020,DUPLICATE_ORIGINAL_RETAINED,36,Original duplicate code retained; confirm catalogue details before production.
+IE2021,Object Oriented Programming,Unverified - select lecturer,2,2,ISE,4,hybrid,90,no,3,IE2021,DUPLICATE_ORIGINAL_RETAINED,37,Original duplicate code retained; confirm catalogue details before production.
+IE2022,Introduction to Cyber Security,Unverified - select lecturer,2,1,CYBER,4,written,90,no,1,IE2022,DUPLICATE_ORIGINAL_RETAINED,38,Original duplicate code retained; confirm catalogue details before production.
+IE2024,Probability and Statistics,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,3,hybrid,90,yes,3,IE2024,ORIGINAL_UNIQUE,39,
+IE2030,Analog Electronics,Unverified - select lecturer,2,1,CSNE,2,hybrid,60,no,3,IE2030,DUPLICATE_ORIGINAL_RETAINED,40,Original duplicate code retained; confirm catalogue details before production.
+IE2031,Structured Analysis and Design,Unverified - select lecturer,2,2,ISE,4,written,90,no,1,IE2031,ORIGINAL_UNIQUE,41,
+IE2032,Secure Operating Systems,Unverified - select lecturer,2,1,CYBER,4,computer_based,90,no,2,IE2032,ORIGINAL_UNIQUE,42,
+IE2040,Advanced Internetworking,Unverified - select lecturer,2,2,CSNE,4,written,90,no,1,IE2040,ORIGINAL_UNIQUE,43,
+IE2041,Information Systems Analysis,Unverified - select lecturer,2,1,ISE,4,computer_based,90,no,2,IE2041,ORIGINAL_UNIQUE,44,
+IE2042,Database Management Systems for Security,Unverified - select lecturer,2,2,CYBER,4,hybrid,90,yes,3,IE2042,ORIGINAL_UNIQUE,45,
+IE2050,Operating Systems,Unverified - select lecturer,2,1,CSNE,4,computer_based,90,no,2,IE2050,ORIGINAL_UNIQUE,46,
+IE2052,Advanced Networking Technologies,Unverified - select lecturer,2,2,CYBER,4,written,120,no,1,IE2052,ORIGINAL_UNIQUE,47,
+IE2060,Computer Systems Administration,Unverified - select lecturer,2,1,CSNE,4,hybrid,90,yes,3,IE2060,ORIGINAL_UNIQUE,48,
+IE2061,Operating Systems and Systems Administration,Unverified - select lecturer,2,2,ISE,4,written,120,no,1,IE2061,ORIGINAL_UNIQUE,49,
+IE2062,Web Security,Unverified - select lecturer,2,1,CYBER,4,computer_based,90,no,2,IE2062,ORIGINAL_UNIQUE,50,
+IE2070,Embedded Systems,Unverified - select lecturer,2,2,CSNE,4,written,120,no,1,IE2070,ORIGINAL_UNIQUE,51,
+IE2071,Design and Management of Computing Infrastructure,Unverified - select lecturer,2,1,ISE,4,computer_based,90,no,2,IE2071,ORIGINAL_UNIQUE,52,
+IE2072,Foundations of Algorithms,Unverified - select lecturer,2,2,CYBER,4,hybrid,90,no,3,IE2072,ORIGINAL_UNIQUE,53,
+IE2080,Database Systems Administration,Unverified - select lecturer,2,1,CSNE,4,computer_based,90,no,2,IE2080,ORIGINAL_UNIQUE,54,
+IE2081,Object Oriented Analysis and Design,Unverified - select lecturer,2,2,ISE,4,hybrid,90,no,3,IE2081,ORIGINAL_UNIQUE,55,
+IE2082,Discrete Mathematics,Unverified - select lecturer,2,1,CYBER,4,written,90,yes,1,IE2082,ORIGINAL_UNIQUE,56,
+IE2090,Professional Engineering Practice and Industrial Management,Unverified - select lecturer,2,2,CSNE,2,hybrid,60,no,3,IE2090,ORIGINAL_UNIQUE,57,
+ZX0011,Network Programming,Unverified - select lecturer,2,1,CSNE,4,computer_based,120,yes,2,IE3010,TEMPORARY_RECODED,58,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0012,IS Project Management,Unverified - select lecturer,2,2,ISE,3,hybrid,90,no,3,IE3011,TEMPORARY_RECODED,59,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0013,Directory Services and Network Management,Unverified - select lecturer,2,1,CSNE,4,hybrid,90,no,3,IE3020,TEMPORARY_RECODED,60,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0014,Organizational Business Functions I,Unverified - select lecturer,2,2,ISE,3,written,90,no,1,IE3021,TEMPORARY_RECODED,61,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0015,Enterprise Standards for Information Security,Unverified - select lecturer,2,1,CYBER,2,written,60,no,1,IE3102,TEMPORARY_RECODED,62,Temporary code assigned for prototype; confirm real module identity before production.
+IT2010,Mobile Application Development,Unverified - select lecturer,2,2,"DS, IM, IT, SE",4,written,90,no,1,IT2010,ORIGINAL_UNIQUE,63,
+IT2020,Software Engineering,Unverified - select lecturer,2,1,"DS, IM, IT, SE",4,computer_based,120,no,2,IT2020,DUPLICATE_ORIGINAL_RETAINED,64,Original duplicate code retained; confirm catalogue details before production.
+IT2030,Object Oriented Programming,Unverified - select lecturer,2,2,"CSNE, DS, IM, IT, SE",4,hybrid,90,yes,3,IT2030,DUPLICATE_ORIGINAL_RETAINED,65,Original duplicate code retained; confirm catalogue details before production.
+IT2040,Database Management Systems,Unverified - select lecturer,2,1,"DS, IM, ISE, IT, SE",4,written,90,no,1,IT2040,DUPLICATE_ORIGINAL_RETAINED,66,Original duplicate code retained; confirm catalogue details before production.
+IT2050,Computer Networks,Unverified - select lecturer,2,2,"DS, IM, IT, SE",4,computer_based,90,no,2,IT2050,ORIGINAL_UNIQUE,67,
+IT2060,Operating Systems and System Administration,Unverified - select lecturer,2,1,"DS, IM, IT, SE",4,hybrid,90,no,3,IT2060,ORIGINAL_UNIQUE,68,
+IT2070,Data Structures and Algorithms,Unverified - select lecturer,2,2,"DS, IM, IT, SE",4,written,120,yes,1,IT2070,ORIGINAL_UNIQUE,69,
+IT2090,Professional Skills,Unverified - select lecturer,2,1,"CSNE, CYBER, DS, IM, ISE, IT, SE",2,hybrid,60,no,3,IT2090,ORIGINAL_UNIQUE,70,
+IT2100,Probability and Statistics,Unverified - select lecturer,2,2,CSNE,3,written,90,no,1,IT2100,ORIGINAL_UNIQUE,71,
+IT2110,Probability and Statistics,Unverified - select lecturer,2,1,"DS, IM, ISE, IT, SE",3,computer_based,120,no,2,IT2110,ORIGINAL_UNIQUE,72,
+ZX0016,Network Design and Management,Unverified - select lecturer,2,2,IT,4,computer_based,120,no,2,IT3010,TEMPORARY_RECODED,73,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0017,Theory and Practices in Statistical Modelling,Unverified - select lecturer,2,1,DS,4,hybrid,90,yes,3,IT3011,TEMPORARY_RECODED,74,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0018,Database Systems,Unverified - select lecturer,2,2,IT,4,hybrid,90,yes,3,IT3020,TEMPORARY_RECODED,75,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0019,Programming Applications and Frameworks,Unverified - select lecturer,2,1,DS,4,written,90,no,1,IT3030,TEMPORARY_RECODED,76,Temporary code assigned for prototype; confirm real module identity before production.
+SE2012,Object Oriented Analysis and Design,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,4,written,90,no,1,SE2012,DUPLICATE_ORIGINAL_RETAINED,77,Original duplicate code retained; confirm catalogue details before production.
+SE2022,Design and Analysis of Algorithms,Unverified - select lecturer,2,1,COMPUTER_SCIENCE,3,computer_based,90,yes,2,SE2022,ORIGINAL_UNIQUE,78,
+SE2032,Database Management Systems,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,3,hybrid,90,no,3,SE2032,ORIGINAL_UNIQUE,79,
+SE2042,Operating Systems,Unverified - select lecturer,2,1,COMPUTER_SCIENCE,3,written,90,no,1,SE2042,ORIGINAL_UNIQUE,80,
+SE2052,Programming Paradigms,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,4,computer_based,120,no,2,SE2052,ORIGINAL_UNIQUE,81,
+SE2062,Distributed Systems,Unverified - select lecturer,2,1,COMPUTER_SCIENCE,3,hybrid,90,yes,3,SE2062,ORIGINAL_UNIQUE,82,
+SE2072,Software Engineering,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,3,written,90,no,1,SE2072,ORIGINAL_UNIQUE,83,
+SE2082,Human Computer Interaction,Unverified - select lecturer,2,1,COMPUTER_SCIENCE,3,computer_based,90,no,2,SE2082,ORIGINAL_UNIQUE,84,
+ZX0020,Software Engineering Process & Quality Management,Unverified - select lecturer,2,2,SE,4,hybrid,120,no,3,SE3010,TEMPORARY_RECODED,85,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0021,Technical Evolution of Multimedia,Unverified - select lecturer,2,1,IM,4,written,90,no,1,SE3011,TEMPORARY_RECODED,86,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0022,Industry Economics and Management,Unverified - select lecturer,2,2,COMPUTER_SCIENCE,3,computer_based,90,yes,2,SE3012,TEMPORARY_RECODED,87,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0023,Distributed Systems,Unverified - select lecturer,2,1,SE,4,written,90,no,1,SE3020,TEMPORARY_RECODED,88,Temporary code assigned for prototype; confirm real module identity before production.
+ZX0024,Design Ideation & Creative Communication,Unverified - select lecturer,2,2,IM,4,computer_based,90,yes,2,SE3021,TEMPORARY_RECODED,89,Temporary code assigned for prototype; confirm real module identity before production.
+IE3010,Network Programming,Unverified - select lecturer,3,1,CSNE,4,hybrid,120,no,4,IE3010,DUPLICATE_ORIGINAL_RETAINED,90,Original duplicate code retained; confirm catalogue details before production.
+IE3011,IS Project Management,Unverified - select lecturer,3,2,ISE,3,written,120,no,2,IE3011,DUPLICATE_ORIGINAL_RETAINED,91,Original duplicate code retained; confirm catalogue details before production.
+IE3014,Professional Skills,Unverified - select lecturer,3,1,COMPUTER_SCIENCE,3,written,150,no,2,IE3014,ORIGINAL_UNIQUE,92,
+IE3020,Directory Services and Network Management,Unverified - select lecturer,3,2,CSNE,4,written,120,no,2,IE3020,DUPLICATE_ORIGINAL_RETAINED,93,Original duplicate code retained; confirm catalogue details before production.
+IE3021,Organizational Business Functions I,Unverified - select lecturer,3,1,ISE,3,computer_based,120,no,3,IE3021,DUPLICATE_ORIGINAL_RETAINED,94,Original duplicate code retained; confirm catalogue details before production.
+IE3022,Applied Information Assurance,Unverified - select lecturer,3,2,CYBER,4,hybrid,120,yes,4,IE3022,ORIGINAL_UNIQUE,95,
+IE3030,Wide area Networks,Unverified - select lecturer,3,1,CSNE,4,computer_based,120,no,3,IE3030,ORIGINAL_UNIQUE,96,
+IE3031,Management Information Systems,Unverified - select lecturer,3,2,ISE,3,hybrid,120,yes,4,IE3031,ORIGINAL_UNIQUE,97,
+IE3032,Network Security,Unverified - select lecturer,3,1,CYBER,4,written,150,no,2,IE3032,ORIGINAL_UNIQUE,98,
+IE3040,Information Storage Management,Unverified - select lecturer,3,2,CSNE,4,hybrid,120,yes,4,IE3040,ORIGINAL_UNIQUE,99,
+IE3041,Data Management and Business Intelligence,Unverified - select lecturer,3,1,ISE,4,written,150,no,2,IE3041,ORIGINAL_UNIQUE,100,
+IE3042,Secure Software Systems,Unverified - select lecturer,3,2,CYBER,4,computer_based,120,no,3,IE3042,ORIGINAL_UNIQUE,101,
+IE3050,Wireless Communications,Unverified - select lecturer,3,1,CSNE,4,written,150,no,2,IE3050,ORIGINAL_UNIQUE,102,
+IE3051,E Business Strategy & Architecture and Design,Unverified - select lecturer,3,2,ISE,3,computer_based,120,no,3,IE3051,ORIGINAL_UNIQUE,103,
+IE3052,Information Security Risk Management,Unverified - select lecturer,3,1,CYBER,2,hybrid,60,no,4,IE3052,ORIGINAL_UNIQUE,104,
+IE3060,Business Management for IT,Unverified - select lecturer,3,2,CSNE,3,computer_based,120,no,3,IE3060,ORIGINAL_UNIQUE,105,
+IE3061,Information Security Management,Unverified - select lecturer,3,1,ISE,4,hybrid,120,no,4,IE3061,ORIGINAL_UNIQUE,106,
+IE3062,Data and Operating Systems Security,Unverified - select lecturer,3,2,CYBER,4,written,120,yes,2,IE3062,ORIGINAL_UNIQUE,107,
+IE3071,Organizational Business Functions II,Unverified - select lecturer,3,1,ISE,3,written,120,yes,2,IE3071,ORIGINAL_UNIQUE,108,
+IE3072,Information Security Policy and Management,Unverified - select lecturer,3,2,CYBER,2,computer_based,60,no,3,IE3072,ORIGINAL_UNIQUE,109,
+IE3080,Network Security Engineering,Unverified - select lecturer,3,1,CSNE,4,written,120,yes,2,IE3080,ORIGINAL_UNIQUE,110,
+IE3081,Enterprise Resource Planning,Unverified - select lecturer,3,2,ISE,4,computer_based,120,no,3,IE3081,ORIGINAL_UNIQUE,111,
+IE3082,Cryptography,Unverified - select lecturer,3,1,CYBER,4,hybrid,150,no,4,IE3082,ORIGINAL_UNIQUE,112,
+IE3091,Information Systems Strategic Management,Unverified - select lecturer,3,2,ISE,3,hybrid,150,no,4,IE3091,ORIGINAL_UNIQUE,113,
+IE3102,Enterprise Standards for Information Security,Unverified - select lecturer,3,1,CYBER,2,computer_based,60,no,3,IE3102,DUPLICATE_ORIGINAL_RETAINED,114,Original duplicate code retained; confirm catalogue details before production.
+IE3112,Mobile Security,Unverified - select lecturer,3,2,CYBER,4,hybrid,120,yes,4,IE3112,ORIGINAL_UNIQUE,115,
+IT3010,Network Design and Management,Unverified - select lecturer,3,1,IT,4,hybrid,120,yes,4,IT3010,DUPLICATE_ORIGINAL_RETAINED,116,Original duplicate code retained; confirm catalogue details before production.
+IT3011,Theory and Practices in Statistical Modelling,Unverified - select lecturer,3,2,DS,4,written,120,no,2,IT3011,DUPLICATE_ORIGINAL_RETAINED,117,Original duplicate code retained; confirm catalogue details before production.
+IT3020,Database Systems,Unverified - select lecturer,3,1,IT,4,written,120,no,2,IT3020,DUPLICATE_ORIGINAL_RETAINED,118,Original duplicate code retained; confirm catalogue details before production.
+IT3021,Data Warehousing and Business Intelligence,Unverified - select lecturer,3,2,DS,4,computer_based,120,no,3,IT3021,ORIGINAL_UNIQUE,119,
+IT3030,Programming Applications and Frameworks,Unverified - select lecturer,3,1,"DS, IT",4,computer_based,120,no,3,IT3030,DUPLICATE_ORIGINAL_RETAINED,120,Original duplicate code retained; confirm catalogue details before production.
+IT3031,Database Systems and Data-Driven Application,Unverified - select lecturer,3,2,DS,4,hybrid,120,no,4,IT3031,ORIGINAL_UNIQUE,121,
+IT3040,IT Project Management,Unverified - select lecturer,3,1,IT,4,hybrid,120,no,4,IT3040,ORIGINAL_UNIQUE,122,
+IT3051,Fundamentals of Data Mining,Unverified - select lecturer,3,2,DS,4,computer_based,120,no,3,IT3051,ORIGINAL_UNIQUE,123,
+ZX0025,Human Computer Interaction,Unverified - select lecturer,3,1,IT,3,computer_based,120,no,3,IT3060,TEMPORARY_RECODED,124,Temporary code assigned for prototype; confirm real module identity before production.
+IT3060,Information Retrieval and Web Analytics,Unverified - select lecturer,3,2,DS,4,computer_based,120,no,3,IT3060,DUPLICATE_ORIGINAL_RETAINED,125,Original duplicate code retained; confirm catalogue details before production.
+IT3061,Massive Data Processing and cloud Computing,Unverified - select lecturer,3,1,DS,4,hybrid,120,no,4,IT3061,ORIGINAL_UNIQUE,126,
+IT3070,Information Assurance & Security,Unverified - select lecturer,3,2,IT,4,hybrid,120,no,4,IT3070,ORIGINAL_UNIQUE,127,
+IT3071,Machine Learning and Optimization Methods,Unverified - select lecturer,3,1,DS,4,written,120,no,2,IT3071,ORIGINAL_UNIQUE,128,
+IT3080,Data Sceince & Analytics,Unverified - select lecturer,3,2,IT,4,written,120,no,2,IT3080,ORIGINAL_UNIQUE,129,
+IT3090,Business Management for IT,Unverified - select lecturer,3,1,IT,3,computer_based,120,yes,3,IT3090,ORIGINAL_UNIQUE,130,
+ZX0026,Modern Topics in IT,Unverified - select lecturer,3,2,IT,4,computer_based,120,no,3,IT4020,TEMPORARY_RECODED,131,Temporary code assigned for prototype; confirm real module identity before production.
+SE3010,Software Engineering Process & Quality Management,Unverified - select lecturer,3,1,SE,4,written,120,no,2,SE3010,DUPLICATE_ORIGINAL_RETAINED,132,Original duplicate code retained; confirm catalogue details before production.
+SE3011,Technical Evolution of Multimedia,Unverified - select lecturer,3,2,IM,4,computer_based,120,yes,3,SE3011,DUPLICATE_ORIGINAL_RETAINED,133,Original duplicate code retained; confirm catalogue details before production.
+SE3012,Industry Economics and Management,Unverified - select lecturer,3,1,COMPUTER_SCIENCE,3,hybrid,120,no,4,SE3012,DUPLICATE_ORIGINAL_RETAINED,134,Original duplicate code retained; confirm catalogue details before production.
+SE3020,Distributed Systems,Unverified - select lecturer,3,2,SE,4,computer_based,120,yes,3,SE3020,DUPLICATE_ORIGINAL_RETAINED,135,Original duplicate code retained; confirm catalogue details before production.
+SE3021,Design Ideation & Creative Communication,Unverified - select lecturer,3,1,IM,4,hybrid,120,no,4,SE3021,DUPLICATE_ORIGINAL_RETAINED,136,Original duplicate code retained; confirm catalogue details before production.
+SE3030,Software Architecture,Unverified - select lecturer,3,2,SE,4,hybrid,120,no,4,SE3030,ORIGINAL_UNIQUE,137,
+SE3031,3D Modeling & Animation,Unverified - select lecturer,3,1,IM,4,written,120,no,2,SE3031,ORIGINAL_UNIQUE,138,
+SE3032,Graphics and Visualization,Unverified - select lecturer,3,2,COMPUTER_SCIENCE,3,computer_based,150,no,3,SE3032,ORIGINAL_UNIQUE,139,
+SE3040,Application Frameworks,Unverified - select lecturer,3,1,SE,4,written,120,no,2,SE3040,ORIGINAL_UNIQUE,140,
+SE3041,Digital Video Production & Delivery,Unverified - select lecturer,3,2,IM,4,computer_based,150,no,3,SE3041,ORIGINAL_UNIQUE,141,
+SE3050,User Experience Engineering,Unverified - select lecturer,3,1,SE,3,computer_based,150,no,3,SE3050,ORIGINAL_UNIQUE,142,
+SE3060,Database Systems,Unverified - select lecturer,3,2,SE,4,hybrid,120,yes,4,SE3060,ORIGINAL_UNIQUE,143,
+SE3061,User Experience Designing,Unverified - select lecturer,3,1,IM,3,written,120,no,2,SE3061,ORIGINAL_UNIQUE,144,
+SE3062,Intelligent Systems,Unverified - select lecturer,3,2,COMPUTER_SCIENCE,3,computer_based,120,no,3,SE3062,ORIGINAL_UNIQUE,145,
+SE3070,Case Studies in Software Engineering,Unverified - select lecturer,3,1,SE,4,written,120,no,2,SE3070,ORIGINAL_UNIQUE,146,
+SE3071,Digital Image Processing,Unverified - select lecturer,3,2,IM,4,computer_based,120,no,3,SE3071,ORIGINAL_UNIQUE,147,
+SE3080,Software Project Management,Unverified - select lecturer,3,1,SE,3,computer_based,120,no,3,SE3080,ORIGINAL_UNIQUE,148,
+SE3081,Digital Marketing Strategies,Unverified - select lecturer,3,2,IM,3,hybrid,120,no,4,SE3081,ORIGINAL_UNIQUE,149,
+SE3082,Parallel Computing,Unverified - select lecturer,3,1,COMPUTER_SCIENCE,3,written,150,yes,2,SE3082,ORIGINAL_UNIQUE,150,
+SE3091,Games Technology,Unverified - select lecturer,3,2,IM,4,written,150,yes,2,SE3091,ORIGINAL_UNIQUE,151,
+SE3092,Platform Based Development,Unverified - select lecturer,3,1,COMPUTER_SCIENCE,3,computer_based,120,no,3,SE3092,ORIGINAL_UNIQUE,152,
+SE3102,Research Methods,Unverified - select lecturer,3,2,COMPUTER_SCIENCE,2,hybrid,60,no,4,SE3102,ORIGINAL_UNIQUE,153,
+SE3112,Advanced Software Engineering,Unverified - select lecturer,3,1,COMPUTER_SCIENCE,3,written,120,no,2,SE3112,ORIGINAL_UNIQUE,154,
+ZX0027,Machine Learning,Unverified - select lecturer,3,2,COMPUTER_SCIENCE,3,computer_based,150,no,3,SE4022,TEMPORARY_RECODED,155,Temporary code assigned for prototype; confirm real module identity before production.
+IE4010,Information Security Management,Unverified - select lecturer,4,1,CSNE,4,computer_based,150,no,4,IE4010,ORIGINAL_UNIQUE,156,
+IE4011,Business Process Management,Unverified - select lecturer,4,2,ISE,4,hybrid,150,yes,5,IE4011,ORIGINAL_UNIQUE,157,
+IE4012,Offensive Hacking: Tactical and Strategic,Unverified - select lecturer,4,1,CYBER,4,written,180,no,3,IE4012,ORIGINAL_UNIQUE,158,
+IE4020,Enterprise Standards for Information Systems,Unverified - select lecturer,4,2,"CSNE, IT",4,hybrid,150,yes,5,IE4020,ORIGINAL_UNIQUE,159,
+IE4022,Security Economic Analysis,Unverified - select lecturer,4,1,CYBER,4,computer_based,150,no,4,IE4022,ORIGINAL_UNIQUE,160,
+IE4030,Virtualization and Cloud Computing Technologies,Unverified - select lecturer,4,2,CSNE,4,written,180,no,3,IE4030,ORIGINAL_UNIQUE,161,
+IE4032,Information Warfare,Unverified - select lecturer,4,1,CYBER,4,hybrid,150,no,5,IE4032,ORIGINAL_UNIQUE,162,
+IE4040,Information Assurance and Auditing,Unverified - select lecturer,4,2,"CSNE, ISE, IT",4,computer_based,150,no,4,IE4040,ORIGINAL_UNIQUE,163,
+IE4042,Secure Software Engineering,Unverified - select lecturer,4,1,CYBER,4,written,150,yes,3,IE4042,ORIGINAL_UNIQUE,164,
+IE4050,Parallel and Distributed Computing,Unverified - select lecturer,4,2,CSNE,4,hybrid,150,no,5,IE4050,ORIGINAL_UNIQUE,165,
+IE4052,Hardware Security,Unverified - select lecturer,4,1,CYBER,4,computer_based,150,no,4,IE4052,ORIGINAL_UNIQUE,166,
+IE4054,Information Security,Unverified - select lecturer,4,2,COMPUTER_SCIENCE,4,written,150,no,3,IE4054,ORIGINAL_UNIQUE,167,
+IE4060,Robotics & Intelligent Systems,Unverified - select lecturer,4,1,"CSNE, IT, SE",4,written,150,yes,3,IE4060,ORIGINAL_UNIQUE,168,
+IE4062,Cyber Forensics and Incident Response,Unverified - select lecturer,4,2,CYBER,4,hybrid,180,no,5,IE4062,ORIGINAL_UNIQUE,169,
+IE4070,Design and Management of Enterprise Network,Unverified - select lecturer,4,1,CSNE,4,computer_based,150,no,4,IE4070,ORIGINAL_UNIQUE,170,
+IE4071,Practicing Business Analyst,Unverified - select lecturer,4,2,ISE,4,hybrid,180,no,5,IE4071,ORIGINAL_UNIQUE,171,
+IE4072,Governance and Cyber Law Clinic,Unverified - select lecturer,4,1,CYBER,4,written,150,no,3,IE4072,ORIGINAL_UNIQUE,172,
+IE4080,Software Deﬁned Networks,Unverified - select lecturer,4,2,CSNE,4,hybrid,180,no,5,IE4080,ORIGINAL_UNIQUE,173,
+IE4081,Supply Chain Management,Unverified - select lecturer,4,1,ISE,4,written,150,no,3,IE4081,ORIGINAL_UNIQUE,174,
+IE4092,Machine Learning for Cyber Security,Unverified - select lecturer,4,2,CYBER,4,hybrid,150,no,5,IE4092,ORIGINAL_UNIQUE,175,
+IE4094,Robotics (Elective),Unverified - select lecturer,4,1,COMPUTER_SCIENCE,3,computer_based,180,no,4,IE4094,ORIGINAL_UNIQUE,176,
+IE4131,Human Computer Interaction,Unverified - select lecturer,4,2,ISE,4,hybrid,150,no,5,IE4131,ORIGINAL_UNIQUE,177,
+IE4151,Human Resource Information Systems,Unverified - select lecturer,4,1,ISE,4,computer_based,150,no,4,IE4151,ORIGINAL_UNIQUE,178,
+IT4011,Database Administration and Storage Systems,Unverified - select lecturer,4,2,DS,4,hybrid,150,no,5,IT4011,ORIGINAL_UNIQUE,179,
+IT4020,Modern Topics in IT,Unverified - select lecturer,4,1,IT,4,hybrid,150,no,5,IT4020,DUPLICATE_ORIGINAL_RETAINED,180,Original duplicate code retained; confirm catalogue details before production.
+IT4021,Internet of Things and Big Data Analytics,Unverified - select lecturer,4,2,DS,4,written,180,yes,3,IT4021,ORIGINAL_UNIQUE,181,
+IT4030,Internet of Things,Unverified - select lecturer,4,1,"CSNE, IT",4,written,180,yes,3,IT4030,ORIGINAL_UNIQUE,182,
+IT4031,Visual Analytics and User Experience Design,Unverified - select lecturer,4,2,DS,4,computer_based,150,no,4,IT4031,ORIGINAL_UNIQUE,183,
+IT4040,Database Administration,Unverified - select lecturer,4,1,IT,4,computer_based,150,no,4,IT4040,ORIGINAL_UNIQUE,184,
+IT4041,Introduction to Information Security Analytics,Unverified - select lecturer,4,2,DS,4,hybrid,150,no,5,IT4041,ORIGINAL_UNIQUE,185,
+IT4050,Innovation Management and Entrepreneurship,Unverified - select lecturer,4,1,"ISE, IT",4,hybrid,150,no,5,IT4050,ORIGINAL_UNIQUE,186,
+IT4060,Machine Learning,Unverified - select lecturer,4,2,"IT, SE",4,written,150,no,3,IT4060,ORIGINAL_UNIQUE,187,
+IT4090,Cloud Computing,Unverified - select lecturer,4,1,IT,4,written,150,no,3,IT4090,ORIGINAL_UNIQUE,188,
+IT4100,Software Quality Asuarance,Unverified - select lecturer,4,2,"ISE, IT",4,computer_based,150,no,4,IT4100,ORIGINAL_UNIQUE,189,
+IT4110,Computer Systems and Network Administration,Unverified - select lecturer,4,1,IT,4,hybrid,150,no,5,IT4110,ORIGINAL_UNIQUE,190,
+IT4120,Knowledge Management,Unverified - select lecturer,4,2,"ISE, IT",4,written,180,yes,3,IT4120,ORIGINAL_UNIQUE,191,
+IT4130,Image Understanding & Processing,Unverified - select lecturer,4,1,SE,4,computer_based,150,no,4,IT4130,ORIGINAL_UNIQUE,192,
+SE4010,Current Trends in Software Engineering,Unverified - select lecturer,4,2,SE,4,hybrid,150,no,5,SE4010,ORIGINAL_UNIQUE,193,
+SE4020,Mobile Application Design & Development,Unverified - select lecturer,4,1,SE,4,written,150,no,3,SE4020,ORIGINAL_UNIQUE,194,
+SE4022,Machine Learning,Unverified - select lecturer,4,2,COMPUTER_SCIENCE,3,hybrid,150,yes,5,SE4022,DUPLICATE_ORIGINAL_RETAINED,195,Original duplicate code retained; confirm catalogue details before production.
+SE4030,Secure Software Development,Unverified - select lecturer,4,1,SE,4,computer_based,180,no,4,SE4030,ORIGINAL_UNIQUE,196,
+SE4031,Games Development,Unverified - select lecturer,4,2,IM,4,hybrid,150,yes,5,SE4031,ORIGINAL_UNIQUE,197,
+SE4032,Advanced Mathematics,Unverified - select lecturer,4,1,COMPUTER_SCIENCE,3,written,150,no,3,SE4032,ORIGINAL_UNIQUE,198,
+SE4040,Enterprise Application Development,Unverified - select lecturer,4,2,SE,4,hybrid,150,yes,5,SE4040,ORIGINAL_UNIQUE,199,
+SE4041,Mobile Application Design and Development,Unverified - select lecturer,4,1,IM,4,written,150,no,3,SE4041,ORIGINAL_UNIQUE,200,
+SE4042,Modelling and Simulation of Sciences,Unverified - select lecturer,4,2,COMPUTER_SCIENCE,4,computer_based,150,no,4,SE4042,ORIGINAL_UNIQUE,201,
+SE4050,Deep Learning,Unverified - select lecturer,4,1,"IT, SE",4,written,150,no,3,SE4050,ORIGINAL_UNIQUE,202,
+SE4051,Trends in Digital Media,Unverified - select lecturer,4,2,IM,4,computer_based,150,no,4,SE4051,ORIGINAL_UNIQUE,203,
+SE4052,Compiler Construction (Elective),Unverified - select lecturer,4,1,COMPUTER_SCIENCE,3,hybrid,150,no,5,SE4052,ORIGINAL_UNIQUE,204,
+SE4060,Parallel Computing,Unverified - select lecturer,4,2,"IT, SE",4,computer_based,150,no,4,SE4060,ORIGINAL_UNIQUE,205,
+SE4061,Multimedia Project Management,Unverified - select lecturer,4,1,IM,4,hybrid,150,no,5,SE4061,ORIGINAL_UNIQUE,206,
+SE4062,Image Processing and Computer Vision (Elective),Unverified - select lecturer,4,2,COMPUTER_SCIENCE,3,written,180,yes,3,SE4062,ORIGINAL_UNIQUE,207,
+SE4072,Deep Learning (Elective),Professor Abeygunawardhana P.K.W.,4,1,COMPUTER_SCIENCE,3,computer_based,150,no,4,SE4072,ORIGINAL_UNIQUE,208,
