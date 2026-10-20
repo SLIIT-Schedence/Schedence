@@ -7,7 +7,7 @@ import { Badge, Card, EmptyState, formatDate, formatDateTime, Kpi, PageSkeleton 
 import { Icon } from "@/components/icon";
 import { requireExaminationAdmin } from "@/lib/examination-access";
 import {
-  getSavedTimetable, getTimetableHistory, listExamModules, listSavedTimetables,
+  getSavedTimetable, getTimetableHistory, listExamModules, listExamPeriods, listSavedTimetables,
   type SavedTimetable, type SavedTimetableDetail, type TimetableHistoryEntry,
 } from "@/lib/examination";
 import { approveSavedTimetable, publishSavedTimetable } from "@/lib/examination-timetable-actions";
@@ -17,6 +17,7 @@ import {
 import { ExaminationReadError } from "../../_components/read-error";
 import { RefreshButton } from "../../_components/refresh-button";
 import { TimetableBrowser } from "../../generate/_components/timetable-browser";
+import { PreferencesSummary } from "../../generate/_components/preferences-summary";
 
 export const metadata: Metadata = { title: "Saved timetable" };
 
@@ -42,7 +43,7 @@ async function TimetableDetail({ params }: { params: Params }) {
   const { id: raw } = await params;
   if (!/^[1-9][0-9]{0,9}$/.test(raw) || Number(raw) > 2_147_483_647) notFound();
   const id = Number(raw);
-  const [detail, history, modules] = await Promise.all([getSavedTimetable(id), getTimetableHistory(id), listExamModules()]);
+  const [detail, history, modules, periods] = await Promise.all([getSavedTimetable(id), getTimetableHistory(id), listExamModules(), listExamPeriods()]);
   if (!detail.ok) {
     if (detail.error.status === 404) notFound();
     return <Card><ExaminationReadError error={detail.error} what="this saved timetable" /></Card>;
@@ -54,6 +55,7 @@ async function TimetableDetail({ params }: { params: Params }) {
     : null;
   const current = published?.ok ? published.data.items[0] ?? null : undefined;
   const sessions = savedSessions(timetable, modules.ok ? modules.data : []);
+  const period = periods.ok ? periods.data.find((item) => item.period_code === timetable.period_code) : undefined;
   const me = account.id;
 
   return (
@@ -88,11 +90,18 @@ async function TimetableDetail({ params }: { params: Params }) {
           value={timetable.validation.passed ? "Passed" : "Failed"} hint="Independent H1–H11 check when saved" />
       </div>
 
-      <TimetableBrowser sessions={sessions} valid statusMessage="" title="Saved timetable sessions"
+      <TimetableBrowser sessions={sessions} valid={timetable.validation.passed === true} statusMessage="This timetable did not pass the saved independent validation." title="Saved timetable sessions"
+        exportMetadata={{ periodCode: timetable.period_code, periodName: timetable.period_name,
+          academicYearLabel: period?.academic_year_label, semester: period?.semester, examKind: timetable.exam_kind,
+          status: timetable.status, recordedAt: timetable.created_at, recordedAtLabel: "Saved",
+          calendarStart: timetable.inputs.start_date, calendarEnd: timetable.inputs.end_date,
+          draftNumber: timetable.draft_number, revision: timetable.revision, periodMetadataSource: "current" }}
         description="Sessions, venues and candidate counts as saved. Individual student seat allocations are not shown here." />
+      <p className="text-xs text-muted">Export academic year and examination semester come from the current period definition; these labels are not stored in older timetable snapshots. Saved dates and session assignments are used unchanged.</p>
       {!modules.ok && <p className="rounded-xl bg-secondary-soft p-4 text-sm text-secondary-ink">Module specializations could not be loaded, so the specialization filter is unavailable.</p>}
 
       <Summary timetable={timetable} me={me} />
+      <PreferencesSummary snapshot={timetable.inputs.scheduling_preferences} />
       <History history={history} me={me} />
     </>
   );
