@@ -157,3 +157,27 @@ No database or AWS is touched. Coverage:
 - workload retrieval and aggregation rules
 - Identity Service outage, disabled accounts, permission caching
 - migration/model consistency
+
+## Academic-owned scheduling inputs
+
+The additive `0002_teaching_inputs` revision registers source datasets,
+departments, staff teaching profiles, specializations, source-bound module
+records, module applicability, candidate teaching teams, lecturer preferences
+and original aggregate cohort counts. Existing staff and administrative tables
+are unchanged. Staff numbers remain the university IDs; new UUIDs are internal
+owner-issued record identifiers. Module codes remain nonunique so distinct
+source records such as the two IT2100 rows survive ingestion.
+
+Separate `pp1_specialization_allocations`, `pp1_student_groups` and
+`module_classification_reviews` tables retain testing provenance. A PP1
+candidate flag never asserts an official elective classification. Source-row
+module identity does not supply an authoritative academic offering ID. All 12
+new tables enforce institution-scoped foreign keys and forced RLS. The import
+only inserts or reuses exact matches and refuses conflicting existing values.
+
+Appointment titles in the staff workbook do not create dated administrative
+appointments or invent underlying academic ranks. Missing email and Identity
+references stay null. `ACTIVE` on newly inserted staff is the existing service
+operational default, rather than a source-provided employment-status claim.
+Venue inventory belongs to Resource; solver snapshots and historical timetable
+versions belong to Teaching. No new Academic API is introduced by this revision.

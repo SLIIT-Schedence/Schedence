@@ -10,6 +10,7 @@ from app.models.entities import (
     Staff,
     StaffAdministrativeAppointment,
 )
+from app.models import teaching_inputs  # Register academic-owned scheduling input tables.
 
 __all__ = [
     "COMBINATION_RULES",
