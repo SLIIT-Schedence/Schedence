@@ -5,6 +5,7 @@ Run from ``services/examination-service``::
     python -m app.seed --validate-only   # generate + validate, no database
     python -m app.seed --dry-run         # compare with the database, write nothing
     python -m app.seed                   # insert/update (never deletes)
+    python -m app.seed --with-synthetic-cycle --dry-run   # also a SYNTHETIC cycle mapping (testing)
 
 Exit codes: 0 success, 1 database error, 2 configuration error,
 3 validation failed, 4 seed tables missing (run ``alembic upgrade head``).
@@ -31,6 +32,7 @@ from schedence_db import (
 )
 from schedence_db.runtime import run
 
+from app.seed.cycles import build_synthetic_cycle
 from app.seed.generator import generate_dataset
 from app.seed.records import Dataset
 from app.seed.seeder import (
@@ -47,6 +49,8 @@ EXIT_OK, EXIT_DB, EXIT_CONFIG, EXIT_INVALID, EXIT_NO_TABLES = 0, 1, 2, 3, 4
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     data = generate_dataset()
+    if args.with_synthetic_cycle:
+        data = build_synthetic_cycle(data)
 
     if args.validate_only:
         return _validate_only(data)
@@ -99,6 +103,8 @@ def _validate_only(data: Dataset) -> int:
         ("venue blocks", data.venue_blocks),
         ("exam periods", data.exam_periods),
         ("exam period exclusions", data.exam_period_exclusions),
+        ("cycle modules", data.exam_period_modules),
+        ("  of which repeat_only", [c for c in data.exam_period_modules if c.candidate_scope == "repeat_only"]),
     ]:
         print(f"  {label:<24}{len(rows):>5}")
     _print_counts(data.registration_counts())
@@ -147,6 +153,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Show what would change; write nothing.")
     mode.add_argument("--validate-only", action="store_true", help="Generate and validate only; no database.")
+    parser.add_argument(
+        "--with-synthetic-cycle",
+        action="store_true",
+        help="Also add a SYNTHETIC examination cycle mapping and repeat-only registrations (testing only).",
+    )
     parser.add_argument(
         "--pooled",
         action="store_true",

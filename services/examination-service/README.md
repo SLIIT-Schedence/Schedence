@@ -99,7 +99,7 @@ model means the satisfaction problem was solved; it is not a timetable-quality s
 | H7 | Starts obey policy and the full sitting fits within daily examination hours |
 | H8 | Weekends and excluded dates obey the selected period's calendar |
 | H9 | Every room and student interval reserves duration plus reading time |
-| H10 | Each selected module has one sitting; each registered candidate gets exactly one room and logical seat |
+| H10 | Each selected module has the fewest sittings its capacity allows (one when everyone fits; see "Multiple sessions"), at different non-overlapping times; each registered candidate gets exactly one room and logical seat in exactly one sitting |
 | H11 | Input/output references, counts, session IDs, rooms and logical seats are checked for consistency |
 
 Logical seats are numbered within each room/session; these are not physical seat
@@ -422,7 +422,10 @@ services/examination-service/
 │       ├── 20261014_0003_campus_venues_expand.py
 │       ├── 20261014_0004_campus_venues_contract.py
 │       ├── 20261015_0005_configurable_exam_seating.py
-│       └── 20261018_0006_scheduling_settings.py
+│       ├── 20261018_0006_scheduling_settings.py
+│       ├── 20261019_0007_exam_period_kind.py
+│       ├── 20261019_0008_module_exam_eligibility.py
+│       └── 20261020_0009_exam_cycle_modules.py
 ├── app/
 │   ├── main.py                    # FastAPI app (create_app); uvicorn app.main:app
 │   ├── database.py                # engine + read-only sessions; writable only for settings changes
@@ -439,6 +442,7 @@ services/examination-service/
 │   │   ├── memory.py              # in-memory store (tests)
 │   │   ├── service.py             # validation, versions, dry run, history, logging
 │   │   └── snapshot.py            # frozen capacity snapshot for the future CP-SAT scheduler
+│   ├── generation/                # POST /timetables/generate: reuse the scheduler, validate, not saved
 │   ├── scheduling_settings/       # admin scheduling settings (versioned, per institution)
 │   │   ├── store.py               # SchedulingSettingsStore + DatabaseSchedulingSettingsStore
 │   │   ├── memory.py              # in-memory store (tests)
@@ -755,7 +759,7 @@ existing policy class:
 
 | Section | Class | Settings |
 |---|---|---|
-| `scheduling` | `SchedulingPolicy` | `permitted_start_times` (`"HH:MM"`), `minimum_break_minutes`, `max_rooms_per_exam` (`null` = no limit), `venue_compatibility` (every exam type), `module_venue_overrides` |
+| `scheduling` | `SchedulingPolicy` | `permitted_start_times` (`"HH:MM"`), `minimum_break_minutes`, `max_rooms_per_exam` (`null` = no limit, per session), `max_sessions_per_exam` (1-10, default 3; documents saved without it use 3), `venue_compatibility` (every exam type), `module_venue_overrides` |
 | `solver` | `SolverSettings` | `time_limit_seconds`, `random_seed`, `num_search_workers` |
 | `optimization` | `OptimizationPolicy` | S1-S5 weights, gap thresholds, workload coefficients, scales, `baseline_budget_percent` |
 | `fairness` | `FairnessPolicy` | `enabled`, `max_individual_increase_points`, `protect_worst_student`, `max_worst_increase_points` (`automatic_relaxation` must stay `false`) |
@@ -834,6 +838,279 @@ The backup tool does not export the scheduling settings tables yet.
 settings were saved, it stops and changes nothing; export the history first,
 then add `-x drop_scheduling_settings=true`.
 
+## Examination period kind (MID / FINAL, migration 0007)
+
+Every examination period has an `exam_kind`: `MID` or `FINAL` (database check
+`ck_seed_exam_periods_exam_kind_valid`). Migration 0007 adds the column with the
+default `FINAL`, so every existing period becomes a final examination period. No
+row is deleted. Old backups without the column also load as `FINAL`.
+
+The kind is shown by `GET /api/v1/exam-periods` and in the `inputs` of a
+generated timetable, and an unknown kind is rejected before solving. It does
+**not** change scheduling yet: MID and FINAL periods use the same hard rules
+H1-H11, S1-S5, fairness and seating rules.
+
+Not applied to Neon yet. Each step needs approval:
+
+```powershell
+cd services/examination-service
+python -m app.seed.backup export --pooled                 # 1. backup at 0006
+alembic -x pooled=true upgrade 0006:0007 --sql            # 2. preview the SQL; changes nothing
+alembic -x pooled=true upgrade 0007                       # 3. one transaction: new column + check
+alembic -x pooled=true current                            # 4. expect 0007
+```
+
+**Rollback:** `alembic -x pooled=true downgrade 0006` drops the check and the
+column. If a MID period exists, it stops and changes nothing; remove it first or
+add `-x drop_exam_kind=true`.
+
+## Module examination eligibility and Block Mode (migration 0008)
+
+New `seed_modules` fields, shown by `GET /api/v1/modules`:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `has_final_exam` | `true` | the module has a FINAL examination (`duration_minutes`) |
+| `has_mid_exam` | `false` | the module has a MID examination |
+| `mid_duration_minutes` | `null` | MID duration; required exactly when `has_mid_exam` |
+| `delivery_mode` | `regular` | `regular` or `block` (Block Mode) |
+| `block_category` | `null` | `pro_rata` or `full_module`; required exactly for block modules |
+
+The defaults keep every existing module as before: FINAL only, regular. The
+catalogue has no MID, Block Mode or pro-rata data, so **no real module is marked**.
+`SeedAssumptions.synthetic_*` can mark modules for tests only (empty by default).
+
+Scheduling: a MID period schedules only modules with a MID examination, using
+`mid_duration_minutes`; a FINAL period only modules with a FINAL examination.
+A selected module without an examination of the period's kind is rejected (422).
+Block Mode is stored and shown only; it does not change scheduling yet. Reading
+time is the same for MID and FINAL. H1-H11, S1-S5, fairness and seating are unchanged.
+
+Not applied to Neon yet. Preview with `alembic -x pooled=true upgrade 0007:0008 --sql`.
+**Rollback:** `downgrade 0007` stops if any module has MID, no-FINAL or Block Mode
+settings, unless `-x drop_module_exam_settings=true` is added.
+
+## Examination cycles (migration 0009)
+
+An examination period is an **examination cycle**. `seed_exam_period_modules`
+lists the modules examined in it, and who sits them (`candidate_scope`):
+
+* `all`: every registration of the module (normal and repeat);
+* `repeat_only`: only repeat registrations (a module re-examined for repeat
+  candidates, e.g. a semester 1 module in a semester 2 cycle).
+
+Rules (checked by seed validation and before solving, with clear 422 messages):
+a mapped module needs an examination of the cycle's kind (MID/FINAL); a regular
+module of another semester may only be `repeat_only` (Block Mode modules are not
+tied to a semester); every mapped module needs candidates. The mapping is empty
+by default: **no module is mapped until the cycle is configured**, and full-cycle
+generation never takes the whole catalogue or every module of a semester.
+`GET /api/v1/exam-periods/{period_code}/modules` shows the mapping.
+
+Registrations of modules that are not in the cycle's mapping are **never added
+automatically**. The generation response lists them as *potentially excluded*
+(`excluded_registrations`: totals, normal/repeat counts per module, and the other
+cycles that map the module; counts only, no student IDs) and adds a warning
+notice. Seed validation warns about repeat registrations whose module is in no
+cycle mapping.
+
+SYNTHETIC test mapping (never official): `python -m app.seed --with-synthetic-cycle`
+maps every synthetic module of the period's semester (`all`) and adds three real
+catalogue modules of the other semester with synthetic repeat registrations
+(`repeat_only`). It only inserts; reruns change nothing; existing rows are kept.
+
+Not applied to Neon yet. **Rollback:** `downgrade 0008` stops while mappings exist,
+unless `-x drop_exam_cycle_modules=true` is added. After 0009, `python -m app.seed`
+needs the new table (run `alembic upgrade head` first).
+
+## Multiple sessions (capacity-based)
+
+At each permitted start, one sitting of a module can seat at most the effective
+exam capacities of its compatible venues that **no venue block overlaps for the
+whole exam** (duration plus reading time), using the configurable seating
+percentage (default 50%, with per-venue overrides) and at most
+`max_rooms_per_exam` rooms. Before solving, each module gets the **fewest**
+sessions that could seat every candidate (`app/scheduling/sessions.py`):
+
+* some start can seat everyone: **one session**, modelled exactly as before (no
+  extra sessions);
+* otherwise the fewest non-overlapping starts whose free seats together can seat
+  everyone (an exact search), at most `max_sessions_per_exam` (default 3,
+  configurable); more is refused before solving with a clear H10 message (422).
+
+In the solver, the N sessions of a module are at different permitted times, in
+order and never overlapping; each has its own rooms (several rooms per session
+are allowed). Each candidate is assigned to exactly one session and one seat, and
+their chosen session must not clash (including the minimum break) with any of
+their other exams: normal, repeat or Block Mode. Venue blocks, capacity, duration
+and reading time apply to every session. S1-S5 and fairness score each student on
+the session they actually sit; the independent validator and evaluator read that
+from the seats. The validator recomputes the required session count itself.
+
+Session IDs: `PERIOD:MODULE` for one session (unchanged), `PERIOD:MODULE:S01`,
+`:S02`, ... when split. The generation API returns `session_number`,
+`session_count` and `session_label` (`"Session 01"`) per session, and
+`summary.multi_session_modules`. Offline CLI: `--max-sessions`.
+
+The count looks at each module on its own: rooms taken by other exams are left to
+the solver, which reports INFEASIBLE if the sessions cannot all be placed. The
+independent validator recomputes the count from the calendar and blocks itself.
+
+## Timetable generation API (not saved yet)
+
+`POST /api/v1/timetables/generate` (`examinations:generate`, only `EXAMINATION_ADMIN`)
+runs the existing scheduler on database inputs and returns a validated
+timetable. Nothing is saved or published. It reuses `load_database_snapshot`
+(one `REPEATABLE READ`, `READ ONLY` transaction), the active scheduling
+settings, `generate_timetable` / `optimize_timetable` and `validate_timetable`;
+it adds no scheduling logic.
+
+```json
+POST /api/v1/timetables/generate
+{
+  "period_code": "PP1-2026-S2-FINAL",
+  "mode": "feasibility",
+  "time_limit_seconds": 30
+}
+```
+
+* `module_codes` is **optional** (1-200, unique). Omitted (or `null`): the full
+  examination cycle, i.e. every module in the period's cycle mapping, with only
+  the cycle's registrations (`inputs.selection = "full_cycle"`). Listed: only
+  those modules, which must all be in the cycle (`partial_cycle`). A period
+  without a mapping refuses a full-cycle run (422) and accepts listed modules of
+  its own semester only (`listed_modules`).
+* `mode`: `feasibility` (H1-H11) or `optimized` (H1-H11, S1-S5 and the saved
+  fairness settings). `time_limit_seconds` may only lower the saved limit.
+* Settings: the active saved settings (or the defaults, version 0). Invalid
+  saved settings or missing settings tables (0006 not applied) answer `503`;
+  nothing is scheduled with them.
+* Response: `status`, `generated` (true only with a validated timetable),
+  `persisted: false`, `solver` (mode, limit, workers, seed, wall time,
+  version), `inputs` (period, counts, input/capacity/settings fingerprints and
+  `settings_version`), `validation` (`passed`, `rules_checked` H1-H11,
+  `violations`), `summary`, `sessions` (date, start/end time, module, rooms with
+  seat counts and exam capacity), `workload` (S1-S5 scores), `optimization`
+  (baseline vs selected, gap, fairness; `optimized` only), `diagnostics`,
+  `notices`. No per-student data.
+* Answers: solver outcomes `200` (`OPTIMAL`, `FEASIBLE`; `INFEASIBLE`, `UNKNOWN`,
+  `MODEL_INVALID` with `generated: false` and diagnostics), request or input
+  problems `422` (`rule`, `message`), another generation running `429`
+  (`Retry-After`), settings/database/solver unavailable `503`.
+* Resources: all reads finish before solving; the solver runs in a worker
+  thread (the server keeps answering); one generation at a time per process;
+  at most 300 s per API run, 200 modules, 20,000 registrations, 500 venues,
+  plus the solver limits (16 workers, one-day minimum break). A timetable that
+  fails independent validation is never returned (`MODEL_INVALID`).
+* Requires the `[solver]` extra (`ortools`) on the API server; without it `503`.
+
+### Per-timetable scheduling preferences
+
+Both `/api/v1/timetables/generate` and `/api/v1/timetables/drafts` accept an optional
+`scheduling_preferences` object. For example:
+
+```json
+{
+  "period_code": "PP1-2026-S2-FINAL",
+  "mode": "optimized",
+  "scheduling_preferences": {
+    "scheduling": {"permitted_start_times": ["09:00", "13:30"], "minimum_break_minutes": 90, "max_rooms_per_exam": 4, "max_sessions_per_exam": 3},
+    "solver": {"time_limit_seconds": 120, "num_search_workers": 1, "random_seed": 17},
+    "optimization": {"s1_weight": 40, "preparation_target_minutes": 3000},
+    "fairness": {"enabled": true, "max_individual_increase_points": 5},
+    "seating": {"default_percentage": 60}
+  }
+}
+```
+
+Only the supported scheduling controls, solver controls, S1-S5 weights, workload
+thresholds/reference values, baseline budget and fairness limits may be overridden.
+Unknown fields, venue compatibility/module exceptions, precision scales and
+automatic fairness relaxation are rejected. Cross-field validation uses the actual
+institution defaults before loading solver inputs. API time limits remain at most
+300 seconds and search workers at most 16. A separate `time_limit_seconds` may only
+lower the effective timetable limit. H1-H11 remain mandatory.
+
+Omitting preferences (or sending null) retains the legacy active-default behavior.
+Sending `{}` opts into a frozen copy of the current scheduling defaults and default
+seating percentage. Venue-specific seating rules remain authoritative; no settings
+PUT or database write is made during generation. Preferences and `calendar` are
+independent and can be used together.
+
+For opted-in timetables, `inputs.scheduling_preferences` records the complete
+effective settings, default seating and venue overrides, original capacity identity,
+effective capacity identity, source seating ruleset version and a versioned SHA-256
+fingerprint. Save Draft stores this in the existing immutable `inputs` JSONB column;
+no migration or trigger change is required. `settings_version` records the source
+defaults version, while `settings_fingerprint` identifies the effective configuration.
+
+Approval/publication reconstruct fresh source inputs with the stored configuration
+and selected calendar. Module, registration, venue, block, source seating/capacity,
+content-integrity and revision checks still run. Changes to another timetable's
+preferences never change defaults or stale this timetable. Regeneration preserves
+the stored scheduling preferences, default seating and calendar while refreshing
+source inputs and venue-specific rules. Legacy snapshots without preferences keep
+their existing checks. Corrupt or unsupported snapshots fail closed.
+
+## Saved draft timetables (migration 0010)
+
+`POST /api/v1/timetables/drafts` takes the same body as `/generate`, generates,
+validates the result again (H1-H11) and saves it as a new `DRAFT` (`201`).
+Only `OPTIMAL`/`FEASIBLE` and validated timetables are saved; otherwise `422`
+and nothing is stored. `/generate` is unchanged and still saves nothing.
+
+* Tables: `exam_timetables` (cycle, MID/FINAL, `draft_number`, status, solver
+  status and run, input fingerprint, settings version, seating rule version,
+  validation, summaries), `exam_timetable_sessions`, `exam_timetable_rooms`,
+  `exam_timetable_seats` (every candidate's logical seat).
+* Every save gets the next `draft_number` of its institution and cycle (an
+  advisory lock serialises saves); older drafts are never overwritten.
+* Names are copied, not foreign keys to the temporary seed tables.
+* Statuses `APPROVED`/`PUBLISHED`/`ARCHIVED`, `approved_*`/`published_*`
+  columns, `revision`, and at most one `PUBLISHED` timetable per cycle are used
+  by the workflow below (migration 0011).
+* Reads (`examinations:read`): `GET /api/v1/timetables` (newest first; filters
+  `period_code`, `exam_kind`, `status`; no sessions, no student IDs) and
+  `GET /api/v1/timetables/{timetable_id}` (sessions, venues, seat counts).
+* Seats (`examinations:generate` or `examinations:approve`):
+  `GET /api/v1/timetables/{timetable_id}/seats` (paged; `session_id`).
+* Every query is limited to this service's institution; another institution's
+  timetable is `404`. Downgrade refuses to drop saved timetables unless
+  `-x drop_saved_timetables=true`.
+
+## Approval and publishing workflow (migration 0011)
+
+DRAFT -> APPROVED -> PUBLISHED (-> ARCHIVED when replaced). Approve and publish
+need `examinations:approve`; body `expected_revision`, `reason` (5-500 chars);
+publish also takes `replace_published`.
+
+* `POST /api/v1/timetables/{id}/approve`: DRAFT only. `POST .../publish`:
+  APPROVED only (a DRAFT is refused). Wrong status, revision, or an already
+  published cycle: `409` with `detail[0].rule` = `STATUS`, `REVISION`,
+  `ALREADY_PUBLISHED`, `INTEGRITY` or `STALE`.
+* Before each change, with the row locked: the stored sessions, rooms and seats
+  must match `content_fingerprint` (taken at save); the active settings, seating
+  capacities and a fresh input snapshot must equal those used at generation;
+  and H1-H11 must pass on the current inputs. Otherwise `409 STALE` lists
+  `STALE_SETTINGS`, `STALE_CAPACITIES`, `STALE_INPUTS` and H-rule problems, and
+  nothing changes. Timetables saved before 0011 have no content fingerprint and
+  must be regenerated.
+* One published timetable per cycle: publishing another needs
+  `replace_published=true`, which archives the old one in the same transaction.
+* `POST /api/v1/timetables/{id}/regenerate` (`examinations:generate`): a new
+  DRAFT with the same cycle, modules and mode (`mode`, `time_limit_seconds`
+  optional), from the current inputs; `source_timetable_id` links it. The old
+  timetable is kept unchanged.
+* `GET /api/v1/timetables/{id}/history` (`examinations:read`): create, approve,
+  publish and archive rows with who, when, why and what was checked.
+* Database triggers enforce the rules too: content columns never change; only
+  the transitions above, each with revision + 1; approval and publication
+  details are fixed once set; sessions, rooms and seats are never updated and
+  are locked once a timetable leaves DRAFT; only drafts may be deleted;
+  history rows are never updated.
+* No notifications are sent yet. Downgrade refuses to drop workflow history
+  unless `-x drop_timetable_workflow=true`.
+
 ## API
 
 Start the server from `services/examination-service` (Windows needs the
@@ -868,6 +1145,8 @@ Reuses the team's authentication; there is no separate login system.
    `PUT /api/v1/settings/scheduling`), including
    dry runs, require `examinations:manage` in that institution. They do not also
    require `examinations:read`. Writes always ask Identity again (no cache).
+5. `POST /api/v1/timetables/generate` requires `examinations:generate` in that
+   institution (not also `read` or `manage`).
 
 Only `EXAMINATION_ADMIN` receives these permissions in the Identity catalog.
 Its existing `examinations:generate`, `examinations:approve`,
@@ -879,13 +1158,12 @@ stays off until a secure user -> student ID mapping exists.
 | Examination permission | Purpose |
 |---|---|
 | `examinations:read` | Current data/settings GET routes; future timetable views, report views, comparisons and exports |
-| `examinations:manage` | Current seating PUT/DELETE routes; future period, daily hours, scheduling policy configuration and draft edits |
-| `examinations:generate` | Future CP-SAT generation, cognitive load optimization and validation runs |
-| `examinations:approve` | Future approval and publication |
+| `examinations:manage` | Seating and scheduling-settings changes; future period, daily hours and draft edits |
+| `examinations:generate` | `POST /api/v1/timetables/generate` (not saved) and `POST /api/v1/timetables/drafts` (saved as a draft); seat allocations of saved timetables |
+| `examinations:approve` | Approve and publish saved timetables; their seat allocations |
 
-Generation and approval alone no longer grant reads or seating changes. No
-scheduling routes are added by this RBAC change. Existing API paths, request
-and response formats, seating history and version checks are preserved.
+Generation and approval alone do not grant reads or settings changes, and
+generation does not need them.
 
 **Rollout:** deploy these checks only after a separately approved Identity RBAC
 data update has added `examinations:read` and `examinations:manage` and granted
@@ -916,13 +1194,23 @@ sign in as an examination admin, and paste the **access token** into Swagger's
 | `GET /api/v1/registrations` | registrations, paginated | `student_id`, `module_code`, `registration_type`, `limit`, `offset` |
 | `GET /api/v1/venues` | venues with `exam_seating_percentage`, `exam_seating_rule` (`default`/`venue`), effective `exam_capacity`, `available_for_exams`, legacy `seed_exam_capacity` | `venue_type` |
 | `GET /api/v1/venue-blocks` | times a venue is unavailable | `venue_id`, `source`, `date_from`, `date_to` |
-| `GET /api/v1/exam-periods` | periods with exclusions and exam days | |
+| `GET /api/v1/exam-periods` | periods with `exam_kind` (`MID`/`FINAL`), exclusions and exam days | |
 | `GET /api/v1/exam-periods/{period_code}` | one period | |
+| `GET /api/v1/exam-periods/{period_code}/modules` | the examination cycle mapping (`module_code`, `candidate_scope`) | |
 | `GET /api/v1/settings/exam-seating` | default rule, overrides, totals, unavailable venues, recent history | `history_limit` (0-500, default 20) |
 | `PUT /api/v1/settings/exam-seating/default` | change the default (`examinations:manage`) | body `percentage`, `reason`, `expected_version`; `dry_run` |
 | `PUT /api/v1/settings/exam-seating/venues/{venue_id}` | create (`expected_version: null`) or change an override | body as above; `dry_run` |
 | `DELETE /api/v1/settings/exam-seating/venues/{venue_id}` | remove an override | `expected_version`, `reason`, `dry_run` |
 | `GET /api/v1/settings/scheduling` | scheduling settings (defaults until saved), `status` (`valid`/`invalid`) and `problems`, mandatory rules H1-H11, recent history | `history_limit` (0-500, default 20) |
+| `POST /api/v1/timetables/generate` | generate and validate a timetable, not saved (`examinations:generate`) | body `period_code`, `module_codes` (required), `mode`, `time_limit_seconds` |
+| `POST /api/v1/timetables/drafts` | generate, validate and save as a new draft (`examinations:generate`) | body as `/generate` |
+| `GET /api/v1/timetables` | saved timetables, newest first, no student IDs (`examinations:read`) | `period_code`, `exam_kind`, `status`, `limit`, `offset` |
+| `GET /api/v1/timetables/{timetable_id}` | one saved timetable with sessions and venues (`examinations:read`) | |
+| `GET /api/v1/timetables/{timetable_id}/seats` | seat allocations with student IDs (`examinations:generate` or `examinations:approve`) | `session_id`, `limit`, `offset` |
+| `POST /api/v1/timetables/{timetable_id}/approve` | DRAFT -> APPROVED after integrity, stale-input and H1-H11 checks (`examinations:approve`) | body `expected_revision`, `reason` |
+| `POST /api/v1/timetables/{timetable_id}/publish` | APPROVED -> PUBLISHED, same checks (`examinations:approve`) | body `expected_revision`, `reason`, `replace_published` |
+| `POST /api/v1/timetables/{timetable_id}/regenerate` | new DRAFT from the same request (`examinations:generate`) | body `mode`, `time_limit_seconds` (optional) |
+| `GET /api/v1/timetables/{timetable_id}/history` | status history (`examinations:read`) | |
 | `PUT /api/v1/settings/scheduling` | replace the settings (`examinations:manage`) | body `settings` (complete document), `reason`, `expected_version` (0 = first save); `dry_run`; `replace_invalid` (only to repair invalid saved settings) |
 
 Settings input rules: `percentage` is a whole number 1-100 (`50.5`, `"50"` and
@@ -965,3 +1253,33 @@ databases:
 $env:SCHEDENCE_TEST_POSTGRES_URL = "postgresql://postgres@127.0.0.1:5432/postgres"
 python -m pytest tests/test_seating_postgres.py
 ```
+
+### Optional preparation-gap evaluation (Generate only)
+
+`POST /api/v1/timetables/generate` accepts `include_analysis: true` (default `false`).
+The optional `analysis` response is computed in a worker from the frozen input snapshot and actual
+assigned sittings, with the independent H1–H11 validator run again. It never changes assignments,
+institution defaults or stored timetables. Draft saving, approval, publication and regeneration keep
+their existing contracts; analysis is not persisted. No migration is required.
+
+Baseline and selected summaries share input/effective-configuration fingerprints and include the
+existing independent S1–S5 scores. The baseline is the optimizer's real feasibility solution; a Basic
+run has no comparison baseline. Module difficulty and applied thresholds come from the frozen inputs.
+The mean is the pooled sum of consecutive end-to-next-start gaps divided by their count. Median and
+lower decile use that same population (lower-decile index `floor((count - 1) / 10)`). Single-exam
+students contribute no gaps. All-pair short/difficult counts include nonconsecutive exams and are
+student-pair counts, not distinct module-pair counts. End times include reserved reading time.
+
+Cohorts use actual registered student year/specialization membership. Normal-only students have no
+repeat registration; the disjoint repeat group includes students with any repeat registration and
+considers all their scheduled exams. Only aggregate cohort statistics and shared-candidate counts
+are returned; no student identifiers, names, seats or individual schedules are exposed.
+
+Additional analysis is skipped above 100,000 student-exam pairs per timetable, with an explicit
+unavailable reason. Responses return at most 128 cohort summaries and 100 difficult session-pair
+groups per timetable (closest gaps, below-target pairs first). Truncation flags and total counts are
+explicit; summaries remain exact within the analysis limit. Pair-detail tables are full-cycle data,
+not cohort-filtered. Unsupported/missing cohorts are unavailable, not inferred from module mappings.
+Soft targets are preferences, not guarantees or validated measurements of stress.
+
+Focused local checks (no database): `python -m pytest -q tests/test_preparation_analysis.py`.

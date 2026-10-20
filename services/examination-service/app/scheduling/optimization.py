@@ -112,14 +112,14 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             if exc.name and exc.name.startswith("ortools"):
                 raise RuntimeError("Offline solver is not installed. Install this service's [solver] extra.") from exc
             raise
-        model, starts, allocated = build_hard_model(snapshot)
+        model, layout, _ = build_hard_model(snapshot)
         try:
             if fairness.enabled:
-                objective = add_objective(model, starts, snapshot, policy, baseline,
+                objective = add_objective(model, layout, snapshot, policy, baseline,
                                           fairness=fairness, baseline_evaluation=baseline_evaluation)
             else:
                 # Preserve the original objective/model path when fairness is off.
-                objective = add_objective(model, starts, snapshot, policy, baseline)
+                objective = add_objective(model, layout, snapshot, policy, baseline)
             # The known valid baseline remains a feasible objective bound.
             if baseline_evaluation:
                 model.add(objective <= baseline_evaluation.objective_units)
@@ -140,7 +140,7 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
                 attempt_status = SolveStatus(solver.status_name(solver.solve(model)))
                 solver_time += solver.wall_time
                 if attempt_status in (SolveStatus.FEASIBLE, SolveStatus.OPTIMAL):
-                    candidate = decode_draft(snapshot, solver, starts, allocated)
+                    candidate = decode_draft(snapshot, solver, layout)
                     violations = validate_timetable(snapshot, candidate)
                     if not violations:
                         measured = evaluate_timetable(snapshot, candidate, policy)

@@ -28,6 +28,7 @@ from app.db.base import SCHEMA
 from app.db.seed_models import (
     SeedExamPeriod,
     SeedExamPeriodExclusion,
+    SeedExamPeriodModule,
     SeedModule,
     SeedModuleSpecialization,
     SeedRegistration,
@@ -86,6 +87,7 @@ TABLE_SPECS: tuple[TableSpec, ...] = (
     TableSpec(SeedVenueBlock, ("source", "venue_id", "block_date", "start_time"), lambda d: d.venue_blocks),
     TableSpec(SeedExamPeriod, ("period_code",), lambda d: d.exam_periods),
     TableSpec(SeedExamPeriodExclusion, ("period_code", "excluded_date"), lambda d: d.exam_period_exclusions),
+    TableSpec(SeedExamPeriodModule, ("period_code", "module_code"), lambda d: d.exam_period_modules),
 )
 
 

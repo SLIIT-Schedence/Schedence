@@ -18,6 +18,8 @@ from app.scheduling.contracts import SchedulingValidationError, Violation, froze
 MAX_TIME_LIMIT_SECONDS = 3600  # one hour per solver run
 MAX_SEARCH_WORKERS = 16
 MAX_MINIMUM_BREAK_MINUTES = 1440  # one day
+MAX_SESSIONS_PER_EXAM = 10  # resource bound on the per-student session choices
+DEFAULT_MAX_SESSIONS_PER_EXAM = 3  # prototype default, not an institutional rule
 
 DEFAULT_COMPATIBILITY = (
     ("written", ("lecture_hall", "smart_classroom")),
@@ -42,6 +44,9 @@ class SchedulingPolicy:
     venue_compatibility: tuple[tuple[str, tuple[str, ...]], ...] = DEFAULT_COMPATIBILITY
     module_venue_overrides: tuple[tuple[str, tuple[str, ...]], ...] = ()
     max_rooms_per_exam: int | None = None
+    # Most sessions (sittings at different times) one module may be split into when
+    # its candidates do not fit into one sitting. 1 = never split.
+    max_sessions_per_exam: int = DEFAULT_MAX_SESSIONS_PER_EXAM
 
     def __post_init__(self) -> None:
         # Copy caller-owned containers so the policy is deeply immutable.
@@ -75,6 +80,8 @@ class SchedulingPolicy:
             errors.append(f"Minimum break must be at most {MAX_MINIMUM_BREAK_MINUTES} minutes (one day).")
         if self.max_rooms_per_exam is not None and not whole_number(self.max_rooms_per_exam, 1):
             errors.append("Maximum rooms must be a positive whole number or None.")
+        if not whole_number(self.max_sessions_per_exam, 1) or self.max_sessions_per_exam > MAX_SESSIONS_PER_EXAM:
+            errors.append(f"Maximum sessions per exam must be a whole number from 1 to {MAX_SESSIONS_PER_EXAM}.")
         for name in ("venue_compatibility", "module_venue_overrides"):
             rows = getattr(self, name)
             if len({key for key, _ in rows}) != len(rows):

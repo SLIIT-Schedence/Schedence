@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Annotated, Literal
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.context import AuthContext
 from app.auth.dependencies import get_auth
 from app.database import get_session, get_write_session
+from app.exam_periods import DatabaseExamPeriodStore, ExamPeriodService
+from app.module_details import DatabaseModuleDetailsStore, ModuleDetailsService
+from app.generation.service import TimetableGenerator
+from app.saved_timetables import DatabaseTimetableStore, TimetableStore
+from app.scheduling.inputs import load_database_snapshot
 from app.db.seed_models import BLOCK_SOURCES, EXAM_TYPES, REGISTRATION_TYPES, VENUE_TYPES
 from app.scheduling_settings.service import SchedulingSettingsService
 from app.scheduling_settings.store import DatabaseSchedulingSettingsStore, SchedulingSettingsStore
 from app.seating.service import SeatingService
 from app.seating.store import DatabaseSeatingStore, SeatingRuleStore
 from app.sources import DatabaseSource, ExamDataSource
+from schedence_db import session_scope
 
 # Identifier formats. Anything else is rejected with 422 before a query runs.
 MODULE_CODE = r"^[A-Z]{2,4}[0-9]{4}$"  # e.g. IT3041
@@ -66,6 +74,22 @@ SeatingReaderDep = Annotated[SeatingService, Depends(get_seating_reader)]
 SeatingWriterDep = Annotated[SeatingService, Depends(get_seating_writer)]
 
 
+def get_exam_period_writer(session: Annotated[AsyncSession, Depends(get_write_session)]) -> ExamPeriodService:
+    """Period changes on a writable session (read-only for dry runs); the service commits explicitly."""
+    return ExamPeriodService(DatabaseExamPeriodStore(session))
+
+
+ExamPeriodWriterDep = Annotated[ExamPeriodService, Depends(get_exam_period_writer)]
+
+
+def get_module_details_writer(session: Annotated[AsyncSession, Depends(get_write_session)]) -> ModuleDetailsService:
+    """Module detail changes on a writable session (read-only for dry runs); the service commits explicitly."""
+    return ModuleDetailsService(DatabaseModuleDetailsStore(session))
+
+
+ModuleDetailsWriterDep = Annotated[ModuleDetailsService, Depends(get_module_details_writer)]
+
+
 def get_scheduling_settings_store(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> SchedulingSettingsStore:
@@ -91,3 +115,49 @@ def get_scheduling_settings_writer(
 
 SchedulingSettingsReaderDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_reader)]
 SchedulingSettingsWriterDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_writer)]
+
+
+def get_timetable_generator(
+    request: Request, auth: Annotated[AuthContext, Depends(get_auth)],
+) -> TimetableGenerator:
+    """Reads finish (and their transactions close) before the solver starts; nothing is written."""
+    state = request.app.state
+
+    async def load_settings():
+        async with session_scope(state.session_factory, commit=False) as session:  # read-only, closed at once
+            return await SchedulingSettingsService(
+                DatabaseSchedulingSettingsStore(session), auth.settings.institution_id).active()
+
+    async def load_snapshot(period_code, policy, module_codes, calendar=None, seating_preferences=None):
+        # One REPEATABLE READ, READ ONLY transaction for every input table.
+        return await load_database_snapshot(state.engine, period_code=period_code, policy=policy,
+                                            module_codes=module_codes, from_cycle=True, calendar=calendar,
+                                            seating_preferences=seating_preferences)
+
+    return TimetableGenerator(load_snapshot, load_settings, request.app.state.generation_lock)
+
+
+TimetableGeneratorDep = Annotated[TimetableGenerator, Depends(get_timetable_generator)]
+
+
+def get_saved_timetable_reader(session: Annotated[AsyncSession, Depends(get_session)]) -> TimetableStore:
+    """Saved timetables on the request's read-only session."""
+    return DatabaseTimetableStore(session)
+
+
+TimetableStoreOpener = Callable[[], AbstractAsyncContextManager[TimetableStore]]
+
+
+def get_saved_timetable_writer(request: Request) -> TimetableStoreOpener:
+    """Opens a writable session only when called: after the solver, never during it. The caller commits."""
+
+    @asynccontextmanager
+    async def open_store() -> AsyncIterator[TimetableStore]:
+        async with session_scope(request.app.state.write_session_factory, commit=False) as session:
+            yield DatabaseTimetableStore(session)
+
+    return open_store
+
+
+SavedTimetableReaderDep = Annotated[TimetableStore, Depends(get_saved_timetable_reader)]
+SavedTimetableWriterDep = Annotated[TimetableStoreOpener, Depends(get_saved_timetable_writer)]

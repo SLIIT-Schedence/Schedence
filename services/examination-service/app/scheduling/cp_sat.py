@@ -1,4 +1,4 @@
-"""Feasibility-only entry point using the shared, unchanged H1-H11 model."""
+"""Feasibility-only entry point using the shared H1-H11 model (with capacity-based sessions)."""
 from importlib.metadata import version
 from ortools.sat.python import cp_model
 from app.scheduling.model import build_hard_model, decode_draft
@@ -7,7 +7,7 @@ from app.scheduling.types import InputSnapshot, SolveResult, SolveStatus
 
 
 def solve(snapshot: InputSnapshot, settings: SolverSettings) -> SolveResult:
-    model, starts, allocated = build_hard_model(snapshot)
+    model, layout, _ = build_hard_model(snapshot)
     model_error = model.validate()
     if model_error:
         return SolveResult(SolveStatus.MODEL_INVALID, diagnostics=(model_error,), settings=settings,
@@ -25,4 +25,4 @@ def solve(snapshot: InputSnapshot, settings: SolverSettings) -> SolveResult:
             SolveStatus.MODEL_INVALID: "CP-SAT rejected the model.",
         }
         return SolveResult(status, diagnostics=(messages[status],), **info)
-    return SolveResult(status, timetable=decode_draft(snapshot, solver, starts, allocated), **info)
+    return SolveResult(status, timetable=decode_draft(snapshot, solver, layout), **info)

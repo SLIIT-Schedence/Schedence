@@ -84,15 +84,19 @@ class SchedulingSettingsService:
         Raises :class:`SchedulingSettingsInvalidStoredError` (503) if the saved document is invalid:
         the scheduler never falls back to the defaults on its own.
         """
+        return (await self.active())[0]
+
+    async def active(self) -> tuple[SchedulingConfiguration, int]:
+        """The scheduler's settings and their version (0 = built-in defaults); raises like :meth:`configuration`."""
         saved = await self.store.get(self.institution_id)
         if saved is None:
-            return SchedulingConfiguration()
+            return SchedulingConfiguration(), 0
         configuration, problems = check_saved(saved)
         if configuration is None:
             logger.error("Saved scheduling settings (institution %s, version %s) are invalid: %d problem(s)",
                          self.institution_id, saved.version, len(problems))
             raise SchedulingSettingsInvalidStoredError()
-        return configuration
+        return configuration, saved.version
 
     async def view(self, *, history_limit: int) -> SettingsView:
         saved = await self.store.get(self.institution_id)

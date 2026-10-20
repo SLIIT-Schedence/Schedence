@@ -54,6 +54,14 @@ class SeedAssumptions:
     hybrid_venue_types: tuple[str, ...] = ALL_VENUE_TYPES
     hybrid_lab_required_modules: tuple[str, ...] = ()
 
+    # --- Examination eligibility and delivery (SYNTHETIC, testing only) --------------
+    # The catalogue has no MID, Block Mode or pro-rata data, so every module is
+    # FINAL-only and regular. These optional settings mark modules for tests only;
+    # they are NOT official classifications. Empty = the seeded data is unchanged.
+    synthetic_mid_exams: tuple[tuple[str, int], ...] = ()  # (module_code, MID duration minutes)
+    synthetic_no_final_modules: tuple[str, ...] = ()  # modules with no FINAL examination
+    synthetic_block_modules: tuple[tuple[str, str], ...] = ()  # (module_code, block_category)
+
     # --- Venues --------------------------------------------------------------------
     # Examination rule: only this share of a venue's full capacity may be used,
     # rounded down (exam capacity = floor(full capacity x ratio)). Same for every
@@ -69,6 +77,7 @@ class SeedAssumptions:
     period_name: str = "Synthetic Semester 2 Final Examinations (PP1)"
     academic_year_label: str = "2026/2027"
     semester: int = 2
+    exam_kind: str = "FINAL"  # MID or FINAL
     period_start: dt.date = dt.date(2026, 11, 16)  # Monday
     period_end: dt.date = dt.date(2026, 11, 28)  # Saturday (weekends off)
     day_start: dt.time = dt.time(8, 30)

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.seed_models import (
     SeedExamPeriod,
     SeedExamPeriodExclusion,
+    SeedExamPeriodModule,
     SeedModule,
     SeedModuleSpecialization,
     SeedRegistration,
@@ -29,6 +30,7 @@ from app.seed.generator import exam_days
 from app.sources.types import (
     ExamPeriod,
     ExamPeriodExclusion,
+    ExamPeriodModule,
     Module,
     Page,
     Registration,
@@ -51,6 +53,11 @@ _MODULE_COLUMNS = (
     SeedModule.duration_minutes,
     SeedModule.has_extra_reading_time,
     SeedModule.reading_time_minutes,
+    SeedModule.has_final_exam,
+    SeedModule.has_mid_exam,
+    SeedModule.mid_duration_minutes,
+    SeedModule.delivery_mode,
+    SeedModule.block_category,
 )
 _STUDENT_COLUMNS = (SeedStudent.student_id, SeedStudent.academic_year, SeedStudent.specialization)
 _REGISTRATION_COLUMNS = (
@@ -249,6 +256,15 @@ class DatabaseSource:
         for row in exclusion_rows:
             exclusions[row.period_code].append(ExamPeriodExclusion(**row._asdict()))
         return [_period(row, tuple(exclusions.get(row.period_code, ()))) for row in rows]
+
+    async def list_exam_period_modules(self, period_code: str) -> list[ExamPeriodModule]:
+        rows = await self._session.execute(
+            select(SeedExamPeriodModule.period_code, SeedExamPeriodModule.module_code,
+                   SeedExamPeriodModule.candidate_scope)
+            .where(SeedExamPeriodModule.period_code == period_code)
+            .order_by(SeedExamPeriodModule.module_code)
+        )
+        return [ExamPeriodModule(**row._asdict()) for row in rows]
 
     # --- Helpers ---------------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ import pytest
 pytest.importorskip("ortools", reason="install the examination service [solver] extra")
 
 from app.scheduling import SchedulingPolicy, SolverSettings, generate_timetable, validate_timetable
+from app.scheduling.inputs import SnapshotError
 from app.scheduling.types import SolveStatus
 from app.sources.types import VenueBlock
 from scheduling_support import MONDAY, make_case
@@ -167,13 +168,19 @@ async def test_h9_reading_time_also_reserves_the_room():
 
 
 async def test_insufficient_capacity_zero_capacity_and_room_limit_are_infeasible():
-    snapshot, _, _ = await make_case(full_capacities=(1, 1))
+    snapshot, _, _ = await make_case(full_capacities=(1, 1))  # no usable seat at all
     assert generate_timetable(snapshot).status == SolveStatus.INFEASIBLE
+    # Too few seats for one sitting, and splitting is switched off: refused before solving.
+    one = SchedulingPolicy(max_sessions_per_exam=1)
     snapshot, _, _ = await make_case(full_capacities=(2, 2), policy=SchedulingPolicy(max_rooms_per_exam=1))
-    assert generate_timetable(snapshot).status == SolveStatus.INFEASIBLE
-    snapshot, _, _ = await make_case(candidates=(("IT30000001", "IT30000002", "IT30000003"),),
-                                      full_capacities=(2, 2))
-    assert generate_timetable(snapshot).status == SolveStatus.INFEASIBLE
+    with pytest.raises(SnapshotError, match="needs 2 sessions"):
+        await make_case(full_capacities=(2, 2), policy=SchedulingPolicy(max_rooms_per_exam=1, max_sessions_per_exam=1))
+    with pytest.raises(SnapshotError, match="needs 2 sessions for 3 candidates"):
+        await make_case(candidates=(("IT30000001", "IT30000002", "IT30000003"),), full_capacities=(2, 2), policy=one)
+    # With the default limit the module is split into two sittings instead.
+    result = generate_timetable(snapshot)
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    assert [s.session_number for s in result.timetable.sessions] == [1, 2]
 
 
 async def test_settings_reproduce_a_small_schedule_and_unknown_is_not_infeasible():

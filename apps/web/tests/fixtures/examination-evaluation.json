@@ -1,0 +1,1226 @@
+{
+  "status": "FEASIBLE",
+  "generated": true,
+  "generated_at": "2026-10-20T08:00:00Z",
+  "solver": {
+    "mode": "optimized",
+    "time_limit_seconds": 60,
+    "wall_time_seconds": 1
+  },
+  "inputs": {
+    "period_code": "TEST",
+    "period_name": "Synthetic evaluation test",
+    "academic_year_label": "2026/2027",
+    "semester": 2,
+    "exam_kind": "FINAL",
+    "modules": 3,
+    "students": 2,
+    "calendar": {
+      "source": "selected",
+      "start_date": "2026-11-16",
+      "end_date": "2026-11-26",
+      "exam_days": 9,
+      "day_start_time": "08:30",
+      "day_end_time": "17:30",
+      "include_saturdays": false,
+      "include_sundays": false,
+      "exclusions": []
+    }
+  },
+  "validation": {
+    "passed": true,
+    "rules_checked": [
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+      "H7",
+      "H8",
+      "H9",
+      "H10",
+      "H11"
+    ],
+    "violations": []
+  },
+  "summary": {
+    "sessions": 3,
+    "exam_days_used": 3,
+    "seat_allocations": 4
+  },
+  "sessions": [],
+  "workload": {
+    "objective_units": 25725,
+    "total_weighted_penalty": 12.8625,
+    "penalties": [
+      {
+        "constraint": "S1",
+        "weight": 25,
+        "penalty_points": 16.65,
+        "weighted_points": 4.1625
+      },
+      {
+        "constraint": "S2",
+        "weight": 20,
+        "penalty_points": 6.0,
+        "weighted_points": 1.2
+      },
+      {
+        "constraint": "S3",
+        "weight": 30,
+        "penalty_points": 0.0,
+        "weighted_points": 0.0
+      },
+      {
+        "constraint": "S4",
+        "weight": 15,
+        "penalty_points": 50.0,
+        "weighted_points": 7.5
+      },
+      {
+        "constraint": "S5",
+        "weight": 10,
+        "penalty_points": 0.0,
+        "weighted_points": 0.0
+      }
+    ],
+    "same_day_student_pairs": 0,
+    "student_days_with_multiple_exams": 0,
+    "short_gap_student_pairs": 0,
+    "difficult_pairs_below_target": 1,
+    "minimum_gap_minutes": 2820,
+    "median_gap_minutes": 2820.0,
+    "lower_decile_gap_minutes": 2820,
+    "maximum_window_exams": 2,
+    "maximum_window_load_points": 225.0,
+    "worst_student_weighted_penalty": 25.725,
+    "repeat_student_mean_weighted_penalty": 25.725
+  },
+  "optimization": {
+    "status": "FEASIBLE",
+    "improved": true,
+    "baseline": {
+      "objective_units": 71025,
+      "total_weighted_penalty": 35.5125,
+      "penalties": [
+        {
+          "constraint": "S1",
+          "weight": 25,
+          "penalty_points": 16.65,
+          "weighted_points": 4.1625
+        },
+        {
+          "constraint": "S2",
+          "weight": 20,
+          "penalty_points": 50.0,
+          "weighted_points": 10.0
+        },
+        {
+          "constraint": "S3",
+          "weight": 30,
+          "penalty_points": 29.5,
+          "weighted_points": 8.85
+        },
+        {
+          "constraint": "S4",
+          "weight": 15,
+          "penalty_points": 50.0,
+          "weighted_points": 7.5
+        },
+        {
+          "constraint": "S5",
+          "weight": 10,
+          "penalty_points": 50.0,
+          "weighted_points": 5.0
+        }
+      ],
+      "same_day_student_pairs": 1,
+      "student_days_with_multiple_exams": 1,
+      "short_gap_student_pairs": 3,
+      "difficult_pairs_below_target": 1,
+      "minimum_gap_minutes": 240,
+      "median_gap_minutes": 660.0,
+      "lower_decile_gap_minutes": 240,
+      "maximum_window_exams": 3,
+      "maximum_window_load_points": 279.167,
+      "worst_student_weighted_penalty": 71.025,
+      "repeat_student_mean_weighted_penalty": 71.025
+    },
+    "selected": {
+      "objective_units": 25725,
+      "total_weighted_penalty": 12.8625,
+      "penalties": [
+        {
+          "constraint": "S1",
+          "weight": 25,
+          "penalty_points": 16.65,
+          "weighted_points": 4.1625
+        },
+        {
+          "constraint": "S2",
+          "weight": 20,
+          "penalty_points": 6.0,
+          "weighted_points": 1.2
+        },
+        {
+          "constraint": "S3",
+          "weight": 30,
+          "penalty_points": 0.0,
+          "weighted_points": 0.0
+        },
+        {
+          "constraint": "S4",
+          "weight": 15,
+          "penalty_points": 50.0,
+          "weighted_points": 7.5
+        },
+        {
+          "constraint": "S5",
+          "weight": 10,
+          "penalty_points": 0.0,
+          "weighted_points": 0.0
+        }
+      ],
+      "same_day_student_pairs": 0,
+      "student_days_with_multiple_exams": 0,
+      "short_gap_student_pairs": 0,
+      "difficult_pairs_below_target": 1,
+      "minimum_gap_minutes": 2820,
+      "median_gap_minutes": 2820.0,
+      "lower_decile_gap_minutes": 2820,
+      "maximum_window_exams": 2,
+      "maximum_window_load_points": 225.0,
+      "worst_student_weighted_penalty": 25.725,
+      "repeat_student_mean_weighted_penalty": 25.725
+    },
+    "objective_bound_units": null,
+    "relative_gap": null,
+    "fairness": null
+  },
+  "violations": [],
+  "diagnostics": [],
+  "notices": [],
+  "excluded_registrations": {
+    "note": "Test only",
+    "total": 0,
+    "normal": 0,
+    "repeat": 0
+  },
+  "analysis": {
+    "version": "preparation-gap-v1",
+    "input_fingerprint": "0c4e591e8f253f9c48d48ee8dfd8137893523de3477598539519e783ec2b6710",
+    "configuration_fingerprint": "bf513fa7fb6e66e610a8330debb332ce4202d9d4e9fe8c62c4b4ee64da30dab5",
+    "policy": {
+      "high_difficulty_minimum": 4,
+      "short_gap_minutes": 2000,
+      "preparation_target_minutes": 3000,
+      "difficult_target_minutes": 5000,
+      "scoring_version": "prototype-workload-v1",
+      "scoring_fingerprint": "0b41105402eb9f75d09f0be8d83c402089fa33e55907b38ebb5d97f0bf57e0d1"
+    },
+    "modules": [
+      {
+        "module_code": "IT1001",
+        "module_name": "Synthetic exam 0",
+        "academic_year": 1,
+        "semester": 2,
+        "specializations": [
+          "IT"
+        ],
+        "difficulty": 5,
+        "difficult": true
+      },
+      {
+        "module_code": "IT1002",
+        "module_name": "Synthetic exam 1",
+        "academic_year": 1,
+        "semester": 2,
+        "specializations": [
+          "IT"
+        ],
+        "difficulty": 4,
+        "difficult": true
+      },
+      {
+        "module_code": "IT1003",
+        "module_name": "Synthetic exam 2",
+        "academic_year": 1,
+        "semester": 2,
+        "specializations": [
+          "IT"
+        ],
+        "difficulty": 1,
+        "difficult": false
+      }
+    ],
+    "limits": {
+      "max_student_pairs": 100000,
+      "max_pair_rows": 100,
+      "max_cohorts": 128
+    },
+    "cohort_membership_available": 2,
+    "baseline": {
+      "input_fingerprint": "0c4e591e8f253f9c48d48ee8dfd8137893523de3477598539519e783ec2b6710",
+      "configuration_fingerprint": "bf513fa7fb6e66e610a8330debb332ce4202d9d4e9fe8c62c4b4ee64da30dab5",
+      "validation": {
+        "passed": true,
+        "rules_checked": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6",
+          "H7",
+          "H8",
+          "H9",
+          "H10",
+          "H11"
+        ]
+      },
+      "workload": {
+        "objective_units": 71025,
+        "total_weighted_penalty": 35.5125,
+        "penalties": [
+          {
+            "constraint": "S1",
+            "weight": 25,
+            "penalty_points": 16.65,
+            "weighted_points": 4.1625
+          },
+          {
+            "constraint": "S2",
+            "weight": 20,
+            "penalty_points": 50.0,
+            "weighted_points": 10.0
+          },
+          {
+            "constraint": "S3",
+            "weight": 30,
+            "penalty_points": 29.5,
+            "weighted_points": 8.85
+          },
+          {
+            "constraint": "S4",
+            "weight": 15,
+            "penalty_points": 50.0,
+            "weighted_points": 7.5
+          },
+          {
+            "constraint": "S5",
+            "weight": 10,
+            "penalty_points": 50.0,
+            "weighted_points": 5.0
+          }
+        ]
+      },
+      "statistics": {
+        "students": 2,
+        "registrations": 4,
+        "normal_registrations": 2,
+        "repeat_registrations": 2,
+        "students_with_consecutive_exams": 1,
+        "consecutive_gap_count": 2,
+        "total_consecutive_gap_minutes": 1320,
+        "mean_gap_minutes": 660.0,
+        "median_gap_minutes": 660.0,
+        "minimum_gap_minutes": 240,
+        "lower_decile_gap_minutes": 240,
+        "short_consecutive_gaps": 2,
+        "all_exam_student_pairs": 3,
+        "short_gap_student_pairs": 3,
+        "difficult_exam_student_pairs": 1,
+        "difficult_pairs_below_target": 1,
+        "same_day_student_pairs": 1,
+        "mean_weighted_workload": 35.5125
+      },
+      "cohorts": [
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 2,
+            "registrations": 4,
+            "normal_registrations": 2,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 35.5125
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "DS",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "DS",
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "IT",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "IT",
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": null,
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": null,
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": "IT",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": "IT",
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": "DS",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": "DS",
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 1320,
+            "mean_gap_minutes": 660.0,
+            "median_gap_minutes": 660.0,
+            "minimum_gap_minutes": 240,
+            "lower_decile_gap_minutes": 240,
+            "short_consecutive_gaps": 2,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 3,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 1,
+            "mean_weighted_workload": 71.025
+          }
+        }
+      ],
+      "cohorts_total": 15,
+      "cohorts_truncated": false,
+      "difficult_pairs": [
+        {
+          "first": {
+            "module_code": "IT1001",
+            "session_number": 1,
+            "date": "2026-11-16",
+            "start_time": "08:30:00",
+            "end_time": "09:30:00"
+          },
+          "second": {
+            "module_code": "IT1002",
+            "session_number": 1,
+            "date": "2026-11-16",
+            "start_time": "13:30:00",
+            "end_time": "14:30:00"
+          },
+          "gap_minutes": 240,
+          "below_target": true,
+          "shared_candidates": 1,
+          "normal_only_candidates": 0,
+          "repeat_candidates": 1
+        }
+      ],
+      "difficult_pair_rows_total": 1,
+      "difficult_pair_rows_truncated": false
+    },
+    "selected": {
+      "input_fingerprint": "0c4e591e8f253f9c48d48ee8dfd8137893523de3477598539519e783ec2b6710",
+      "configuration_fingerprint": "bf513fa7fb6e66e610a8330debb332ce4202d9d4e9fe8c62c4b4ee64da30dab5",
+      "validation": {
+        "passed": true,
+        "rules_checked": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6",
+          "H7",
+          "H8",
+          "H9",
+          "H10",
+          "H11"
+        ]
+      },
+      "workload": {
+        "objective_units": 25725,
+        "total_weighted_penalty": 12.8625,
+        "penalties": [
+          {
+            "constraint": "S1",
+            "weight": 25,
+            "penalty_points": 16.65,
+            "weighted_points": 4.1625
+          },
+          {
+            "constraint": "S2",
+            "weight": 20,
+            "penalty_points": 6.0,
+            "weighted_points": 1.2
+          },
+          {
+            "constraint": "S3",
+            "weight": 30,
+            "penalty_points": 0.0,
+            "weighted_points": 0.0
+          },
+          {
+            "constraint": "S4",
+            "weight": 15,
+            "penalty_points": 50.0,
+            "weighted_points": 7.5
+          },
+          {
+            "constraint": "S5",
+            "weight": 10,
+            "penalty_points": 0.0,
+            "weighted_points": 0.0
+          }
+        ]
+      },
+      "statistics": {
+        "students": 2,
+        "registrations": 4,
+        "normal_registrations": 2,
+        "repeat_registrations": 2,
+        "students_with_consecutive_exams": 1,
+        "consecutive_gap_count": 2,
+        "total_consecutive_gap_minutes": 5640,
+        "mean_gap_minutes": 2820.0,
+        "median_gap_minutes": 2820.0,
+        "minimum_gap_minutes": 2820,
+        "lower_decile_gap_minutes": 2820,
+        "short_consecutive_gaps": 0,
+        "all_exam_student_pairs": 3,
+        "short_gap_student_pairs": 0,
+        "difficult_exam_student_pairs": 1,
+        "difficult_pairs_below_target": 1,
+        "same_day_student_pairs": 0,
+        "mean_weighted_workload": 12.8625
+      },
+      "cohorts": [
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 2,
+            "registrations": 4,
+            "normal_registrations": 2,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 12.8625
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": null,
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "DS",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "DS",
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "IT",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": null,
+          "specialization": "IT",
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": null,
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": null,
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": null,
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": "IT",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 1,
+          "specialization": "IT",
+          "registration_group": "normal_only",
+          "statistics": {
+            "students": 1,
+            "registrations": 1,
+            "normal_registrations": 1,
+            "repeat_registrations": 0,
+            "students_with_consecutive_exams": 0,
+            "consecutive_gap_count": 0,
+            "total_consecutive_gap_minutes": 0,
+            "mean_gap_minutes": null,
+            "median_gap_minutes": null,
+            "minimum_gap_minutes": null,
+            "lower_decile_gap_minutes": null,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 0,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 0,
+            "difficult_pairs_below_target": 0,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 0.0
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": "DS",
+          "registration_group": "all",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        },
+        {
+          "academic_year": 2,
+          "specialization": "DS",
+          "registration_group": "includes_repeat",
+          "statistics": {
+            "students": 1,
+            "registrations": 3,
+            "normal_registrations": 1,
+            "repeat_registrations": 2,
+            "students_with_consecutive_exams": 1,
+            "consecutive_gap_count": 2,
+            "total_consecutive_gap_minutes": 5640,
+            "mean_gap_minutes": 2820.0,
+            "median_gap_minutes": 2820.0,
+            "minimum_gap_minutes": 2820,
+            "lower_decile_gap_minutes": 2820,
+            "short_consecutive_gaps": 0,
+            "all_exam_student_pairs": 3,
+            "short_gap_student_pairs": 0,
+            "difficult_exam_student_pairs": 1,
+            "difficult_pairs_below_target": 1,
+            "same_day_student_pairs": 0,
+            "mean_weighted_workload": 25.725
+          }
+        }
+      ],
+      "cohorts_total": 15,
+      "cohorts_truncated": false,
+      "difficult_pairs": [
+        {
+          "first": {
+            "module_code": "IT1001",
+            "session_number": 1,
+            "date": "2026-11-16",
+            "start_time": "08:30:00",
+            "end_time": "09:30:00"
+          },
+          "second": {
+            "module_code": "IT1002",
+            "session_number": 1,
+            "date": "2026-11-18",
+            "start_time": "08:30:00",
+            "end_time": "09:30:00"
+          },
+          "gap_minutes": 2820,
+          "below_target": true,
+          "shared_candidates": 1,
+          "normal_only_candidates": 0,
+          "repeat_candidates": 1
+        }
+      ],
+      "difficult_pair_rows_total": 1,
+      "difficult_pair_rows_truncated": false
+    },
+    "baseline_unavailable_reason": null,
+    "selected_unavailable_reason": null
+  }
+}
