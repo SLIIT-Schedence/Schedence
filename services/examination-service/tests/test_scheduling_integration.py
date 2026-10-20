@@ -79,7 +79,8 @@ def test_cli_updated_break_is_used_on_the_next_run(monkeypatch, capsys):
 
 @pytest.mark.parametrize("args,status", [
     (["--module", "UNKNOWN"], "MODEL_INVALID"),
-    (["--module", "IT1010", "--max-rooms", "1"], "INFEASIBLE"),
+    (["--module", "IT1010", "--starts", "17:00"], "INFEASIBLE"),  # no start leaves time for the exam
+    (["--module", "IT1010", "--max-rooms", "1"], "MODEL_INVALID"),  # needs more sessions than allowed
     (["--module", "IT1010", "--time-limit", "0.000000001"], "UNKNOWN"),
     (["--period", "UNKNOWN"], "MODEL_INVALID"),
 ])
@@ -128,3 +129,9 @@ assert 'ortools' not in sys.modules
     result = subprocess.run([sys.executable, "-B", "-c", script], cwd=Path(__file__).resolve().parents[1],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_cli_splits_a_module_into_numbered_sessions(capsys):
+    assert main(["--module", "IT1010", "--max-rooms", "1", "--max-sessions", "4", "--include-draft"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["multi_session_modules"] == 1 and payload["summary"]["independent_validation_passed"]

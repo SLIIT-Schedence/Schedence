@@ -16,6 +16,7 @@ EXPECTED_TABLES = [
     "seed_venue_blocks",
     "seed_exam_periods",
     "seed_exam_period_exclusions",
+    "seed_exam_period_modules",
 ]
 
 

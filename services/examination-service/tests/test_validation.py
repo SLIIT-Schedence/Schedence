@@ -158,3 +158,34 @@ def test_invalid_exam_period_is_rejected(data) -> None:
     p = data.exam_periods[0]
     bad = dataclasses.replace(p, end_date=p.start_date - dt.timedelta(days=1))
     _assert_error(_with(data, exam_periods=(bad,)), "end_date is before start_date")
+
+
+@pytest.mark.parametrize("kind", ["MIDTERM", "final", ""])
+def test_unknown_exam_kind_is_rejected(data, kind) -> None:
+    bad = dataclasses.replace(data.exam_periods[0], exam_kind=kind)
+    _assert_error(_with(data, exam_periods=(bad,)), "exam_kind must be one of MID, FINAL")
+
+
+def test_mid_period_is_valid(data) -> None:
+    mid = dataclasses.replace(data.exam_periods[0], period_code="PP1-2026-S2-MID", exam_kind="MID")
+    report = validate_dataset(_with(data, exam_periods=data.exam_periods + (mid,)))
+    assert report.ok, report.errors
+
+
+@pytest.mark.parametrize("changes, fragment", [
+    ({"has_mid_exam": True}, "MID examination needs a positive whole mid_duration_minutes"),
+    ({"mid_duration_minutes": 30}, "mid_duration_minutes must be empty"),
+    ({"delivery_mode": "weekend"}, "delivery_mode must be one of regular, block"),
+    ({"delivery_mode": "block"}, "block module needs a block_category"),
+    ({"block_category": "pro_rata"}, "block_category must be empty for a regular module"),
+])
+def test_inconsistent_module_exam_fields_are_rejected(data, changes, fragment) -> None:
+    bad = dataclasses.replace(data.modules[0], **changes)
+    _assert_error(_with(data, modules=(bad,) + data.modules[1:]), fragment)
+
+
+def test_synthetic_settings_for_unknown_modules_are_rejected(data) -> None:
+    from app.seed.assumptions import SeedAssumptions
+
+    report = validate_dataset(data, SeedAssumptions(synthetic_mid_exams=(("XX9999", 60),)))
+    assert "synthetic exam setting refers to unknown module XX9999" in report.errors

@@ -53,8 +53,8 @@ async def test_model_objective_equals_independent_evaluator_for_fixed_timetables
     policy = only_weight(component) if component <= 5 else OptimizationPolicy(score_scale=23,load_scale=7)
     model, starts, allocated = build_hard_model(x)
     objective = add_objective(model,starts,x,policy)
-    for code,start in zip(sorted(starts),starts_on(*days)):
-        model.add(starts[code] == minute_offset(x,start))
+    for (code,_),start in zip(sorted(starts.starts),starts_on(*days)):
+        model.add(starts.starts[code,0] == minute_offset(x,start))
     solver=cp_model.CpSolver()
     solver.parameters.max_time_in_seconds=3
     solver.parameters.num_search_workers=1
@@ -215,7 +215,7 @@ async def test_full_dataset_short_limits_still_return_a_valid_timetable(limit,fa
 
 
 async def test_insufficient_capacity_and_empty_inputs_are_reported():
-    x,_,_=await make_case(candidates=(("A","B","C","D","E"),))
+    x,_,_=await make_case(full_capacities=(1,1))  # no usable seat: truly infeasible (not fixable by sessions)
     r=optimize_timetable(x,SolverSettings(time_limit_seconds=2))
     assert r.status==SolveStatus.INFEASIBLE and r.timetable is None
     empty=replace(x,modules=(),registrations=())

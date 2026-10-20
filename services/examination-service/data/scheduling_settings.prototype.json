@@ -6,6 +6,7 @@
     ],
     "minimum_break_minutes": 60,
     "max_rooms_per_exam": null,
+    "max_sessions_per_exam": 3,
     "venue_compatibility": {
       "written": [
         "lecture_hall",

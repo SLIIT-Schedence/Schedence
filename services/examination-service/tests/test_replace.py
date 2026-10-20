@@ -68,7 +68,7 @@ def test_venue_replacement_plan_touches_only_venues_and_blocks(tmp_path, data) -
     rows = {spec.table: load_rows(backup, spec.table) for spec in TABLE_SPECS}
     planned = {t: len(keys) for t, keys in plan_deletions(rows, data).items()}
     assert planned == {
-        "seed_exam_period_exclusions": 0, "seed_exam_periods": 0, "seed_venue_blocks": 1, "seed_venues": 9,
+        "seed_exam_period_modules": 0, "seed_exam_period_exclusions": 0, "seed_exam_periods": 0, "seed_venue_blocks": 1, "seed_venues": 9,
         "seed_registrations": 0, "seed_students": 0, "seed_module_specializations": 0, "seed_modules": 0,
     }
     assert "building" not in rows["seed_venues"][0]  # pre-0003 rows load without the new columns
@@ -81,13 +81,15 @@ def test_plan_deletes_children_before_parents(data) -> None:
     assert order.index("seed_module_specializations") < order.index("seed_modules")
     assert order.index("seed_venue_blocks") < order.index("seed_venues")
     assert order.index("seed_exam_period_exclusions") < order.index("seed_exam_periods")
+    assert order.index("seed_exam_period_modules") < order.index("seed_exam_periods")
+    assert order.index("seed_exam_period_modules") < order.index("seed_modules")
 
 
 def test_expected_final_counts(data) -> None:
     assert expected_counts(data) == {
         "seed_modules": 42, "seed_module_specializations": 91, "seed_students": 390,
         "seed_registrations": 1700, "seed_venues": 62, "seed_venue_blocks": 27,
-        "seed_exam_periods": 1, "seed_exam_period_exclusions": 1,
+        "seed_exam_periods": 1, "seed_exam_period_exclusions": 1, "seed_exam_period_modules": 0,
     }
 
 
@@ -104,7 +106,7 @@ def test_real_backup_delete_plan(data) -> None:
     planned = {t: len(keys) for t, keys in plan_deletions(rows, data).items()}
     # The original SYN backup: its 6 fictional venues and 22 blocks are all gone from the new dataset.
     assert planned == {
-        "seed_exam_period_exclusions": 1, "seed_exam_periods": 1, "seed_venue_blocks": 22, "seed_venues": 6,
+        "seed_exam_period_modules": 0, "seed_exam_period_exclusions": 1, "seed_exam_periods": 1, "seed_venue_blocks": 22, "seed_venues": 6,
         "seed_registrations": 748, "seed_students": 200, "seed_module_specializations": 0, "seed_modules": 20,
     }
 

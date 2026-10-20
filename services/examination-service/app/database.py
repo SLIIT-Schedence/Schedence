@@ -8,7 +8,9 @@
   ``BEGIN READ ONLY``, so this costs no extra round trip to Neon.
 * The only exceptions: the seating-rule changes (``PUT``/``DELETE
   /api/v1/settings/exam-seating...``) and the scheduling-settings change
-  (``PUT /api/v1/settings/scheduling``) get a writable session from
+  (``PUT /api/v1/settings/scheduling``), the exam period changes
+  (``POST``/``PUT /api/v1/exam-periods...``) and the module exam-details
+  change (``PUT /api/v1/modules/{code}/exam-details``) get a writable session from
   :func:`get_write_session`, which never commits by itself. A dry run
   (``dry_run=true``) gets the read-only session instead.
 """

@@ -17,6 +17,7 @@ from app.seed.records import Dataset
 from app.sources.types import (
     ExamPeriod,
     ExamPeriodExclusion,
+    ExamPeriodModule,
     Module,
     Page,
     Registration,
@@ -69,6 +70,10 @@ class DatasetSource:
                 for p in data.exam_periods
             ),
             key=lambda p: p.period_code,
+        )
+        self._period_modules = sorted(
+            (ExamPeriodModule(**dataclasses.asdict(m)) for m in data.exam_period_modules),
+            key=lambda m: (m.period_code, m.module_code),
         )
 
     async def list_modules(
@@ -157,6 +162,9 @@ class DatasetSource:
 
     async def get_exam_period(self, period_code: str) -> ExamPeriod | None:
         return next((p for p in self._periods if p.period_code == period_code), None)
+
+    async def list_exam_period_modules(self, period_code: str) -> list[ExamPeriodModule]:
+        return [m for m in self._period_modules if m.period_code == period_code]
 
 
 def _page(items: Iterable[T], limit: int | None, offset: int) -> Page[T]:

@@ -11,7 +11,24 @@ from enum import Enum
 from app.seating.snapshot import CapacitySnapshot
 from app.scheduling.contracts import SchedulingValidationError, Violation, data_shape_errors, frozen_sequence, text_errors
 from app.scheduling.policy import SchedulingPolicy, SolverSettings
-from app.sources.types import ExamPeriod, Module, Registration, Student, Venue, VenueBlock
+from app.sources.types import ExamPeriod, ExamPeriodModule, Module, Registration, Student, Venue, VenueBlock
+
+
+@dataclass(frozen=True)
+class ExcludedModule:
+    """Registrations NOT loaded because their module is not in the selected cycle's mapping.
+
+    Counts only (no student identifiers). They are potentially excluded: the module
+    may legitimately be examined in another cycle (``other_cycles``).
+    """
+
+    module_code: str
+    module_name: str
+    academic_year: int
+    semester: int
+    normal_registrations: int
+    repeat_registrations: int
+    other_cycles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -24,6 +41,11 @@ class InputSnapshot:
     blocks: tuple[VenueBlock, ...]
     capacities: CapacitySnapshot
     policy: SchedulingPolicy
+    # The cycle mapping rows of the selected modules; empty when modules were listed
+    # without a cycle mapping (partial/legacy selection).
+    cycle_modules: tuple[ExamPeriodModule, ...] = ()
+    # Report only, not a scheduling input: never part of the fingerprint.
+    excluded_modules: tuple[ExcludedModule, ...] = ()
     fingerprint: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -31,7 +53,8 @@ class InputSnapshot:
         from app.seating.snapshot import SnapshotVenue
 
         for name, record in (("modules", Module), ("students", Student), ("registrations", Registration),
-                             ("venues", Venue), ("blocks", VenueBlock)):
+                             ("venues", Venue), ("blocks", VenueBlock), ("cycle_modules", ExamPeriodModule),
+                             ("excluded_modules", ExcludedModule)):
             object.__setattr__(self, name, frozen_sequence(getattr(self, name), name, record))
         if type(self.period) is not ExamPeriod or type(self.capacities) is not CapacitySnapshot or type(self.policy) is not SchedulingPolicy:
             raise SchedulingValidationError((Violation("H11", "Snapshot requires an ExamPeriod, CapacitySnapshot and SchedulingPolicy."),))
@@ -51,6 +74,10 @@ class InputSnapshot:
                    else [asdict(row) for row in getattr(self, name)]
                    for name in ("period", "modules", "students", "registrations", "venues", "blocks", "capacities", "policy")}
         content["capacities"].pop("taken_at")
+        if content["capacities"].get("source_fingerprint") is None:
+            content["capacities"].pop("source_fingerprint", None)  # preserve legacy input fingerprints
+        if self.cycle_modules:  # only when present, so snapshots without a cycle keep their identity
+            content["cycle_modules"] = [asdict(row) for row in self.cycle_modules]
         digest = hashlib.sha256(json.dumps(content, sort_keys=True, default=str, separators=(",", ":")).encode()).hexdigest()
         object.__setattr__(self, "fingerprint", digest)
 
@@ -89,6 +116,9 @@ class ExamSession:
     start: dt.datetime  # local calendar time, matching existing source records
     end: dt.datetime
     rooms: tuple[RoomAllocation, ...]  # every room inherits this session's times
+    # Session N of M of this module (in time order); 1 of 1 when one sitting seats everyone.
+    session_number: int = 1
+    session_count: int = 1
 
     def __post_init__(self) -> None:
         errors = tuple(v for name in ("session_id", "module_code", "period_code")

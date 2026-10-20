@@ -149,6 +149,7 @@ async def test_invalid_solver_settings_are_model_invalid(settings):
     "duplicate_module", "duplicate_student", "duplicate_registration", "duplicate_venue", "unknown_student",
     "unknown_module", "candidate_count", "reading_flag", "duration", "capacity", "missing_capacity",
     "unknown_block_venue", "bad_block_time", "wrong_exclusion_period", "cached_days", "period_range", "hours",
+    "exam_kind",
 ])
 async def test_invalid_input_relationships_are_rejected(mode):
     snapshot, _, _ = await make_case()
@@ -180,6 +181,8 @@ async def test_invalid_input_relationships_are_rejected(mode):
             period = replace(period, end_date=MONDAY - dt.timedelta(days=1))
         elif mode == "hours":
             period = replace(period, day_end_time=dt.time(7))
+        elif mode == "exam_kind":
+            period = replace(period, exam_kind="MIDTERM")
         else:
             from app.sources.types import ExamPeriodExclusion
             period = replace(period, exclusions=(ExamPeriodExclusion("OTHER", MONDAY, "SIMULATED"),))
@@ -201,3 +204,83 @@ async def test_missing_solver_has_clear_install_message_and_validation_needs_no_
     assert validate_inputs(snapshot) == ()
     with pytest.raises(RuntimeError, match=r"\[solver\]"):
         generate_timetable(snapshot)
+
+
+@pytest.mark.parametrize("kind", ["MID", "FINAL"])
+async def test_mid_and_final_periods_are_scheduled_by_the_same_rules(kind):
+    # SYNTHETIC MID duration equal to the FINAL one, so only the kind differs.
+    snapshot, _, _ = await make_case(exam_kind=kind, mid_durations=(60,))
+    assert snapshot.period.exam_kind == kind and validate_inputs(snapshot) == ()
+    result = generate_timetable(snapshot)
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    final, _, _ = await make_case(exam_kind="FINAL", mid_durations=(60,))
+    # The kind is part of the input identity, but does not change the timetable yet.
+    assert (snapshot.fingerprint == final.fingerprint) == (kind == "FINAL")
+    assert [(s.start, s.end) for s in result.timetable.sessions] == [
+        (s.start, s.end) for s in generate_timetable(final).timetable.sessions]
+
+
+@pytest.mark.parametrize("kind", ["MIDTERM", "final", "", None])
+async def test_unknown_exam_kind_is_rejected_when_loading(kind):
+    with pytest.raises(SnapshotError):
+        await make_case(exam_kind=kind)
+
+
+# --- Module examination eligibility (SYNTHETIC values) ---------------------------------------
+
+
+async def test_mid_period_uses_the_mid_duration():
+    snapshot, _, _ = await make_case(exam_kind="MID", durations=(120,), mid_durations=(45,))
+    [module] = snapshot.modules
+    assert module.duration_minutes == module.mid_duration_minutes == 45
+    [session] = generate_timetable(snapshot).timetable.sessions
+    assert session.end - session.start == dt.timedelta(minutes=45)
+    final, _, _ = await make_case(exam_kind="FINAL", durations=(120,), mid_durations=(45,))
+    assert final.modules[0].duration_minutes == 120
+
+
+async def test_unselected_period_kind_selects_only_eligible_modules():
+    candidates = (("IT30000001",), ("IT30000002",))
+    mid, _, _ = await make_case(exam_kind="MID", candidates=candidates, mid_durations=(None, 30))
+    assert [m.module_code for m in mid.modules] == ["IT1002"]
+    assert {r.module_code for r in mid.registrations} == {"IT1002"}
+    final, _, _ = await make_case(candidates=candidates, has_final=(True, False), mid_durations=(None, 30))
+    assert [m.module_code for m in final.modules] == ["IT1001"]
+
+
+async def test_explicit_selection_rejects_modules_without_that_exam():
+    _, source, store = await make_case(exam_kind="MID", candidates=(("IT30000001",), ("IT30000002",)),
+                                       mid_durations=(None, 30))
+    with pytest.raises(SnapshotError, match="without a MID examination.*IT1001"):
+        await load_snapshot(source, store, period_code="TEST", module_codes=("IT1001", "IT1002"))
+
+
+@pytest.mark.parametrize("changes", [
+    {"has_mid_exam": True, "mid_duration_minutes": None},
+    {"has_mid_exam": False, "mid_duration_minutes": 30},
+    {"has_mid_exam": True, "mid_duration_minutes": 0},
+    {"delivery_mode": "weekend"},
+    {"delivery_mode": "block", "block_category": None},
+    {"delivery_mode": "regular", "block_category": "pro_rata"},
+    {"has_final_exam": False},  # FINAL period, module without a FINAL exam
+])
+async def test_inconsistent_module_exam_fields_are_model_invalid(changes):
+    snapshot, _, _ = await make_case(durations=(60,))
+    changed = replace(snapshot, modules=(replace(snapshot.modules[0], **changes),))
+    assert validate_inputs(changed)
+    assert generate_timetable(changed).status == SolveStatus.MODEL_INVALID
+
+
+async def test_block_modules_are_scheduled_like_regular_modules():
+    snapshot, _, _ = await make_case()
+    block = replace(snapshot, modules=(replace(snapshot.modules[0], delivery_mode="block",
+                                               block_category="full_module"),))
+    assert validate_inputs(block) == ()
+    assert generate_timetable(block).status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+
+
+async def test_mid_snapshot_duration_must_be_the_mid_duration():
+    snapshot, _, _ = await make_case(exam_kind="MID", durations=(120,), mid_durations=(45,))
+    changed = replace(snapshot, modules=(replace(snapshot.modules[0], duration_minutes=120),))
+    assert any("no MID examination of 120 minutes" in v.message for v in validate_inputs(changed))
+    assert generate_timetable(changed).status == SolveStatus.MODEL_INVALID

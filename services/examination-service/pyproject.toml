@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 solver = [
-    "ortools==9.15.6755",  # offline CP-SAT; deliberately separate from API runtime
+    "ortools==9.15.6755",  # CP-SAT: offline CLI and POST /api/v1/timetables/generate (503 without it)
 ]
 dev = [
     "pytest>=8.3",

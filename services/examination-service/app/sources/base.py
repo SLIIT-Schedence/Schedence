@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Protocol
 
-from app.sources.types import ExamPeriod, Module, Page, Registration, Student, Venue, VenueBlock
+from app.sources.types import ExamPeriod, ExamPeriodModule, Module, Page, Registration, Student, Venue, VenueBlock
 
 
 class ExamDataSource(Protocol):
@@ -61,3 +61,7 @@ class ExamDataSource(Protocol):
     async def list_exam_periods(self) -> list[ExamPeriod]: ...
 
     async def get_exam_period(self, period_code: str) -> ExamPeriod | None: ...
+
+    async def list_exam_period_modules(self, period_code: str) -> list[ExamPeriodModule]:
+        """The cycle mapping of one period, sorted by module code (empty when not configured)."""
+        ...

@@ -59,6 +59,8 @@ FOREIGN_KEYS = (
     ("seed_registrations", "module_code", "seed_modules", "module_code"),
     ("seed_venue_blocks", "venue_id", "seed_venues", "venue_id"),
     ("seed_exam_period_exclusions", "period_code", "seed_exam_periods", "period_code"),
+    ("seed_exam_period_modules", "period_code", "seed_exam_periods", "period_code"),
+    ("seed_exam_period_modules", "module_code", "seed_modules", "module_code"),
 )
 
 

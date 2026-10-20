@@ -181,7 +181,7 @@ async def test_solver_guard_cannot_be_bypassed_by_an_unfair_improving_candidate(
     def omit_guards(model, starts, snapshot, scoring, baseline, **kwargs):
         expression = original(model, starts, snapshot, scoring, baseline)
         for session in unfair.sessions:
-            model.add(starts[session.module_code] == minute_offset(snapshot, session.start))
+            model.add(starts.starts[session.module_code, 0] == minute_offset(snapshot, session.start))
         return expression
     monkeypatch.setattr(objective, "add_objective", omit_guards)
     r = optimize_timetable(x, SolverSettings(time_limit_seconds=5), baseline=baseline, fairness=FairnessPolicy(enabled=True))
@@ -207,7 +207,7 @@ async def test_solver_individual_cap_is_exact_and_not_multiplied_by_population(s
     model, starts, _ = build_hard_model(x)
     a, b = evaluate_timetable(x, baseline, scoring), evaluate_timetable(x, candidate, scoring)
     add_objective(model, starts, x, scoring, baseline, fairness=p, baseline_evaluation=a)
-    for session in candidate.sessions: model.add(starts[session.module_code] == minute_offset(x, session.start))
+    for session in candidate.sessions: model.add(starts.starts[session.module_code, 0] == minute_offset(x, session.start))
     solver = cp_model.CpSolver(); solver.parameters.num_search_workers = 1
     status = solver.solve(model)
     assert (status in (cp_model.OPTIMAL, cp_model.FEASIBLE)) is feasible
@@ -230,7 +230,7 @@ async def test_solver_worst_student_guard_is_independently_configurable(protect,
     a, b = evaluate_timetable(x, baseline), evaluate_timetable(x, candidate)
     model, starts, _ = build_hard_model(x)
     add_objective(model, starts, x, OptimizationPolicy(), baseline, fairness=p, baseline_evaluation=a)
-    for session in candidate.sessions: model.add(starts[session.module_code] == minute_offset(x, session.start))
+    for session in candidate.sessions: model.add(starts.starts[session.module_code, 0] == minute_offset(x, session.start))
     solver = cp_model.CpSolver(); solver.parameters.num_search_workers = 1
     status = solver.solve(model)
     assert (status in (cp_model.OPTIMAL, cp_model.FEASIBLE)) is feasible
@@ -275,7 +275,7 @@ async def test_timeout_keeps_exact_baseline_and_zero_increases():
 
 async def test_infeasible_and_stale_inputs_are_not_relaxed():
     pytest.importorskip("ortools")
-    x, _, _ = await make_case(candidates=(("A", "B", "C", "D", "E"),))
+    x, _, _ = await make_case(full_capacities=(1, 1))  # no usable seat: truly infeasible
     r = optimize_timetable(x, SolverSettings(time_limit_seconds=3), fairness=FairnessPolicy(enabled=True))
     assert r.status.value == "INFEASIBLE" and r.timetable is None
     x = await optimization_case(1, difficulties=(3,))

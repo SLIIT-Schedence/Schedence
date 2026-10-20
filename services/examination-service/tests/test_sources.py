@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import inspect
-from collections import Counter
+from collections import Counter, namedtuple
 
 import pytest
 from sqlalchemy import Select
@@ -191,3 +192,57 @@ async def test_database_source_never_reads_legacy_specialization_column() -> Non
     session = RecordingSession()
     await DatabaseSource(session).list_modules()  # type: ignore[arg-type]
     assert "seed_modules.specialization" not in _sql(session.statements[0])
+
+
+# --- Examination period kind (MID / FINAL) -------------------------------------------
+
+
+async def test_current_synthetic_period_is_final(source: DatasetSource) -> None:
+    [period] = await source.list_exam_periods()
+    assert period.exam_kind == "FINAL"
+
+
+async def test_dataset_source_keeps_a_mid_period() -> None:
+    mid = dataclasses.replace(DATA.exam_periods[0], period_code="PP1-2026-S2-MID", exam_kind="MID")
+    source = DatasetSource(dataclasses.replace(DATA, exam_periods=DATA.exam_periods + (mid,)))
+    kinds = {p.period_code: p.exam_kind for p in await source.list_exam_periods()}
+    assert kinds == {"PP1-2026-S2-FINAL": "FINAL", "PP1-2026-S2-MID": "MID"}
+    assert (await source.get_exam_period("PP1-2026-S2-MID")).exam_kind == "MID"
+
+
+async def test_database_source_reads_the_exam_kind() -> None:
+    session = RecordingSession()
+    await DatabaseSource(session).list_exam_periods()  # type: ignore[arg-type]
+    assert "seed_exam_periods.exam_kind" in _sql(session.statements[0])
+
+
+@pytest.mark.parametrize("kind", ["MID", "FINAL"])
+def test_database_rows_become_periods_with_their_kind(kind: str) -> None:
+    from app.sources.database import _period
+
+    p = DATA.exam_periods[0]
+    row = namedtuple("Row", [f.name for f in dataclasses.fields(p)])(**{**dataclasses.asdict(p), "exam_kind": kind})
+    period = _period(row, ())
+    assert period.exam_kind == kind and period.period_code == p.period_code
+
+
+# --- Examination cycle modules -----------------------------------------------------------
+
+
+async def test_dataset_source_lists_cycle_modules_per_period() -> None:
+    from app.seed.records import ExamPeriodModule
+
+    rows = (ExamPeriodModule("P1", "IT2020", "all"), ExamPeriodModule("P1", "IT1010", "repeat_only"),
+            ExamPeriodModule("P2", "IT1010"))
+    source = DatasetSource(dataclasses.replace(DATA, exam_period_modules=rows))
+    assert [(m.module_code, m.candidate_scope) for m in await source.list_exam_period_modules("P1")] == [
+        ("IT1010", "repeat_only"), ("IT2020", "all")]
+    assert await DatasetSource(DATA).list_exam_period_modules("P1") == []
+
+
+async def test_database_source_reads_one_cycle_in_order() -> None:
+    session = RecordingSession()
+    assert await DatabaseSource(session).list_exam_period_modules("P1") == []  # type: ignore[arg-type]
+    sql = _sql(session.statements[0])
+    assert "FROM examinations.seed_exam_period_modules" in sql and "ORDER BY" in sql
+    assert "seed_exam_period_modules.period_code = " in sql
