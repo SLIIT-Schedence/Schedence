@@ -20,12 +20,12 @@ import hashlib
 import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.seating.errors import SeatingNotConfiguredError
-from app.seating.rules import Scope, SeatingPolicy
+from app.seating.rules import Scope, SeatingPolicy, check_percentage, effective_exam_capacity
 from app.seating.store import SeatingRuleStore
 from app.sources import ExamDataSource
 
@@ -52,6 +52,8 @@ class CapacitySnapshot:
     venues: tuple[SnapshotVenue, ...]
     # SHA-256 of the capacities only: equal fingerprints = identical capacities.
     fingerprint: str
+    # Only populated for per-timetable seating; keeps source changes detectable.
+    source_fingerprint: str | None = None
 
     def exam_capacity(self, venue_id: str) -> int:
         """Effective exam capacity; ``KeyError`` for a venue not in the snapshot."""
@@ -75,6 +77,7 @@ async def load_capacity_snapshot(
     store: SeatingRuleStore,
     *,
     clock: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC),
+    preferences: dict | None = None,
 ) -> CapacitySnapshot:
     """Read venues and rules once. Use one transaction for both (see ``snapshot_session``)."""
     policy = SeatingPolicy.from_rules(await store.list_rules())
@@ -93,12 +96,19 @@ async def load_capacity_snapshot(
         for v in sorted(await source.list_venues(), key=lambda v: v.venue_id)
         for c in (policy.capacity(v.venue_id, v.normal_capacity),)
     )
+    source_fingerprint = None
+    if preferences is not None:
+        percentage = check_percentage(preferences.get("default_percentage", policy.default.percentage))
+        source_fingerprint = _fingerprint(venues)
+        venues = tuple(replace(v, percentage=percentage, exam_capacity=effective_exam_capacity(v.normal_capacity, percentage))
+                       if v.rule_scope == "default" else v for v in venues)
     return CapacitySnapshot(
         ruleset_version=ruleset_version,
         taken_at=clock(),
-        default_percentage=policy.default.percentage,
+        default_percentage=policy.default.percentage if preferences is None else percentage,
         venues=venues,
         fingerprint=_fingerprint(venues),
+        source_fingerprint=source_fingerprint,
     )
 
 

@@ -78,13 +78,13 @@ class Harness:
         async def load_settings():
             return await SchedulingSettingsService(self.settings, INSTITUTION).active()
 
-        async def load(period_code, policy, module_codes):
+        async def load(period_code, policy, module_codes, calendar=None, seating_preferences=None):
             self.loads += 1
             self.loader_threads.append(threading.get_ident())
             store = MemorySeatingStore() if self.seating_percentage is None else MemorySeatingStore(
                 default_percentage=self.seating_percentage)
             return await load_snapshot(self.source, store, period_code=period_code, policy=policy,
-                                       module_codes=module_codes, from_cycle=True)
+                                       module_codes=module_codes, from_cycle=True, calendar=calendar, seating_preferences=seating_preferences)
 
         return TimetableGenerator(load, load_settings, lock)
 

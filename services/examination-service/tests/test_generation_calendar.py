@@ -48,10 +48,10 @@ class CalendarHarness(Harness):
             from auth_support import INSTITUTION
             return await SchedulingSettingsService(self.settings, INSTITUTION).active()
 
-        async def load(period_code, policy, module_codes, calendar=None):
+        async def load(period_code, policy, module_codes, calendar=None, seating_preferences=None):
             self.loads += 1
             return await load_snapshot(self.source, MemorySeatingStore(), period_code=period_code, policy=policy,
-                                       module_codes=module_codes, from_cycle=True, calendar=calendar)
+                                       module_codes=module_codes, from_cycle=True, calendar=calendar, seating_preferences=seating_preferences)
 
         return TimetableGenerator(load, load_settings, lock)
 

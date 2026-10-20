@@ -164,6 +164,7 @@ async def load_snapshot(
     module_codes: tuple[str, ...] | None = None,
     from_cycle: bool = False,
     calendar: ExamCalendar | None = None,
+    seating_preferences: dict | None = None,
 ) -> InputSnapshot:
     """Read a coherent source. Database callers must use load_database_snapshot.
 
@@ -226,7 +227,7 @@ async def load_snapshot(
     errors = data_shape_errors(period, (), (), (), (), blocks)
     if errors:
         raise SnapshotError(errors)
-    capacities = await load_capacity_snapshot(source, store)
+    capacities = await load_capacity_snapshot(source, store, preferences=seating_preferences)
     if len(students.items) != students.total or len(registrations.items) != registrations.total:
         raise SnapshotError((Violation("H11", "Source returned incomplete students or registrations."),))
     known = {m.module_code for m in all_modules}

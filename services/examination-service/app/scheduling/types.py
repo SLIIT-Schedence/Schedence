@@ -74,6 +74,8 @@ class InputSnapshot:
                    else [asdict(row) for row in getattr(self, name)]
                    for name in ("period", "modules", "students", "registrations", "venues", "blocks", "capacities", "policy")}
         content["capacities"].pop("taken_at")
+        if content["capacities"].get("source_fingerprint") is None:
+            content["capacities"].pop("source_fingerprint", None)  # preserve legacy input fingerprints
         if self.cycle_modules:  # only when present, so snapshots without a cycle keep their identity
             content["cycle_modules"] = [asdict(row) for row in self.cycle_modules]
         digest = hashlib.sha256(json.dumps(content, sort_keys=True, default=str, separators=(",", ":")).encode()).hexdigest()
