@@ -186,6 +186,7 @@ test("publish needs PUBLISH, archives the published timetable only when chosen, 
 function saveAction(response) {
   const calls = [];
   const actions = load("src/lib/examination-generation-actions.ts", {
+    "@/lib/examination-protection": load("src/lib/examination-protection.ts", { "@/lib/examination-timetables": helpers }),
     "@/lib/examination-evaluation": load("src/lib/examination-evaluation.ts", {}),
     "@/lib/examination-settings": load("src/lib/examination-settings.ts", {}),
     "@/lib/examination-calendar": load("src/lib/examination-calendar.ts", {}),
@@ -243,6 +244,25 @@ test("a refused or interrupted save says what happened and never invents a draft
   assert.equal(busy.title, "The timetable solver is busy");
   const odd = await saveAction({ ok: true, data: { timetable_id: 5, draft_number: 1, period_code: "FINAL-CYCLE", status: "PUBLISHED" } }).save();
   assert.equal(odd.status, "error");
+});
+
+test("cross-semester save, approval and publication conflicts identify protected examinations", async () => {
+  const problems = [{ rule: "STALE", message: "Regenerate the timetable." },
+    { rule: "X1", message: "Room R1 is occupied by Semester 1." },
+    { rule: "X2", message: `Student ${STUDENT} needs a break.` }];
+  const h = workflow({ ok: false, error: { status: 409, code: "STALE", message: "x", problems } });
+  const reason = h.form({ reason: "Board decision", confirm: "PUBLISH" });
+  for (const action of [h.actions.approveSavedTimetable, h.actions.publishSavedTimetable]) {
+    const answer = await action(7, 1, { status: "idle" }, reason);
+    assert.match(answer.message, /approved or published timetable of another examination cycle/);
+    assert.match(answer.message, /Room R1 is occupied by Semester 1/);
+    assert.ok(!answer.message.includes(STUDENT));
+  }
+  const saved = await saveAction({ ok: false, error: { status: 409, code: "PROTECTED_CHANGED",
+    message: "Semester 1 was approved during generation. Nothing was saved.", problems } }).save();
+  assert.match(saved.title, /Another examination timetable now conflicts/);
+  assert.match(saved.message, /Nothing was saved/);
+  assert.equal(saved.timetableId, undefined);
 });
 
 test("the save card explains the fresh generation and stays disabled until confirmed", () => {

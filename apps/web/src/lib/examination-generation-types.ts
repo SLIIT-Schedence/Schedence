@@ -1,6 +1,7 @@
 // Browser-safe view contracts. Only aggregate counts and timetable rows are returned by the action.
 import type { PreferencesSnapshot } from "@/lib/examination-settings";
 import type { EvaluationAnalysis } from "./examination-evaluation";
+import type { CrossTimetableSummary } from "./examination-protection";
 export type GenerationMode = "feasibility" | "optimized";
 export type GenerationProblem = { rule: string; message: string };
 export type WorkloadScore = {
@@ -49,6 +50,8 @@ export type GeneratedTimetable = {
   generated: boolean;
   solver: { mode: GenerationMode; time_limit_seconds: number; wall_time_seconds: number };
   inputs: {
+    batch?: { batch_id: string; peer_period_code: string; strategy: string };
+    cross_timetable?: CrossTimetableSummary | null;
     scheduling_preferences?: PreferencesSnapshot | null;
     period_code: string; period_name: string; modules: number; students: number;
     academic_year_label?: string; semester?: number; exam_kind?: string;

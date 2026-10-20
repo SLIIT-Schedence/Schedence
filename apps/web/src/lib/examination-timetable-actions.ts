@@ -42,6 +42,10 @@ function workflowFailure(error: ExaminationApiError, action: Action): FormState 
       : { status: "error", message: redactStudentIds(error.message) };
   }
   if (error.status === 409) {
+    if (error.problems?.some((problem) => problem.rule === "X1" || problem.rule === "X2")) {
+      return { status: "error", message: `This timetable conflicts with an approved or published timetable of another examination cycle, so it was not ${done}. `
+        + `Generate and save a new draft to work around the protected exams. ${details.join(" · ")}` };
+    }
     switch (error.code) {
       case "STALE":
         return { status: "error", message: `This timetable no longer matches the current inputs or settings, so it was not ${done}. `
