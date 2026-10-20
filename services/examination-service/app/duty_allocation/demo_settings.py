@@ -32,6 +32,15 @@ class DemoSource(str, Enum):
     NEON_READ_ONLY = "NEON_READ_ONLY"
 
 
+class PersistenceMode(str, Enum):
+    DISABLED = "DISABLED"  # roster / seating endpoints answer 503 (default)
+    MEMORY = "MEMORY"  # working drafts in this process only; lost on restart; for development and demos
+    DATABASE = "DATABASE"  # examinations.duty_* tables (needs the approved migration 0007 and the acknowledgement)
+
+
+PERSISTENCE_DATABASE_ACKNOWLEDGEMENT = "I APPROVE SAVING SYNTHETIC DRAFTS TO THE EXAMINATIONS SCHEMA"
+
+
 class Member3DemoSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="M3_DEMO_", env_file=None, extra="ignore", case_sensitive=False)
 
@@ -40,6 +49,9 @@ class Member3DemoSettings(BaseSettings):
     period_code: str = Field(default=DEMO_PERIOD_CODE, pattern=r"^[A-Z0-9-]{1,32}$")
     snapshot_ttl_seconds: int = Field(default=300, ge=0, le=86_400)
     max_solver_seconds: float = Field(default=60.0, gt=0, le=600)
+
+    persistence: PersistenceMode = Field(default=PersistenceMode.DISABLED, description="DISABLED, MEMORY or DATABASE.")
+    persistence_acknowledgement: str = Field(default="", description="Required text for DATABASE mode.")
 
     seed_dir: Path | None = Field(default=None, description="LOCAL_DEMO: folder with manifest.json and csv/.")
 
@@ -68,3 +80,12 @@ class Member3DemoSettings(BaseSettings):
         if not self.neon_credential_rotated:
             missing.append("M3_DEMO_NEON_CREDENTIAL_ROTATED=true")
         return tuple(missing)
+
+    def persistence_problem(self) -> str | None:
+        """Why saving is unavailable (None when it is usable). DATABASE needs an exact acknowledgement."""
+        if self.persistence is PersistenceMode.DISABLED:
+            return "Saving is disabled. Set M3_DEMO_PERSISTENCE to MEMORY (development) or DATABASE to enable it."
+        if self.persistence is PersistenceMode.DATABASE and self.persistence_acknowledgement != PERSISTENCE_DATABASE_ACKNOWLEDGEMENT:
+            return ("DATABASE saving needs M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT and the approved migration 0007; "
+                    "it is not configured.")
+        return None

@@ -27,6 +27,7 @@ from duty_allocation_demo_support import PERIOD, SEED_PACK, compact_source, sid
 from schedence_auth.testing import TokenFactory
 
 API = "/api/v1/duty-allocation"
+COMPONENT = "Fairness-Aware Staff Allocation for Examination Duties"
 SOLVER = pytest.mark.skipif(importlib.util.find_spec("ortools") is None, reason="install the [solver] extra")
 AUTH_INSTITUTION = OTHER_INSTITUTION  # the real examination institution; must differ from the synthetic one
 
@@ -630,9 +631,10 @@ def test_timetable_overlaps_are_rejected_before_any_seating():
 
 def test_openapi_documents_every_endpoint(env):
     spec = env.client.get("/openapi.json").json()
-    paths = {p for p in spec["paths"] if p.startswith(API)}
+    preview = f"{COMPONENT} (PREVIEW ONLY)"  # the saved-draft endpoints have their own tag (test_duty_roster_api.py)
+    operations = [(m, p) for p, v in spec["paths"].items() if p.startswith(API) for m in v if preview in v[m]["tags"]]
+    paths = {p for _, p in operations}
     assert len(paths) >= 18
-    operations = [(m, p) for p in paths for m in spec["paths"][p]]
     assert len(operations) == len(GETS) + len(POSTS)  # every route listed above is documented, once
     assert all("summary" in spec["paths"][p][m] and spec["paths"][p][m]["tags"] for m, p in operations)
     assert all(spec["paths"][API + "/allocations/" + k]["post"]["responses"].get("201") for k in ("baseline", "fair", "compare"))
@@ -669,13 +671,12 @@ def test_local_demo_source_reports_a_missing_seed_pack(tmp_path):
 
 # --- Official component name, PREVIEW ONLY marking and the six frontend screens ---------------------
 
-COMPONENT = "Fairness-Aware Staff Allocation for Examination Duties"
 
 
 def test_openapi_uses_the_official_component_name_and_paths_are_unchanged(env):
     spec = env.client.get("/openapi.json").json()
     tags = {t for p, v in spec["paths"].items() if p.startswith(API) for op in v.values() for t in op["tags"]}
-    assert tags == {f"{COMPONENT} (PREVIEW ONLY)"}
+    assert tags == {f"{COMPONENT} (PREVIEW ONLY)", f"{COMPONENT} (saved drafts and approval)"}
     assert API + "/allocations/compare" in spec["paths"] and API + "/seating" in spec["paths"]
 
 

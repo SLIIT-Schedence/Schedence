@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.duty_allocation.demo_settings import DemoSource
+from app.duty_allocation.demo_settings import DemoSource, PersistenceMode
 from app.duty_allocation.orchestration import AllocationMode
 from app.duty_allocation.types import DutyRole
 
@@ -72,7 +72,9 @@ class DemoStatusOut(_Out):
     safeguards: list[str]
     component: str = COMPONENT_NAME
     notice: str = PREVIEW_NOTICE
-    persistence: str = "NOT_IMPLEMENTED: roster approval, publication and saved swaps are not available."
+    persistence_mode: PersistenceMode = PersistenceMode.DISABLED
+    persistence_problem: str | None = None
+    persistence: str = Field("", description="Plain-language state of saving, approval and publication.")
 
 
 # --- Periods and sessions -----------------------------------------------------------------------------

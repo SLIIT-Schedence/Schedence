@@ -40,6 +40,8 @@ async def demo_service_error_handler(request: Request, exc: DemoServiceError) ->
     body = {"detail": exc.message, "code": exc.code}
     if exc.problems:
         body["problems"] = list(exc.problems[:50])
+    if exc.details:
+        body["details"] = exc.details
     return JSONResponse(body, status_code=exc.status_code)
 
 
@@ -62,7 +64,12 @@ async def source_status(service: ServiceDep) -> s.DemoStatusOut:
     """Which data source is active and what is still missing. Never connects to a database."""
     info = service.status()
     problem = info.pop("problem")
-    return s.DemoStatusOut(**info, problem_code=problem[1] if problem else None, problem=problem[2] if problem else None)
+    mode = info["persistence_mode"]
+    described = {"DISABLED": "Saving, approval and publication are disabled; every result is a preview only.",
+                 "MEMORY": "Working drafts can be saved in memory only (lost on restart). Publishing is not possible for synthetic data.",
+                 "DATABASE": "Working drafts are saved in the database. Synthetic rosters can never be published."}[mode.value]
+    return s.DemoStatusOut(**info, problem_code=problem[1] if problem else None, problem=problem[2] if problem else None,
+                           persistence=described)
 
 
 @router.post("/snapshot/refresh", response_model=s.DemoStatusOut, dependencies=GENERATE_ONLY, responses=SOURCE_ERRORS)

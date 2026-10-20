@@ -26,7 +26,9 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import duty_allocation, exam_periods, health, modules, scheduling_settings, settings, students, timetables, venues
+from app.api import (
+    duty_allocation, duty_rosters, exam_periods, health, modules, scheduling_settings, settings, students, timetables, venues,
+)
 from app.api.errors import register_error_handlers
 from app.auth.context import AuthContext, build_auth_context
 from app.auth.dependencies import INSTITUTION_HEADER, get_current_user, require_dataset_read
@@ -34,6 +36,7 @@ from app.auth.settings import load_auth_settings
 from app.database import close_database, open_database
 from app.duty_allocation.demo_service import DemoServiceError, Member3DemoService
 from app.duty_allocation.demo_settings import DemoSource, Member3DemoSettings
+from app.duty_allocation.persistence.repository import MemoryState
 
 API_PREFIX = "/api/v1"
 
@@ -94,6 +97,8 @@ def create_app(auth: AuthContext | None = None, m3_demo: Member3DemoSettings | N
     if demo.source is not DemoSource.DISABLED:
         app.state.m3_demo_service = Member3DemoService(
             demo, app_env=auth.settings.app_env, real_institution_id=auth.settings.institution_id)
+        app.state.m3_memory_state = MemoryState()  # backs M3_DEMO_PERSISTENCE=MEMORY only
         api.include_router(duty_allocation.router)
+        api.include_router(duty_rosters.router)  # saved drafts and approval workflow; 503 until persistence is enabled
     app.include_router(api)
     return app

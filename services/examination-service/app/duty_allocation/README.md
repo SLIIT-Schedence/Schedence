@@ -1,8 +1,8 @@
 # Fairness-Aware Staff Allocation for Examination Duties (preview API)
 
 CP-SAT staff duty allocation, fairness analysis, duty swap / emergency replacement previews and
-student seating, exposed under `/api/v1/duty-allocation`. **Everything is a preview**: nothing is
-saved, approved, published or applied. All data is the **synthetic** `m3_demo` data set (never
+student seating, exposed under `/api/v1/duty-allocation`. **Generation is always a preview**: nothing is
+saved, approved, published or applied unless saving is explicitly enabled (section 9). All data is the **synthetic** `m3_demo` data set (never
 SLIIT data or policy), and the synthetic institution is never merged with the real one.
 
 ## 1. Install
@@ -30,6 +30,8 @@ from the **process environment only** (never from `.env`). The feature is **disa
 | `M3_DEMO_INSTITUTION_ID` | synthetic institution (default `11111111-1111-4111-8111-111111111111`); the service refuses to run if it equals the real institution |
 | `M3_DEMO_SNAPSHOT_TTL_SECONDS` | how long the read-only snapshot is reused (default 300) |
 | `M3_DEMO_MAX_SOLVER_SECONDS` | upper limit for one solver run (default 60) |
+| `M3_DEMO_PERSISTENCE` | saving of drafts: `DISABLED` (default), `MEMORY` (development; lost on restart) or `DATABASE` |
+| `M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT` | DATABASE only: exact text `I APPROVE SAVING SYNTHETIC DRAFTS TO THE EXAMINATIONS SCHEMA` |
 | `M3_DEMO_SEED_DIR` | LOCAL_DEMO: folder with `manifest.json` and `csv/` |
 | `M3_DEMO_NEON_ENV_FILE` | NEON_READ_ONLY: **absolute** path of an env file holding the URL |
 | `M3_DEMO_NEON_URL_VARIABLE` | name of the variable inside that file |
@@ -144,12 +146,67 @@ python -m pytest tests/test_scheduling_*.py tests/test_seating_rules.py tests/te
 No test connects to a database. The optional seed-pack tests read `M3_SEED_PACK_DIR` (default
 `C:\Users\Hp\Desktop\Schedence-M3-Seed`) and skip when it is absent.
 
-## 9. Not implemented yet (needs persistence or other teams)
+## 9. Saved drafts and the approval workflow
 
-* Saving, approving and publishing a duty roster, and saving a swap / replacement (no tables or
-  migrations yet; belongs to a reviewed schema change).
-* Real timetables: the demo uses a `DEMO-UNPUBLISHED:` reference because Member 2 publishes no
-  `input_fingerprint` for `m3_demo`; full Member 2 H1–H11 validation needs their original input.
-* Verified physical seat layouts (all demo seats stay `SYNTHETIC`/`PROVISIONAL`).
-* Live Neon read: needs the rotated password, the dedicated role and your confirmations.
-* Previews are per process; a multi-worker deployment needs a shared store.
+Everything in sections 5-8 is a preview. With `M3_DEMO_PERSISTENCE=MEMORY` (development) or `DATABASE` the
+following lifecycle becomes available, under the same `/api/v1/duty-allocation`:
+
+```
+DRAFT -> VALIDATED -> APPROVED -> PUBLISHED        REJECTED (revise to continue)   SUPERSEDED (replaced by a published revision)
+```
+
+| Action | Endpoint | Permission |
+|---|---|---|
+| Save a generated roster as DRAFT (validated first; one working roster per period) | `POST /rosters` `{run_id, roster?}` | `examinations:generate` |
+| List / read / audit trail | `GET /rosters`, `/rosters/{id}`, `/rosters/{id}/history` | `examinations:read` |
+| Validate (rebuilds the inputs, re-runs the independent checks) | `POST /rosters/{id}/validate` | `examinations:generate` |
+| Approve (validates again; any hard-constraint violation blocks it) | `POST /rosters/{id}/approve` | `examinations:approve` |
+| Publish (needs a verified published timetable and a compatibility check) | `POST /rosters/{id}/publish` | `examinations:approve` |
+| Reject with a reason | `POST /rosters/{id}/reject` | `examinations:approve` or `:manage` |
+| Controlled revision of a PUBLISHED or REJECTED roster (new DRAFT version) | `POST /rosters/{id}/revisions` | `examinations:manage` |
+| Preview a change | `POST /rosters/{id}/change-previews/swap` \| `/replacement` | `examinations:generate` |
+| Submit a change request | `POST /rosters/{id}/change-requests/swap` \| `/replacement` | `examinations:generate` |
+| List / read requests | `GET /rosters/{id}/change-requests`, `/change-requests/{rid}` | `examinations:read` |
+| Approve / reject a request | `POST /change-requests/{rid}/approve` \| `/reject` | `examinations:approve` |
+| Apply an approved request (atomic) | `POST /change-requests/{rid}/apply` | `examinations:approve` |
+| Cancel an open request (requester, or a manager) | `POST /change-requests/{rid}/cancel` | `examinations:generate` |
+| Save a seating plan as a draft; read drafts | `POST /seating/{id}/save`, `GET /seating-drafts[/{id}[/rooms/{session}/{venue}]]` | `generate` / `read` |
+
+Rules the backend enforces:
+
+* Permissions come only from the verified Cognito identity and the Identity Service; no request field or header can grant
+  one (a `role` field is rejected with 422).
+* Every changing request may send `expected_version` (the roster's `row_version`); a stale screen gets `409 STALE_ROSTER`.
+* A roster stores the hash of the inputs it was built on; if the timetable, staff or constraints changed, validation,
+  approval and changes are refused (`ROSTER_INPUT_CHANGED`) until a revision is made.
+* Staff cannot hold two duties in one session, and cannot overlap duties in another period's working or published roster.
+* A **PUBLISHED roster is never edited**. A swap or replacement on it answers `REVISION_REQUIRED`; create a revision,
+  change it, validate, approve and publish it again - the old version becomes SUPERSEDED only then.
+* Applying a change to an APPROVED roster withdraws the approval (it becomes VALIDATED and must be approved again), and every other open
+  request for that roster becomes STALE.
+* **Publishing is closed by default.** Synthetic `m3_demo` rosters can never be published
+  (`SYNTHETIC_ROSTER_CANNOT_BE_PUBLISHED`), and with no published-timetable contract the answer is `503
+  PUBLISHED_TIMETABLE_UNAVAILABLE`. The interface is `PublishedTimetableProvider` in
+  [persistence/published_timetable.py](persistence/published_timetable.py); install an implementation as
+  `app.state.m3_published_timetable_provider` once Member 2 provides the contract.
+* Seats are never `VERIFIED` without a verified hall layout; demo seats stay `SYNTHETIC`.
+
+### Tables and migration (not applied)
+
+[persistence/models.py](persistence/models.py) defines six tables in the `examinations` schema: `duty_rosters`,
+`duty_roster_assignments`, `duty_roster_events`, `duty_change_requests`, `seating_drafts`, `seating_draft_seats`. The Alembic
+migration is a **proposal** at
+[proposed_migrations/20261020_0007_duty_roster_persistence.py](../../proposed_migrations/20261020_0007_duty_roster_persistence.py);
+it is outside `alembic/versions` so the shared migration chain and its tests are unchanged, and nothing was run against any
+database. To activate it after review: copy it to `alembic/versions`, register the models on `app.db.base.Base`
+(`app/db/__init__`/`alembic/env.py` imports), run `alembic upgrade head` yourself on a database you chose, then set
+`M3_DEMO_PERSISTENCE=DATABASE` and the acknowledgement. Without the tables, `DATABASE` mode answers `503 PERSISTENCE_NOT_MIGRATED`.
+
+## 10. Not implemented yet / external blockers
+
+* Applying the migration (needs your review and approval) and the first real database save.
+* Publishing real rosters: needs Member 2's published-timetable contract and non-synthetic input data.
+* Real timetables: the demo uses a `DEMO-UNPUBLISHED:` reference; full Member 2 H1-H11 validation needs their original input.
+* Verified physical seat layouts (all demo seats stay `SYNTHETIC`).
+* Live Neon read: needs the rotated password, the dedicated read-only role and your confirmations.
+* Run / seating previews (sections 5-8) are per process; `MEMORY` drafts are lost on restart.

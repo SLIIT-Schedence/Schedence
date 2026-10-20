@@ -53,8 +53,10 @@ SAFEGUARDS = (
 class DemoServiceError(Exception):
     """A safe, credential-free error with an HTTP status and a stable code."""
 
-    def __init__(self, status_code: int, code: str, message: str, problems: tuple[str, ...] = ()) -> None:
+    def __init__(self, status_code: int, code: str, message: str, problems: tuple[str, ...] = (),
+                 details: dict | None = None) -> None:
         self.status_code, self.code, self.message, self.problems = status_code, code, message, problems
+        self.details = details or {}
         super().__init__(message)
 
 
@@ -156,7 +158,8 @@ class Member3DemoService:
         return {"source": s.source, "enabled": problem is None, "problem": problem,
                 "missing_settings": s.missing_setup(), "institution_id": s.institution_id,
                 "default_period_code": s.period_code, "app_env": self.app_env, "safeguards": SAFEGUARDS,
-                "snapshot_loaded": self._snapshot is not None}
+                "snapshot_loaded": self._snapshot is not None, "persistence_mode": s.persistence,
+                "persistence_problem": s.persistence_problem()}
 
     def _gate_problem(self) -> tuple[int, str, str] | None:
         s = self.settings
