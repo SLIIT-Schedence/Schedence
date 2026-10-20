@@ -5,6 +5,7 @@ import { requireExaminationAdmin } from "@/lib/examination-access";
 import { examinationRequest, type ExaminationResult } from "@/lib/examination-api";
 import { listExamModules } from "@/lib/examination";
 import { normalizeExclusionReason, periodEditErrors } from "@/lib/examination-calendar";
+import { schedulingReview, seatingReview } from "@/lib/examination-settings";
 import type { CycleModule, PeriodChange, PeriodChangeResult, PeriodDefinition, PeriodEdit, ReviewResult, SchedulingReview, SeatingReview } from "@/lib/examination-workspace-types";
 
 const validCode = (value: unknown): value is string => typeof value === "string" && /^[A-Z0-9-]{1,32}$/.test(value);
@@ -69,13 +70,7 @@ export async function loadCycleReview(periodCode: string): Promise<ReviewResult>
       repeat_candidates: repeats ? repeats.get(module.module_code) ?? 0 : null,
       normal_candidates: repeats ? module.candidate_count - (repeats.get(module.module_code) ?? 0) : null,
     })),
-    scheduling: { source: scheduling.data.source, status: scheduling.data.status, version: scheduling.data.version,
-      fingerprint: scheduling.data.fingerprint, mandatory_rules: scheduling.data.mandatory_rules,
-      problems: scheduling.data.problems, settings: scheduling.data.settings },
-    seating: { ruleset_version: seating.data.ruleset_version, default: { percentage: seating.data.default.percentage },
-      venue_count: seating.data.venue_count, total_normal_capacity: seating.data.total_normal_capacity,
-      total_exam_capacity: seating.data.total_exam_capacity, unavailable_venues: seating.data.unavailable_venues,
-      venue_overrides: seating.data.venue_overrides.map((item) => ({ venue_id: item.venue_id, percentage: item.percentage })) },
+    scheduling: schedulingReview(scheduling.data), seating: seatingReview(seating.data),
     draft_count: counts[0].ok ? counts[0].data.total : null, locked, warnings,
   } };
 }

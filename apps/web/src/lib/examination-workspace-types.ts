@@ -11,7 +11,9 @@ export type SchedulingReview = {
   settings: Record<string, Record<string, unknown>>;
 };
 export type SeatingReview = {
-  ruleset_version: number; default: { percentage: number }; venue_count: number;
+  ruleset_version: number; min_percentage: number; max_percentage: number;
+  /** The default rule's own version: the expected_version of a default seating change. */
+  default: { percentage: number; version: number }; venue_count: number;
   total_normal_capacity: number; total_exam_capacity: number; unavailable_venues: string[];
   venue_overrides: { venue_id: string | null; percentage: number }[];
 };
