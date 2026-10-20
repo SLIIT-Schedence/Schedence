@@ -1,4 +1,4 @@
-"""Builds the Member 3 API responses from domain results (no business logic, no I/O)."""
+"""Builds the Fairness-Aware Staff Allocation for Examination Duties API responses from domain results (no business logic, no I/O)."""
 
 from __future__ import annotations
 

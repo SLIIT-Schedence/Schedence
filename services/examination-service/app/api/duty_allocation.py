@@ -1,4 +1,4 @@
-"""Member 3 API: fairness-aware examination duty allocation and student seating (PREVIEW ONLY).
+"""Fairness-Aware Staff Allocation for Examination Duties API, with student seating (PREVIEW ONLY).
 
 Reads the SYNTHETIC ``m3_demo`` data from one explicit source (LOCAL_DEMO seed pack or
 NEON_READ_ONLY) and runs the existing algorithms. Nothing is saved, approved, published or
@@ -25,7 +25,7 @@ from app.duty_allocation.types import DutyAssignment, DutyRole
 
 READ = [Depends(require_exam_data_access)]
 GENERATE_ONLY = [Depends(require_any_permission(GENERATE))]
-router = APIRouter(prefix="/duty-allocation", tags=["duty allocation (member 3 preview)"])
+router = APIRouter(prefix="/duty-allocation", tags=["Fairness-Aware Staff Allocation for Examination Duties (PREVIEW ONLY)"])
 
 PeriodPath = Annotated[str, Path(pattern=PERIOD_CODE)]
 PeriodQuery = Annotated[str | None, Query(pattern=PERIOD_CODE, description="Defaults to M3_DEMO_PERIOD_CODE.")]

@@ -1,4 +1,4 @@
-# Member 3 – Fairness-Aware Examination Duty Allocation (preview API)
+# Fairness-Aware Staff Allocation for Examination Duties (preview API)
 
 CP-SAT staff duty allocation, fairness analysis, duty swap / emergency replacement previews and
 student seating, exposed under `/api/v1/duty-allocation`. **Everything is a preview**: nothing is
@@ -19,7 +19,7 @@ python -m pip install -e "./services/examination-service[dev,solver]"
 ## 2. Environment variables (names only – never commit values)
 
 The service keeps its usual authentication/database settings (`AWS_REGION`, `COGNITO_*`,
-`SLIIT_INSTITUTION_ID`, `DATABASE_URL`, ...). The Member 3 feature adds `M3_DEMO_*`. They are read
+`SLIIT_INSTITUTION_ID`, `DATABASE_URL`, ...). This component adds `M3_DEMO_*`. They are read
 from the **process environment only** (never from `.env`). The feature is **disabled by default**: while
 `M3_DEMO_SOURCE` is `DISABLED` the routes are not mounted at all (they return 404 and are absent from OpenAPI).
 

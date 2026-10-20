@@ -1,4 +1,6 @@
-"""Settings of the Member 3 demo API (environment variables ``M3_DEMO_*``, no secret values).
+"""Settings of the Fairness-Aware Staff Allocation for Examination Duties demo API.
+
+Environment variables ``M3_DEMO_*``; no secret values are settings.
 
 Never reads ``.env``: only real process environment variables are used, so the repository
 ``.env`` can never switch this feature on by accident. The default is DISABLED.

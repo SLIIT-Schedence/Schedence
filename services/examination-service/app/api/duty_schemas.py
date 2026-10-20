@@ -1,4 +1,4 @@
-"""Request and response models of the Member 3 duty-allocation demo API.
+"""Request and response models of the Fairness-Aware Staff Allocation for Examination Duties API.
 
 Every response carries ``meta``: the active data source, the synthetic institution, the
 snapshot time and the preview-only guarantee, so the frontend can always show where data
@@ -18,6 +18,8 @@ from app.duty_allocation.orchestration import AllocationMode
 from app.duty_allocation.types import DutyRole
 
 T = TypeVar("T")
+COMPONENT_NAME = "Fairness-Aware Staff Allocation for Examination Duties"
+PREVIEW_NOTICE = ("PREVIEW ONLY: calculated from synthetic demo data; not saved, approved, published or applied.")
 Label = Literal["BASELINE", "FAIR"]
 IdText = Annotated[str, Field(min_length=1, max_length=64)]
 
@@ -40,6 +42,8 @@ class MetaOut(_Out):
     period_code: str | None = None
     snapshot_loaded_at: dt.datetime
     preview_only: bool = Field(True, description="Nothing is saved, approved, published or applied.")
+    component: str = COMPONENT_NAME
+    notice: str = PREVIEW_NOTICE
 
 
 class ViolationOut(_Out):
@@ -66,6 +70,8 @@ class DemoStatusOut(_Out):
     app_env: str
     snapshot_loaded: bool
     safeguards: list[str]
+    component: str = COMPONENT_NAME
+    notice: str = PREVIEW_NOTICE
     persistence: str = "NOT_IMPLEMENTED: roster approval, publication and saved swaps are not available."
 
 

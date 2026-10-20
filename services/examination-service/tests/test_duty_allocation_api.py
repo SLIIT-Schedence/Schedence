@@ -665,3 +665,80 @@ def test_local_demo_source_reports_a_missing_seed_pack(tmp_path):
     reply = env.get("/exam-periods")
     assert reply.status_code == 503 and reply.json()["code"] == "M3_DEMO_DATABASE_UNAVAILABLE"
     assert "nope" not in reply.text  # no local paths in errors
+
+
+# --- Official component name, PREVIEW ONLY marking and the six frontend screens ---------------------
+
+COMPONENT = "Fairness-Aware Staff Allocation for Examination Duties"
+
+
+def test_openapi_uses_the_official_component_name_and_paths_are_unchanged(env):
+    spec = env.client.get("/openapi.json").json()
+    tags = {t for p, v in spec["paths"].items() if p.startswith(API) for op in v.values() for t in op["tags"]}
+    assert tags == {f"{COMPONENT} (PREVIEW ONLY)"}
+    assert API + "/allocations/compare" in spec["paths"] and API + "/seating" in spec["paths"]
+
+
+@SOLVER
+def test_every_response_is_marked_preview_only_and_names_the_component(env):
+    run_id = run(env, "compare")["run_id"]
+    seating_id = env.post("/seating").json()["seating_id"]
+    duty = env.get(f"/allocations/{run_id}/roster").json()["roster"]["assignments"][0]
+    responses = [
+        env.get("/status"), env.get("/exam-periods"), env.get(f"/exam-periods/{PERIOD}/sessions"),
+        env.get(f"/exam-periods/{PERIOD}/requirements"), env.get("/staff"), env.get("/staff/workload"),
+        env.get(f"/staff/{staff_id_of(env, 1)}"), env.get(f"/staff/{staff_id_of(env, 1)}/constraints"),
+        env.get(f"/allocations/{run_id}"), env.get(f"/allocations/{run_id}/roster"), env.get(f"/allocations/{run_id}/fairness"),
+        env.post(f"/allocations/{run_id}/validation"),
+        env.post(f"/allocations/{run_id}/replacement-preview", json={"duty": ref(duty), "reason": "Illness"}),
+        env.post(f"/allocations/{run_id}/swap-preview", json={"first": ref(duty), "second": ref(duty)}),
+        env.get(f"/seating/{seating_id}"),
+    ]
+    for reply in responses:
+        assert reply.status_code == 200, reply.text
+        body = reply.json()
+        meta = body.get("meta", body)  # /status carries the notice at top level
+        assert meta["component"] == COMPONENT and meta["notice"].startswith("PREVIEW ONLY")
+        assert meta.get("preview_only", True) is True
+        for flag in ("saved", "approved", "published", "applied"):
+            assert body.get(flag, False) is False
+    created = [run(env, "baseline"), env.post("/seating").json()]
+    assert all(c["saved"] is False and c["approved"] is False and c["published"] is False for c in created)
+    assert all(c["meta"]["notice"].startswith("PREVIEW ONLY") for c in created)
+
+
+@SOLVER
+def test_the_six_frontend_screens_have_the_data_they_need(env):
+    # 1. Dashboard
+    status = env.get("/status").json()
+    periods = env.get("/exam-periods").json()["items"]
+    sessions = env.get(f"/exam-periods/{PERIOD}/sessions").json()
+    needs = env.get(f"/exam-periods/{PERIOD}/requirements").json()
+    assert status["enabled"] and periods[0]["session_count"] == sessions["total"] == 3 and needs["complete"]
+    # 2. Staff information and availability
+    staff = env.get("/staff").json()["items"][0]
+    detail = env.get(f"/staff/{staff['staff_id']}").json()
+    assert {"staff_number", "full_name", "academic_rank", "eligible_roles"} <= set(detail)
+    assert {"unavailability", "availability", "preferences", "restrictions", "history", "limits"} <= set(detail["constraints"])
+    assert detail["workload"]["status"] in ("COMPUTED", "NOT_COMPUTED", "MISSING_RESPONSE", "NOT_LOADED")
+    # 3. Generate duty roster
+    generated = run(env, "compare")
+    roster = generated["rosters"][1]
+    assert roster["label"] == "FAIR" and roster["independently_valid"] is True
+    assert {"date", "start", "end", "venue_name", "staff_name", "role"} <= set(roster["assignments"][0])
+    # 4. Fairness analytics
+    fairness = env.get(f"/allocations/{generated['run_id']}/fairness").json()
+    assert fairness["comparison"]["fairer_by_gini"] in ("FAIR", "TIE") and fairness["fair"]["per_staff"]
+    assert fairness["fairness_scope"] and "fairness_complete" in fairness
+    # 5. Swap and replacement management
+    duty = next(a for a in roster["assignments"] if a["role"] == "INVIGILATOR")
+    change = env.post(f"/allocations/{generated['run_id']}/replacement-preview",
+                      json={"duty": ref(duty), "reason": "Illness"}).json()
+    assert change["status"] == "PROPOSED" and change["candidates"] and change["applied"] is False
+    check = env.post(f"/allocations/{generated['run_id']}/validation").json()
+    assert check["valid"] is True
+    # 6. Student seating allocation
+    seating = env.post("/seating").json()
+    room = seating["rooms"][0]
+    seats = env.get(f"/seating/{seating['seating_id']}/rooms/{room['session_id']}/{room['venue_id']}").json()
+    assert seating["seat_state"] == "SYNTHETIC" and seats["seats"] and "seat_label" in seats["seats"][0]

@@ -1,4 +1,4 @@
-"""Service layer of the Member 3 demo API: explicit data source, cached snapshot, preview runs.
+"""Service layer of the Fairness-Aware Staff Allocation for Examination Duties API: explicit data source, cached snapshot, preview runs.
 
 * One explicit source per deployment (``M3_DEMO_SOURCE``); there is never a fallback from
   NEON_READ_ONLY to local data. Every result says which source produced it.
@@ -161,7 +161,7 @@ class Member3DemoService:
     def _gate_problem(self) -> tuple[int, str, str] | None:
         s = self.settings
         if s.source is DemoSource.DISABLED:
-            return 503, "M3_DEMO_DISABLED", "The Member 3 demo source is disabled. Set M3_DEMO_SOURCE to enable it."
+            return 503, "M3_DEMO_DISABLED", "The Fairness-Aware Staff Allocation for Examination Duties demo source is disabled. Set M3_DEMO_SOURCE to enable it."
         if s.institution_id == self.real_institution_id:
             return (409, "M3_DEMO_INSTITUTION_CONFLICT",
                     "The synthetic demo institution must differ from the real examination institution.")
