@@ -35,7 +35,7 @@ class DemoSource(str, Enum):
 class PersistenceMode(str, Enum):
     DISABLED = "DISABLED"  # roster / seating endpoints answer 503 (default)
     MEMORY = "MEMORY"  # working drafts in this process only; lost on restart; for development and demos
-    DATABASE = "DATABASE"  # examinations.duty_* tables (needs the approved migration 0007 and the acknowledgement)
+    DATABASE = "DATABASE"  # examinations.duty_* tables (needs the approved migration 0012 and the acknowledgement)
 
 
 PERSISTENCE_DATABASE_ACKNOWLEDGEMENT = "I APPROVE SAVING SYNTHETIC DRAFTS TO THE EXAMINATIONS SCHEMA"
@@ -86,6 +86,6 @@ class Member3DemoSettings(BaseSettings):
         if self.persistence is PersistenceMode.DISABLED:
             return "Saving is disabled. Set M3_DEMO_PERSISTENCE to MEMORY (development) or DATABASE to enable it."
         if self.persistence is PersistenceMode.DATABASE and self.persistence_acknowledgement != PERSISTENCE_DATABASE_ACKNOWLEDGEMENT:
-            return ("DATABASE saving needs M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT and the approved migration 0007; "
+            return ("DATABASE saving needs M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT and the approved migration 0012; "
                     "it is not configured.")
         return None

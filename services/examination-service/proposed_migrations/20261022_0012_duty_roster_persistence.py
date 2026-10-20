@@ -15,11 +15,11 @@ Touches only the examinations schema. Adds 6 tables; changes and deletes no exis
 or table; inserts nothing; references no other service's data and no ``m3_demo`` table.
 
 Downgrade drops the tables. It refuses to run when rosters were saved (their history would
-be lost) unless ``alembic -x drop_duty_rosters=true downgrade 0006`` is used after export.
+be lost) unless ``alembic -x drop_duty_rosters=true downgrade 0011`` is used after export.
 
-Revision ID: 0007
-Revises: 0006
-Create Date: 2026-10-20
+Revision ID: 0012
+Revises: 0011
+Create Date: 2026-10-22
 """
 
 from collections.abc import Sequence
@@ -28,8 +28,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from alembic import context, op
 
-revision: str = "0007"
-down_revision: str | None = "0006"
+revision: str = "0012"
+down_revision: str | None = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -226,7 +226,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     allow_loss = context.get_x_argument(as_dictionary=True).get("drop_duty_rosters", "").lower() == "true"
     if not allow_loss:
-        # Stop (and change nothing) if rosters or seating drafts were saved since 0007.
+        # Stop (and change nothing) if rosters or seating drafts were saved since 0012.
         op.execute(
             "DO $$ BEGIN"
             f" IF EXISTS (SELECT 1 FROM {SCHEMA}.duty_rosters) OR EXISTS (SELECT 1 FROM {SCHEMA}.seating_drafts) THEN"

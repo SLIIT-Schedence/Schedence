@@ -404,7 +404,7 @@ def render(revision: str, *, downgrade=False, x=()) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "alembic"
         shutil.copytree(SERVICE_DIR / "alembic", copy, ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copy(SERVICE_DIR / "proposed_migrations" / "20261020_0007_duty_roster_persistence.py", copy / "versions")
+        shutil.copy(SERVICE_DIR / "proposed_migrations" / "20261022_0012_duty_roster_persistence.py", copy / "versions")
         buffer = io.StringIO()
         config = Config(str(SERVICE_DIR / "alembic.ini"), stdout=buffer, cmd_opts=argparse.Namespace(x=list(x)))
         config.set_main_option("script_location", str(copy))
@@ -416,13 +416,13 @@ def render(revision: str, *, downgrade=False, x=()) -> str:
 @pytest.fixture
 def migration_sql(monkeypatch) -> str:
     monkeypatch.setenv("DATABASE_URL", "postgresql://fake_user:fake_password@ep-example-123456.eu-central-1.aws.neon.tech/neondb")
-    return render("0006:0007")
+    return render("0011:0012")
 
 
 def test_proposed_migration_is_not_in_the_active_chain():
     active = {p.name for p in (SERVICE_DIR / "alembic" / "versions").glob("*.py")}
-    assert not any("0007" in name for name in active)  # activating it is a reviewed, separate step
-    assert (SERVICE_DIR / "proposed_migrations" / "20261020_0007_duty_roster_persistence.py").is_file()
+    assert not any("0012" in name for name in active)  # activating it is a reviewed, separate step
+    assert (SERVICE_DIR / "proposed_migrations" / "20261022_0012_duty_roster_persistence.py").is_file()
 
 
 def test_migration_creates_exactly_the_model_tables(migration_sql):
@@ -447,11 +447,11 @@ def test_migration_constraint_and_index_names_match_the_models(migration_sql):
 
 
 def test_migration_is_additive_and_confined_to_examinations(migration_sql):
-    body = migration_sql.split("Running upgrade 0006 -> 0007")[1].upper()
+    body = migration_sql.split("Running upgrade 0011 -> 0012")[1].upper()
     body = "\n".join(line for line in body.splitlines() if "ALEMBIC_VERSION" not in line)  # Alembic's own bookkeeping
     for forbidden in ("DROP ", "DELETE FROM", "TRUNCATE", "UPDATE ", "INSERT INTO", "ALTER TABLE", "CREATE SCHEMA", "M3_DEMO"):
         assert forbidden not in body
-    names = re.findall(r"(?:CREATE TABLE|REFERENCES|CREATE (?:UNIQUE )?INDEX \w+ ON) (\S+)", migration_sql.split("0006 -> 0007")[1])
+    names = re.findall(r"(?:CREATE TABLE|REFERENCES|CREATE (?:UNIQUE )?INDEX \w+ ON) (\S+)", migration_sql.split("0011 -> 0012")[1])
     assert names and all(n.startswith("examinations.") for n in names)
     assert migration_sql.count("BEGIN;") == 1 and "fake_password" not in migration_sql
 
@@ -465,7 +465,7 @@ def test_migration_publish_and_seating_rules_are_in_the_database(migration_sql):
 
 def test_migration_downgrade_refuses_to_lose_saved_rosters(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://fake_user:fake_password@ep-example-123456.eu-central-1.aws.neon.tech/neondb")
-    guarded = render("0007:0006", downgrade=True)
+    guarded = render("0012:0011", downgrade=True)
     assert guarded.index("RAISE EXCEPTION") < guarded.index("DROP TABLE examinations.duty_rosters")
     assert set(re.findall(r"DROP TABLE ([\w.]+)", guarded)) == {f"examinations.{t.name}" for t in m.DutyBase.metadata.sorted_tables}
-    assert "RAISE EXCEPTION" not in render("0007:0006", downgrade=True, x=["drop_duty_rosters=true"])
+    assert "RAISE EXCEPTION" not in render("0012:0011", downgrade=True, x=["drop_duty_rosters=true"])

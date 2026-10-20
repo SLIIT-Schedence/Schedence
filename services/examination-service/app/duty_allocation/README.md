@@ -196,7 +196,7 @@ Rules the backend enforces:
 [persistence/models.py](persistence/models.py) defines six tables in the `examinations` schema: `duty_rosters`,
 `duty_roster_assignments`, `duty_roster_events`, `duty_change_requests`, `seating_drafts`, `seating_draft_seats`. The Alembic
 migration is a **proposal** at
-[proposed_migrations/20261020_0007_duty_roster_persistence.py](../../proposed_migrations/20261020_0007_duty_roster_persistence.py);
+[proposed_migrations/20261022_0012_duty_roster_persistence.py](../../proposed_migrations/20261022_0012_duty_roster_persistence.py);
 it is outside `alembic/versions` so the shared migration chain and its tests are unchanged, and nothing was run against any
 database. To activate it after review: copy it to `alembic/versions`, register the models on `app.db.base.Base`
 (`app/db/__init__`/`alembic/env.py` imports), run `alembic upgrade head` yourself on a database you chose, then set

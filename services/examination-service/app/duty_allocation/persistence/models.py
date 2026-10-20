@@ -3,7 +3,7 @@
 PROPOSED, NOT ACTIVE. These models use their OWN ``MetaData`` (same schema and naming
 convention as ``app.db.base.Base``) so that importing them never changes the shared metadata
 that the teammate-owned migration tests compare with the applied Alembic chain. To activate:
-approve the migration ``proposed_migrations/20261020_0007_duty_roster_persistence.py``, move it
+approve the migration ``proposed_migrations/20261022_0012_duty_roster_persistence.py``, move it
 to ``alembic/versions`` and register these models on ``app.db.base.Base`` (see the README).
 
 Rules enforced by the database as well as by the service:
