@@ -30,6 +30,10 @@ from app.duty_allocation.academic_client import (
     AcademicDataNotFound, AcademicDataUnauthenticated, AcademicDataUnavailable, MissingWorkload, WorkloadFetch,
 )
 from app.duty_allocation.academic_adapter import AcademicStaffData, load_academic_staff_data, load_staff
+from app.duty_allocation.orchestration import (
+    NO_SUPPLEMENTAL_DATA, AllocationMode, AllocationPolicies, DataAvailability, DataOrigin, DataStatus, OrchestrationResult,
+    OrchestrationStatus, SupplementalStaffData, plan_duty_allocation, plan_duty_allocation_from_academic,
+)
 from app.duty_allocation.duty_changes import (
     Candidate, ChangeProposal, ChangeStatus, RejectedCandidate, check_proposal, propose_replacement, propose_swap,
 )
@@ -52,4 +56,7 @@ __all__ = [
     "AcademicDataClient", "AcademicDataError", "AcademicDataForbidden", "AcademicDataInstitutionMismatch",
     "AcademicDataMalformed", "AcademicDataNotFound", "AcademicDataUnauthenticated", "AcademicDataUnavailable",
     "MissingWorkload", "WorkloadFetch", "AcademicStaffData", "load_academic_staff_data", "load_staff",
+    "NO_SUPPLEMENTAL_DATA", "AllocationMode", "AllocationPolicies", "DataAvailability", "DataOrigin", "DataStatus",
+    "OrchestrationResult", "OrchestrationStatus", "SupplementalStaffData", "plan_duty_allocation",
+    "plan_duty_allocation_from_academic",
 ]
