@@ -153,6 +153,14 @@ class TimetableGenerator:
         async with self._lock:
             return await self._generate(request)
 
+    async def generate_both(self, requests: tuple[GenerationRequest, GenerationRequest]):
+        from app.generation.both_semesters import generate_both
+
+        if self._lock.locked():
+            raise GenerationBusyError()
+        async with self._lock:
+            return await generate_both(self, requests)
+
     async def current_inputs(self, period_code: str, module_codes: tuple[str, ...] | None,
                              calendar: ExamCalendar | None = None, *, configuration: SchedulingConfiguration | None = None,
                              seating_preferences: dict | None = None) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
@@ -173,7 +181,7 @@ class TimetableGenerator:
             extra["seating_preferences"] = seating_preferences
         return await self._load_snapshot(period_code, policy, module_codes, **extra)
 
-    async def _generate(self, request: GenerationRequest) -> GenerationOutcome:
+    async def _prepare(self, request: GenerationRequest, *, defaults=None):
         custom = request.scheduling_preferences is not None or request.stored_preferences is not None
         seating_preferences = None
         if request.stored_preferences is not None:
@@ -182,7 +190,7 @@ class TimetableGenerator:
             version = request.stored_settings_version
             seating_preferences = {"default_percentage": stored["seating"]["default_percentage"]}
         else:
-            configuration, version = await self._load_settings()
+            configuration, version = defaults if defaults is not None else await self._load_settings()
             if request.scheduling_preferences is not None:
                 try:
                     configuration = effective_configuration(configuration, request.scheduling_preferences)
@@ -200,6 +208,12 @@ class TimetableGenerator:
         errors = _scope_errors(snapshot)
         if errors:
             raise GenerationInputError(errors)
+
+        return configuration, version, solver_settings, snapshot, custom
+
+    async def _generate(self, request: GenerationRequest, *, prepared=None) -> GenerationOutcome:
+        configuration, version, solver_settings, snapshot, custom = (
+            await self._prepare(request) if prepared is None else prepared)
 
         def solve() -> SolveResult | OptimizationResult:
             if request.mode == "optimized":
