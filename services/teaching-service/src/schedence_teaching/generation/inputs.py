@@ -78,6 +78,15 @@ def prepare_database_work(evidence, request):
     check_references(evidence.document, request)
     loaded = build_database_generation(evidence, request.database_request())
     document = scoped_document(evidence, loaded)
+    if request.scheduling_rules is not None:
+        from schedence_teaching.persistence.generation_inputs import academic_source
+        from .scheduling_rules import RulesError, apply_rules
+        metadata = evidence_source(evidence.document, "PP1:preparation-source-bindings")["metadata"]
+        academic = academic_source(evidence, metadata)
+        try:
+            document = apply_rules(document, request.scheduling_rules, academic)
+        except RulesError as error:
+            raise ApiError(400, "INVALID_SCHEDULING_RULES", str(error)) from None
     selection = dict(parent_snapshot_id=str(evidence.snapshot_id), parent_snapshot_sha256=content_digest(evidence.document),
         request_sha256=content_digest(request), calendar_reference=request.calendar_reference,
         scheduling_policy_reference=request.scheduling_policy_reference,

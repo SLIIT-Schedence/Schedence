@@ -3656,6 +3656,28 @@ No real grants are changed by Teaching. See the [durable jobs and Swagger guide]
 for the migration plan, exact startup/settings, request examples, account-management
 ownership, isolated demonstration and remaining production requirements.
 
+### Generation input readiness (read-only)
+
+`GET /api/v1/teaching/generation-inputs?semester=1[&academic_year=1][&stream=WEEKDAY]`
+(also `/api/teaching`) prepares one institution's input snapshot with the existing
+reviewed PP1 preparation, binds it to that institution's own staff, module and venue
+identifiers, and runs the generation worker's pre-solve validation against the
+institution's restricted, RLS-scoped Academic and Resource rows. It returns counts
+(staff, modules, student groups, venues, teaching teams, lecturer preferences,
+expected sessions) and Ready/Warning/Missing checks for the selected scope. It
+requires `teaching:generate`, never stores the snapshot and never solves. The
+scheduling configuration is labelled `EXPERIMENTAL_CONFIGURATION_NOT_UNIVERSITY_APPROVED`.
+
+It is disabled by default. Development opt-in needs `TEACHING_GENERATION_READINESS=DEVELOPMENT`,
+`TEACHING_DATABASE_ENV_FILE` (the ignored restricted-role credentials) and the explicit
+`TEACHING_GENERATION_DATABASE`/`_PROJECT_ID`/`_BRANCH_ID` target; production refuses it.
+API reads keep a small pre-pinged connection pool, so requests no longer open a new
+Neon connection each time.
+
+The [Scheduling Rules backend guide](docs/scheduling-rules.md) documents read-only
+rule validation with `POST /generation-inputs` and the optional per-request
+`scheduling_rules` integration with the existing solver.
+
 ## Academic teaching tracks and unified main-group PDF previews
 
 Reviewed `AcademicPathwayConfiguration` rules can pool provisional PP1 allocation

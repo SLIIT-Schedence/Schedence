@@ -7,13 +7,14 @@ import { Badge, Card, EmptyState, first, LoadError, PageHeader, TableSkeleton } 
 import { Icon } from "@/components/icon";
 import { getAcademicContext } from "@/lib/academic";
 import { chooseVersion, getWorkloadReport, rankLabel, STAGES, TEACHING_SERVICE, type FairnessComparison, type Ratio, type WorkloadReport } from "@/lib/teaching";
-import { DraftNotice, Explain, LABEL, percent, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields } from "../_teaching/teaching-ui";
+import { HISTORICAL_PREVIEW, isHistoricalPreview } from "@/lib/teaching-preview";
+import { DraftNotice, Explain, LABEL, percent, PreviewNotice, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields } from "../_teaching/teaching-ui";
 
 export const metadata: Metadata = { title: "Workload fairness" };
 
 type SearchParams = PageProps<"/academic/fairness">["searchParams"];
 
-const KEYS = ["semester", "version", "group"] as const;
+const KEYS = ["semester", "version", "group", "source"] as const;
 const groupKey = (row: { academic_rank: string | null; appointment: string | null }) => `${row.academic_rank ?? "NONE"}|${row.appointment ?? ""}`;
 const groupName = (row: { academic_rank: string | null; appointment: string | null }) =>
   `${rankLabel(row.academic_rank)}${row.appointment ? ` · ${row.appointment}` : ""}`;
@@ -39,13 +40,16 @@ async function Fairness({ searchParams }: { searchParams: SearchParams }) {
   const raw = await searchParams;
   const params = Object.fromEntries(KEYS.map((key) => [key, first(raw[key])?.slice(0, 300)])) as Partial<Record<(typeof KEYS)[number], string>>;
   const institution = context.primary;
+  // The Historical Experimental Preview is read from its saved export, never as this institution's data.
+  const source = isHistoricalPreview(params.source) ? HISTORICAL_PREVIEW : undefined;
+  const tenant = source ?? institution.id;
 
-  const chosen = await chooseVersion(institution.id, params);
+  const chosen = await chooseVersion(tenant, params);
   if (chosen.status !== "ok") {
-    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref="/academic/fairness" />;
+    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref={source ? `/academic/fairness?source=${source}` : "/academic/fairness"} />;
   }
   const { choice } = chosen;
-  const report = await getWorkloadReport(institution.id, choice.version.version_id);
+  const report = await getWorkloadReport(tenant, choice.version.version_id);
   if (!report.ok) {
     return (
       <Card>
@@ -67,10 +71,10 @@ async function Fairness({ searchParams }: { searchParams: SearchParams }) {
 
   return (
     <>
-      <DraftNotice version={choice.version} />
+      {source ? <PreviewNotice institution={institution.name} backHref="/academic/fairness" versionId={choice.version.version_id} /> : <DraftNotice version={choice.version} />}
       <Card>
         <Form action="/academic/fairness" className="grid gap-3 p-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-4">
-          <VersionFields choice={choice} />
+          <VersionFields choice={choice} source={source} />
           {comparisons.length > 0 && (
             <label className={LABEL}>
               Comparable staff group

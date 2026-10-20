@@ -4,6 +4,7 @@ import { Badge, Card, EmptyState, LoadError } from "@/components/console/ui";
 import { Icon } from "@/components/icon";
 import type { ApiError } from "@/lib/service-api";
 import { TEACHING_SERVICE, type TimetableSummary, type VersionChoice } from "@/lib/teaching";
+import { HISTORICAL_PREVIEW, HISTORICAL_PREVIEW_LABEL, historicalPreviewEnabled, previewOrigin } from "@/lib/teaching-preview";
 
 // Shared pieces of the Academic Admin teaching pages (sessions, workload, fairness). Server-safe.
 
@@ -22,6 +23,15 @@ export const percent = (value: number | null | undefined) => (value === null || 
 
 /** What to show when the institution's validated versions can't be listed, or there are none. */
 export function TeachingUnavailable({ status, error, institution, retryHref }: { status: "empty" | "error"; error?: ApiError; institution: string; retryHref: string }) {
+  if (retryHref.includes(`source=${HISTORICAL_PREVIEW}`)) {
+    return (
+      <Card>
+        <EmptyState icon="history" title={`${HISTORICAL_PREVIEW_LABEL} unavailable`} action={<Retry href={retryHref} />}>
+          {error?.message ?? "The saved preview could not be read."}
+        </EmptyState>
+      </Card>
+    );
+  }
   if (status === "error" && error?.code === "PREVIEW_LOADING") {
     return (
       <Card>
@@ -36,16 +46,103 @@ export function TeachingUnavailable({ status, error, institution, retryHref }: {
     return (
       <Card>
         <LoadError error={error} what="teaching timetables" retryHref={retryHref} service={TEACHING_SERVICE} />
+        <div className="flex justify-center pb-8">
+          <PreviewLink href={`${retryHref.split("?")[0]}?source=${HISTORICAL_PREVIEW}`} />
+        </div>
       </Card>
     );
   }
   return (
     <Card>
-      <EmptyState icon="calendar_month" title="No validated timetables yet">
+      <EmptyState icon="calendar_month" title="No validated timetables yet" action={<PreviewLink href={`${retryHref.split("?")[0]}?source=${HISTORICAL_PREVIEW}`} />}>
         {institution} has no teaching timetable version that has passed independent validation, so there are no
         sessions or workloads to show. They appear here once a timetable is generated and validated for this institution.
       </EmptyState>
     </Card>
+  );
+}
+
+/** Entry to the Historical Experimental Preview, shown only when the development preview is enabled. */
+export function PreviewLink({ href }: { href: string }) {
+  if (!historicalPreviewEnabled()) return null;
+  return (
+    <Link
+      href={href}
+      prefetch={false}
+      className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-background"
+    >
+      <Icon name="history" size={18} />
+      Open the {HISTORICAL_PREVIEW_LABEL}
+    </Link>
+  );
+}
+
+/**
+ * Replaces the draft notice in preview mode: names the run's own institution, so the preview can never be read
+ * as the signed-in institution's timetable.
+ */
+export async function PreviewNotice({ institution, backHref, versionId, semester, year }: {
+  institution: string;
+  backHref: string;
+  versionId: string;
+  /** The selection on the page; incomplete-scope warnings appear only when they apply to it. */
+  semester?: number;
+  year?: number;
+}) {
+  const origin = await previewOrigin(versionId);
+  const source = origin?.source;
+  const stored = source?.kind === "STORED_HISTORICAL_VERSION";
+  const issues = [
+    ...(origin?.incomplete ?? []).map((row) => ({
+      semester: row.semester,
+      year: row.academic_year,
+      text: `Year ${row.academic_year} ${row.specialization} (${row.stream.toLowerCase()}) is not scheduled: missing academic mapping${row.student_count ? `, ${row.student_count} students` : ""}.`,
+    })),
+    ...(origin?.researchPending ? [{ semester: undefined, year: 4, text: "Compulsory Year 4 research has no session mapping and is not scheduled." }] : []),
+  ];
+  const relevant = issues.filter((row) => (semester === undefined || row.semester === undefined || row.semester === semester) && year !== undefined && row.year === year);
+  return (
+    <div className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm leading-6 text-danger">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          <Icon name="history" size={18} filled />
+          {HISTORICAL_PREVIEW_LABEL}
+        </span>
+        <span className="text-[13px]">
+          {source?.institution_code ?? "Test institution"} · not {institution} data · not published
+        </span>
+        <Link href={backHref} className="ml-auto text-[13px] font-semibold underline underline-offset-2">
+          Back to {institution}
+        </Link>
+      </div>
+      {relevant.length > 0 && (
+        <ul className="mt-1 space-y-0.5 text-[13px]">
+          {relevant.map((row) => (
+            <li key={row.text} className="flex gap-1.5">
+              <Icon name="info" size={16} className="mt-1" />
+              {row.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      <details className="group mt-0.5 text-[13px]">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 font-semibold [&::-webkit-details-marker]:hidden">
+          <Icon name="chevron_right" size={16} className="transition-transform group-open:rotate-90" />
+          About this preview
+        </summary>
+        <div className="mt-1 space-y-1 pl-5">
+          <p>
+            {source?.run ?? "A saved run"} (completed {source?.run_completed ?? "earlier"}) of the original test institution,{" "}
+            {stored ? "an unpublished validated draft read without changes" : "a local run never saved to a database"}, re-checked by
+            independent validation and shown read-only.
+          </p>
+          <p>{source?.settings ?? "Experimental settings"}; not university-approved; dated on a synthetic reference week.</p>
+          {issues.length > relevant.length && (
+            <p>All incomplete scopes in this version: {issues.map((row) => row.text).join(" ")}</p>
+          )}
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -94,9 +191,10 @@ export function versionLabel(version: TimetableSummary, semester: number) {
 }
 
 /** Semester and (when a semester has several) version selects, for a GET filter form. */
-export function VersionFields({ choice }: { choice: VersionChoice }) {
+export function VersionFields({ choice, source }: { choice: VersionChoice; source?: string }) {
   return (
     <>
+      {source && <input type="hidden" name="source" value={source} />}
       <label className={LABEL}>
         Semester
         <select name="semester" defaultValue={choice.semester} className={`mt-1 ${SELECT}`}>

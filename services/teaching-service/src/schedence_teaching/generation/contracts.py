@@ -4,11 +4,13 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from schedence_teaching.persistence.contracts import Sha256
 from schedence_teaching.persistence.generation_inputs import DatabaseGenerationRequest
 from schedence_teaching.schemas.models import InputContract, RequiredText
+
+from .scheduling_rules import SchedulingRules
 
 
 class GenerationRequest(DatabaseGenerationRequest):
@@ -21,9 +23,20 @@ class GenerationRequest(DatabaseGenerationRequest):
     job_timeout_seconds: Annotated[float, Field(gt=0, le=3600, allow_inf_nan=False)] = 300
     timetable_series_id: UUID | None = None
     expected_previous_version_id: UUID | None = None
+    # Omitted preserves historical/sealed snapshot behavior. Supplied rules are experimental, per request.
+    scheduling_rules: SchedulingRules | None = None
+
+    @model_serializer(mode="wrap")
+    def historical_payload(self, handler):
+        result = handler(self)
+        if self.scheduling_rules is None:
+            result.pop("scheduling_rules", None)  # Preserve existing durable request/idempotency digests.
+        return result
 
     @model_validator(mode="after")
     def bounded_solver(self):
+        if self.scheduling_rules is not None and self.strategy != "MONOLITHIC":
+            raise ValueError("experimental scheduling rules require the existing monolithic solver")
         if self.snapshot_id.int == 0 or self.max_time_seconds > self.job_timeout_seconds:
             raise ValueError("a nonzero snapshot and bounded native solver timeout are required")
         if self.expected_previous_version_id is not None and self.timetable_series_id is None:

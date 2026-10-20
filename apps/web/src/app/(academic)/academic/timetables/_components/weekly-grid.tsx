@@ -16,10 +16,8 @@ const DAY_NAMES: Record<string, string> = {
 };
 /** Pixels per minute in the desktop grid. */
 const SCALE = 1.1;
-const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-const dateLabel = (iso: string) => shortDate.format(new Date(`${iso}T00:00:00Z`));
 
 /** Parallel sessions (such as lab subgroups) share the column side by side. */
 function lanes(sessions: TimetableSession[]) {
@@ -55,7 +53,6 @@ export function WeeklyGrid({ version, sessions }: { version: TimetableSummary; s
   const first = Math.floor(start / 60) * 60;
   const last = Math.ceil(end / 60) * 60;
   const height = (last - first) * SCALE;
-  const dates = Object.fromEntries(windows.map((row) => [row.day, row.teaching_date]));
   const byDay = Object.fromEntries(DAYS.map((day) => [day, sessions.filter((row) => row.day === day)]));
   const hours = Array.from({ length: (last - first) / 60 + 1 }, (_, index) => first + index * 60);
 
@@ -66,9 +63,8 @@ export function WeeklyGrid({ version, sessions }: { version: TimetableSummary; s
         <div className="grid min-w-[56rem] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
           <div className="border-b border-line" />
           {DAYS.map((day) => (
-            <div key={day} className="border-b border-l border-line px-2 py-2.5 text-center">
+            <div key={day} className="border-b border-l border-line px-2 py-3 text-center">
               <p className="text-[13px] font-semibold text-ink">{DAY_NAMES[day]}</p>
-              <p className="text-xs text-muted">{dates[day] ? dateLabel(dates[day]) : "—"}</p>
             </div>
           ))}
           <div className="relative" style={{ height }}>
@@ -104,9 +100,7 @@ export function WeeklyGrid({ version, sessions }: { version: TimetableSummary; s
       <div className="divide-y divide-line md:hidden">
         {DAYS.filter((day) => byDay[day].length).map((day) => (
           <section key={day} className="px-4 py-4">
-            <h3 className="text-sm font-semibold text-ink">
-              {DAY_NAMES[day]} <span className="font-normal text-muted">{dates[day] ? dateLabel(dates[day]) : ""}</span>
-            </h3>
+            <h3 className="text-sm font-semibold text-ink">{DAY_NAMES[day]}</h3>
             <ul className="mt-3 space-y-2">
               {byDay[day].map((session) => (
                 <li key={session.delivery_reference} className="rounded-xl border border-line px-3 py-2.5">
