@@ -1,7 +1,7 @@
 """Admin scheduling settings: starts, breaks, rooms, solver, S1-S5 weights and fairness.
 
-GET requires ``examinations:read``; PUT requires ``examinations:manage`` in this
-service's institution. Hard rules H1-H11 are always enforced and are listed in
+GET requires ``examinations:read``; PUT requires ``examinations:manage`` in the caller's
+institution (one settings row per institution). Hard rules H1-H11 are always enforced and are listed in
 every response; no setting can switch them off.
 
 An invalid saved document is reported by GET (``status: invalid`` and its
@@ -23,13 +23,12 @@ from app.api.schemas import (
     SetSchedulingSettingsIn,
     SettingsProblemOut,
 )
-from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin
-from app.auth.principal import Principal
+from app.auth.dependencies import ExamAccess, require_exam_data_access, require_exam_settings_admin
 from app.scheduling.configuration import MANDATORY_RULES, SETTINGS_FORMAT
 
 router = APIRouter(prefix="/settings/scheduling", tags=["settings"])
 
-SettingsAdmin = Annotated[Principal, Depends(require_exam_settings_admin)]
+SettingsAdmin = Annotated[ExamAccess, Depends(require_exam_settings_admin)]
 DryRun = Annotated[bool, Query(description="Validate and preview the change without saving it")]
 ReplaceInvalid = Annotated[bool, Query(
     description="Required (and only allowed) when the saved settings are invalid: replace them with this document")]

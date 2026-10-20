@@ -30,7 +30,13 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.auth.dependencies import get_current_user, require_exam_data_access, require_exam_settings_admin  # noqa: E402
+from app.auth.dependencies import (  # noqa: E402
+    get_current_user,
+    require_dataset_admin,
+    require_dataset_read,
+    require_exam_data_access,
+    require_exam_settings_admin,
+)
 from app.main import create_app  # noqa: E402
 from app.seating.errors import SeatingConflictError  # noqa: E402
 from app.seating.memory import MemorySeatingStore  # noqa: E402
@@ -41,7 +47,7 @@ from app.seed.backup import SEED_TABLES, RestoreError, export_tables, restore_ta
 from app.seed.generator import generate_dataset  # noqa: E402
 from app.seed.seeder import seed_dataset  # noqa: E402
 from app.sources import DatabaseSource, DatasetSource  # noqa: E402
-from auth_support import EXAM_ADMIN, make_auth_context  # noqa: E402
+from auth_support import EXAM_ADMIN, make_auth_context, as_exam_admin  # noqa: E402
 from conftest import SERVICE_DIR  # noqa: E402
 from schedence_db import create_db_engine, dispose_engine, load_settings  # noqa: E402
 
@@ -386,8 +392,8 @@ async def test_snapshot_is_consistent_while_rules_change(engine, migrated: str) 
 
 def _api_client() -> TestClient:
     app = create_app(make_auth_context())
-    app.dependency_overrides[require_exam_data_access] = lambda: EXAM_ADMIN
-    app.dependency_overrides[require_exam_settings_admin] = lambda: EXAM_ADMIN
+    as_exam_admin(app, require_exam_data_access, require_exam_settings_admin, require_dataset_read,
+                  require_dataset_admin)
     app.dependency_overrides[get_current_user] = lambda: EXAM_ADMIN
     return TestClient(app, backend_options={"loop_factory": asyncio.SelectorEventLoop})
 

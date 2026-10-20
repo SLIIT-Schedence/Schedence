@@ -10,6 +10,7 @@ import { reviewCount, solverHint, summarize, type SummaryItem } from "@/lib/exam
 import { secondaryButton } from "./period-calendar";
 import { DetailsPanel, HardPanel, IssuesPanel, LoadPanel } from "./result-panels";
 import { TimetableBrowser } from "./timetable-browser";
+import { ProtectedTimetables } from "./protected-timetables";
 
 const count = new Intl.NumberFormat("en-GB");
 const seconds = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
@@ -101,6 +102,7 @@ export function GenerationResults({ result, children }: { result: GeneratedTimet
       </div>
 
       <dl aria-label="Result summary" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">{summarize(result).map((item) => <SummaryTile key={item.id} item={item} />)}</dl>
+      <ProtectedTimetables data={result.inputs.cross_timetable} resultGenerated={valid} />
 
       <div role="region" aria-label="Result actions" className="space-y-2 rounded-2xl border border-line bg-surface p-3 sm:p-4">
         <div className="flex flex-wrap items-start gap-2">

@@ -23,7 +23,7 @@ from sqlalchemy.pool import NullPool  # noqa: E402
 
 from app.auth.dependencies import require_exam_approval, require_exam_generation, require_exam_seat_access  # noqa: E402
 from app.saved_timetables import DatabaseTimetableStore, ListFilter, NewTimetable  # noqa: E402
-from auth_support import INSTITUTION, OTHER_INSTITUTION  # noqa: E402
+from auth_support import INSTITUTION, OTHER_INSTITUTION, as_exam_admin  # noqa: E402
 from schedence_db import create_db_engine, dispose_engine, load_settings  # noqa: E402
 from test_seating_postgres import (  # noqa: E402
     ADMIN_URL,
@@ -81,8 +81,7 @@ def _timetable_counts(url: str) -> dict[str, int]:
 
 def _timetable_client() -> TestClient:
     client = _api_client()
-    for dependency in (require_exam_generation, require_exam_seat_access, require_exam_approval):
-        client.app.dependency_overrides[dependency] = lambda: EXAM_ADMIN
+    as_exam_admin(client.app, require_exam_generation, require_exam_seat_access, require_exam_approval)
     return client
 
 

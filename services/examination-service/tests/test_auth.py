@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_scheduling_settings_store, get_seating_store, get_source
-from app.auth.settings import load_auth_settings
+from app.auth.settings import ExaminationAuthSettings, load_auth_settings
 from app.main import create_app
 from app.scheduling_settings.memory import MemorySchedulingSettingsStore
 from app.seating.memory import MemorySeatingStore
@@ -25,18 +25,23 @@ from auth_support import (
     ROLE_PERMISSIONS,
     FakeIdentityService,
     make_auth_context,
+    own_dataset,
 )
 from schedence_auth import ConfigurationError
 from schedence_auth.testing import SigningKey, TokenFactory
 
 API = "/api/v1"
 SOURCE = DatasetSource(generate_dataset())
-DATA_ENDPOINTS = [
+# The imported dataset: only the institution that owns it may read it.
+DATASET_ENDPOINTS = [
     f"{API}/modules", f"{API}/modules/IT3041", f"{API}/students", f"{API}/students/IT30129034",
     f"{API}/registrations", f"{API}/venues", f"{API}/venue-blocks", f"{API}/exam-periods",
     f"{API}/exam-periods/PP1-2026-S2-FINAL", f"{API}/exam-periods/PP1-2026-S2-FINAL/modules",
-    f"{API}/settings/exam-seating", f"{API}/settings/scheduling",
+    f"{API}/settings/exam-seating",
 ]
+# Stored per institution: every institution reads its own.
+SCHEDULING_SETTINGS = f"{API}/settings/scheduling"
+DATA_ENDPOINTS = DATASET_ENDPOINTS + [SCHEDULING_SETTINGS]
 STUDENT_DATA = [f"{API}/students", f"{API}/students/IT30129034", f"{API}/registrations"]
 
 
@@ -58,7 +63,7 @@ class _Untouchable:
 
 
 def _client(tokens, identity, source=SOURCE, **settings) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity, **settings))
+    app = own_dataset(create_app(make_auth_context(tokens, identity, **settings)))
     app.dependency_overrides[get_source] = lambda: source
     app.dependency_overrides[get_seating_store] = MemorySeatingStore
     app.dependency_overrides[get_scheduling_settings_store] = MemorySchedulingSettingsStore
@@ -157,10 +162,18 @@ def test_get_endpoints_require_read_for_every_role_and_permission_set(tokens, id
         assert client.get(url, headers=headers).status_code == (200 if allowed else 403), url
 
 
-@pytest.mark.parametrize("url", DATA_ENDPOINTS)
+@pytest.mark.parametrize("url", DATASET_ENDPOINTS)
 def test_permission_in_another_institution_does_not_count(tokens, identity, url) -> None:
     headers = _headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
-    assert _client(tokens, identity, source=_Untouchable()).get(url, headers=headers).status_code == 403
+    response = _client(tokens, identity, source=_Untouchable()).get(url, headers=headers)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "This institution has no examination dataset in this service."
+
+
+def test_another_institution_reads_only_its_own_scheduling_settings(client, tokens, identity) -> None:
+    headers = _headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
+    response = client.get(SCHEDULING_SETTINGS, headers=headers)
+    assert response.status_code == 200 and response.json()["institution_id"] == str(OTHER_INSTITUTION)
 
 
 def test_read_permission_cannot_be_borrowed_from_another_institution(tokens, identity) -> None:
@@ -170,8 +183,70 @@ def test_read_permission_cannot_be_borrowed_from_another_institution(tokens, ide
     })
     headers = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
     client = _client(tokens, identity, source=_Untouchable())
-    for url in DATA_ENDPOINTS:
+    for url in DATASET_ENDPOINTS:  # read is held only in OTHER_INSTITUTION, which does not own the dataset
         assert client.get(url, headers=headers).status_code == 403
+    assert client.get(SCHEDULING_SETTINGS, headers=headers).json()["institution_id"] == str(OTHER_INSTITUTION)
+    explicit = {**headers, "X-Institution-Id": str(INSTITUTION)}  # manage there, but no read
+    for url in DATA_ENDPOINTS:
+        assert client.get(url, headers=explicit).status_code == 403
+
+
+# --- Institution of the request -------------------------------------------------------------------------------
+
+
+def _two_institutions(tokens, identity, permissions=("examinations:read",)) -> dict[str, str]:
+    sub = identity.register({INSTITUTION: (["EXAMINATION_ADMIN"], list(permissions)),
+                             OTHER_INSTITUTION: (["EXAMINATION_ADMIN"], list(permissions))})
+    return {"Authorization": f"Bearer {tokens.access_token(sub)}"}
+
+
+@pytest.mark.parametrize("url", DATA_ENDPOINTS)
+def test_permission_in_two_institutions_without_a_choice_is_400(tokens, identity, url) -> None:
+    response = _client(tokens, identity, source=_Untouchable()).get(url, headers=_two_institutions(tokens, identity))
+    assert response.status_code == 400
+    assert "X-Institution-Id" in response.json()["detail"]
+
+
+def test_the_institution_header_chooses_one_of_the_callers_institutions(client, tokens, identity) -> None:
+    headers = _two_institutions(tokens, identity)
+    mine = {**headers, "X-Institution-Id": str(INSTITUTION)}
+    other = {**headers, "X-Institution-Id": str(OTHER_INSTITUTION)}
+    for url in DATASET_ENDPOINTS:
+        assert client.get(url, headers=mine).status_code == 200, url
+        assert client.get(url, headers=other).status_code == 403, url  # OTHER_INSTITUTION does not own the dataset
+    assert client.get(SCHEDULING_SETTINGS, headers=mine).json()["institution_id"] == str(INSTITUTION)
+    assert client.get(SCHEDULING_SETTINGS, headers=other).json()["institution_id"] == str(OTHER_INSTITUTION)
+
+
+def test_the_institution_header_is_never_trusted_without_a_permission_there(tokens, identity) -> None:
+    client = _client(tokens, identity, source=_Untouchable())
+    headers = _headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
+    for url in DATA_ENDPOINTS:
+        assert client.get(url, headers={**headers, "X-Institution-Id": str(INSTITUTION)}).status_code == 403
+
+
+@pytest.mark.parametrize("value", ["SLIIT", "", "1111", "11111111-1111-4111-8111-11111111111x"])
+def test_a_malformed_institution_header_is_400(client, tokens, identity, value) -> None:
+    headers = {**_headers(tokens, identity, "EXAMINATION_ADMIN"), "X-Institution-Id": value}
+    response = client.get(f"{API}/modules", headers=headers)
+    assert response.status_code == 400 and "UUID" in response.json()["detail"]
+
+
+def test_without_a_dataset_owner_no_institution_reads_the_dataset(tokens, identity) -> None:
+    client = _client(tokens, identity, source=_Untouchable())
+    own_dataset(client.app, None)
+    headers = _headers(tokens, identity, "EXAMINATION_ADMIN")
+    for url in DATASET_ENDPOINTS:
+        assert client.get(url, headers=headers).status_code == 403
+    assert client.get(SCHEDULING_SETTINGS, headers=headers).status_code == 200  # per institution, not the dataset
+
+
+def test_cors_allows_the_institution_header(client) -> None:
+    response = client.options(f"{API}/modules", headers={
+        "Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization,x-institution-id"})
+    assert response.status_code == 200
+    assert "x-institution-id" in response.headers["access-control-allow-headers"].lower()
 
 
 @pytest.mark.parametrize("role", sorted(ROLE_PERMISSIONS))
@@ -282,6 +357,8 @@ def test_permission_matrix_covers_every_protected_endpoint(client) -> None:
         ("PUT", f"{API}/modules/IT3041/exam-details"),  # access tests: test_module_details_management.py
         ("POST", f"{API}/timetables/generate"),  # access tests: test_timetable_generation.py
         ("POST", f"{API}/timetables/drafts"),  # access tests: test_saved_timetables.py
+        ("POST", f"{API}/timetables/generate/both-semesters"),  # examinations:generate; access tests: test_both_semesters.py
+        ("POST", f"{API}/timetables/drafts/both-semesters"),
         ("POST", f"{API}/timetables/1/approve"),  # access tests: test_timetable_workflow.py
         ("POST", f"{API}/timetables/1/publish"),
         ("POST", f"{API}/timetables/1/regenerate"),
@@ -295,13 +372,25 @@ def test_production_hides_the_docs(tokens, identity) -> None:
     assert client.get("/health").status_code == 200
 
 
-def test_institution_comes_from_sliit_institution_id(tmp_path, monkeypatch) -> None:
+COGNITO_ENV = ["AWS_REGION=ap-south-1", "COGNITO_USER_POOL_ID=ap-south-1_TestPool1",
+               "COGNITO_APP_CLIENT_ID=testclientid0000000000000a"]
+
+
+def test_the_service_starts_without_an_institution_variable(tmp_path, monkeypatch) -> None:
     env = tmp_path / ".env"
-    env.write_text("\n".join([
-        "AWS_REGION=ap-south-1", "COGNITO_USER_POOL_ID=ap-south-1_TestPool1",
-        "COGNITO_APP_CLIENT_ID=testclientid0000000000000a", f"SLIIT_INSTITUTION_ID={INSTITUTION}",
-    ]), encoding="utf-8")
-    assert load_auth_settings(env).institution_id == INSTITUTION
+    env.write_text("\n".join(COGNITO_ENV), encoding="utf-8")
+    settings = load_auth_settings(env)
+    assert "institution_id" not in ExaminationAuthSettings.model_fields and not hasattr(settings, "institution_id")
+    monkeypatch.setenv("SCHEDENCE_ENV_FILE", str(env))
+    app = create_app()  # settings from the environment, as run_services.py starts it
+    assert TestClient(app).get("/health").status_code == 200
+
+
+def test_an_old_institution_variable_is_ignored(tmp_path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("\n".join([*COGNITO_ENV, f"SLIIT_INSTITUTION_ID={INSTITUTION}",
+                              f"EXAMINATION_INSTITUTION_ID={OTHER_INSTITUTION}"]), encoding="utf-8")
+    assert not hasattr(load_auth_settings(env), "institution_id")
 
 
 def test_missing_settings_are_named_without_values(tmp_path) -> None:

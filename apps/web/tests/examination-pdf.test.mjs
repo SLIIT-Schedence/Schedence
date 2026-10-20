@@ -41,6 +41,24 @@ function pdfText(doc) {
   return { binary, streams };
 }
 
+test("Both Semesters exports remain separate documents with their own cycle, semester and room assignments", () => {
+  const rows = [1, 2].map((semester) => ({ ...sessions[0], semester, module_code: semester === 1 ? "IT1001" : "IT2001",
+    module_name: `Synthetic Semester ${semester}`, rooms: [{ venue_id: `R${semester}`, venue_name: `Room ${semester}`, seats: 15 }] }));
+  const names = [];
+  for (let i = 0; i < 2; i++) {
+    const meta = { ...metadata, periodCode: `LOCAL-S${i + 1}-FINAL`, periodName: `Semester ${i + 1} FINAL`, semester: i + 1 };
+    const { streams } = pdfText(pdfHarness().createTimetablePdf([rows[i]], meta, emptyFilters));
+    assert.ok(streams.includes(`Examination semester: ${i + 1}`));
+    assert.ok(streams.includes(meta.periodCode));
+    assert.ok(streams.includes(rows[i].module_code));
+    assert.ok(streams.includes(`Room ${i + 1}`));
+    assert.equal(streams.includes(rows[1 - i].module_code), false);
+    assert.ok(streams.includes("UNSAVED PREVIEW"));
+    names.push(helpers.exportFilename(meta, emptyFilters));
+  }
+  assert.notEqual(names[0], names[1]);
+});
+
 test("PDF is real A4, wraps long names, paginates, repeats headers and keeps cells within margins", () => {
   const { createTimetablePdf, cells } = pdfHarness();
   const doc = createTimetablePdf(sessions, metadata, emptyFilters, new Date("2026-10-19T09:00:00Z"));

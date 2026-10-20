@@ -6,22 +6,23 @@ import { listExamModules, listExamPeriodModules, listExamPeriods } from "@/lib/e
 import { cycleRegistrations, type ExamOption } from "@/lib/examination-selection";
 import { ExaminationReadError } from "../_components/read-error";
 import { RefreshButton } from "../_components/refresh-button";
-import { GenerationForm } from "./_components/generation-form";
+import { GenerationModes } from "./_components/generation-modes";
 
 export const metadata: Metadata = { title: "Generate FINAL timetable" };
 
-export default function GeneratePage() {
+export default async function GeneratePage({ searchParams }: { searchParams: Promise<{ semesters?: string }> }) {
+  const both = (await searchParams).semesters === "both";
   return (
     <div className="space-y-6">
       <PageHeader title="Generate FINAL timetable" description="Select the exam, choose dates, review modules, then generate and explore a full-cycle timetable. Optimized mode is recommended." actions={<RefreshButton label="Refresh examinations" />} />
       <Suspense fallback={<PageSkeleton />}>
-        <GenerationWorkspace />
+        <GenerationWorkspace both={both} />
       </Suspense>
     </div>
   );
 }
 
-async function GenerationWorkspace() {
+async function GenerationWorkspace({ both }: { both: boolean }) {
   await requireExaminationAdmin();
   const [periods, modules] = await Promise.all([listExamPeriods(), listExamModules()]);
   if (!periods.ok) return <Card><ExaminationReadError error={periods.error} what="examination periods" /></Card>;
@@ -39,5 +40,5 @@ async function GenerationWorkspace() {
   if (!options.length) {
     return <Card><EmptyState icon="history" title="No examination periods configured">An examination period must be configured in the Examination Service before you can generate a timetable.</EmptyState></Card>;
   }
-  return <GenerationForm cycles={options} />;
+  return <GenerationModes cycles={options} initialBoth={both} />;
 }

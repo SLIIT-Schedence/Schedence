@@ -7,6 +7,8 @@ import { calendarErrors, type ExamCalendarInput, parseCalendar } from "@/lib/exa
 import type { GeneratedTimetable, GenerationProblem, GenerationState, SaveDraftState, WorkloadScore } from "@/lib/examination-generation-types";
 import { parseSchedulingPreferences, publicPreferences, type SchedulingPreferences } from "@/lib/examination-settings";
 import { publicAnalysis } from "@/lib/examination-evaluation";
+import { publicProtection } from "@/lib/examination-protection";
+import type { BothGenerationResult, BothGenerationState, BothSaveState } from "@/lib/examination-both-types";
 
 const GENERATION_TIMEOUT_MS = 360_000;
 const GENERATION_LOGIN = "/login?error=SessionExpired&callbackUrl=%2Fexams%2Fgenerate";
@@ -60,6 +62,11 @@ function publicResult(raw: GeneratedTimetable, catalog: ExamModule[], period: Ex
     analysis: publicAnalysis(raw.analysis),
     solver: { mode: raw.solver.mode, time_limit_seconds: raw.solver.time_limit_seconds, wall_time_seconds: raw.solver.wall_time_seconds },
     inputs: {
+      ...(raw.inputs.batch ? { batch: {
+        batch_id: publicText(raw.inputs.batch.batch_id), peer_period_code: publicText(raw.inputs.batch.peer_period_code),
+        strategy: publicText(raw.inputs.batch.strategy),
+      } } : {}),
+      cross_timetable: publicProtection(raw.inputs.cross_timetable),
       scheduling_preferences: publicPreferences(raw.inputs.scheduling_preferences),
       period_code: publicText(raw.inputs.period_code), period_name: publicText(raw.inputs.period_name),
       academic_year_label: period.academic_year_label ? publicText(period.academic_year_label) : undefined,
@@ -220,7 +227,8 @@ export async function saveFinalTimetableDraft(_previous: SaveDraftState, formDat
     const interrupted = saved.error.code === "TIMEOUT" || saved.error.code === "UNREACHABLE";
     return {
       status: "error", httpStatus: saved.error.status,
-      title: SAVE_TITLES[saved.error.status] ?? (saved.error.code === "TIMEOUT" ? "The save request timed out" : "Could not save the draft"),
+      title: saved.error.code === "PROTECTED_CHANGED" ? "Another examination timetable now conflicts with this draft"
+        : SAVE_TITLES[saved.error.status] ?? (saved.error.code === "TIMEOUT" ? "The save request timed out" : "Could not save the draft"),
       message: interrupted ? `${state.message} Check Saved timetables before trying again: the draft may have been saved.`
         : saved.error.status === 422 && problems.length ? `Nothing was saved. ${problems.join(" · ")}` : state.message,
     };
@@ -230,4 +238,89 @@ export async function saveFinalTimetableDraft(_previous: SaveDraftState, formDat
     return { status: "error", title: "Could not read the saved draft", message: "The Examination Service returned an unexpected answer. Open Saved timetables to check whether the draft was saved." };
   }
   return { status: "saved", timetableId, draftNumber, periodCode: publicText(periodCode) };
+}
+
+const BOTH_TIMEOUT_MS = 720_000; // Two sequential solves, each bounded by 300 seconds, plus processing.
+
+async function checkedBoth(formData: FormData) {
+  let cycles: { period_code?: unknown; calendar?: unknown; expected_period_fingerprint?: unknown }[];
+  try { cycles = JSON.parse(input(formData, "cycles")); } catch { cycles = []; }
+  const invalid = { ok: false as const, state: { status: "error" as const, title: "Check both examination cycles",
+    message: "Select one Semester 1 and one Semester 2 FINAL cycle of the same academic year." } };
+  if (!Array.isArray(cycles) || cycles.length !== 2 || cycles.some((c) => !c || typeof c !== "object" || typeof c.period_code !== "string")) return invalid;
+  const checked = await Promise.all(cycles.map((cycle) => {
+    const data = new FormData();
+    for (const field of ["mode", "time_limit_seconds", "scheduling_preferences", "expected_settings_fingerprint", "expected_seating_version"]) {
+      const value = formData.get(field); if (typeof value === "string") data.set(field, value);
+    }
+    data.set("period_code", String(cycle.period_code));
+    data.set("calendar", JSON.stringify(cycle.calendar));
+    if (typeof cycle.expected_period_fingerprint === "string") data.set("expected_period_fingerprint", cycle.expected_period_fingerprint);
+    return checkedGeneration(data);
+  }));
+  for (const result of checked) if (!result.ok) return result;
+  const items = checked.flatMap((result) => result.ok ? [result] : []).sort((a, b) => a.period.semester - b.period.semester);
+  if (items[0].period.semester !== 1 || items[1].period.semester !== 2
+    || items[0].period.period_code === items[1].period.period_code
+    || items[0].period.academic_year_label !== items[1].period.academic_year_label) return invalid;
+  return { ok: true as const, periods: items.map((i) => i.period), body: {
+    cycles: items.map((i) => ({ period_code: i.body.period_code, calendar: i.body.calendar })),
+    mode: items[0].body.mode, time_limit_seconds: items[0].body.time_limit_seconds,
+    scheduling_preferences: items[0].body.scheduling_preferences,
+  } };
+}
+
+export async function generateBothFinalTimetables(_previous: BothGenerationState, formData: FormData): Promise<BothGenerationState> {
+  await requireExaminationAdmin();
+  const checked = await checkedBoth(formData);
+  if (!checked.ok) return checked.state;
+  const response = await examinationRequest<BothGenerationResult>("/api/v1/timetables/generate/both-semesters", {
+    method: "POST", body: { ...checked.body, include_analysis: true }, timeoutMs: BOTH_TIMEOUT_MS, sessionExpiredPath: GENERATION_LOGIN,
+  });
+  if (!response.ok) return failure(response.error);
+  const catalog = await listExamModules();
+  try {
+    const raw = response.data;
+    if (raw.results.length > 2 || new Set(raw.results.map((r) => r.inputs.period_code)).size !== raw.results.length) throw new Error("Unexpected cycles");
+    if (raw.generated && (raw.results.length !== 2 || raw.pair_validation.passed !== true
+      || raw.results.some((r) => !r.generated || r.validation.passed !== true))) throw new Error("Incomplete pair");
+    const results = raw.results.map((r) => {
+      const period = checked.periods.find((p) => p.period_code === r.inputs.period_code);
+      if (!period) throw new Error("Unexpected cycle");
+      const result = publicResult(r, catalog.ok ? catalog.data : [], period, new Date().toISOString());
+      if (!catalog.ok) result.notices.push("Specialization metadata is unavailable for this result.");
+      return result;
+    });
+    return { status: "complete", result: {
+      batch_id: publicText(raw.batch_id), generated: raw.generated,
+      sequential_order: raw.sequential_order.map(publicText), skipped_period_codes: raw.skipped_period_codes.map(publicText), results,
+      pair_validation: { passed: raw.pair_validation.passed, violations: raw.pair_validation.violations.map((p) => ({ rule: publicText(p.rule), message: publicText(p.message) })) },
+      shared_candidates: raw.shared_candidates, notices: raw.notices.map(publicText),
+    } };
+  } catch {
+    return { status: "error", title: "Could not read both results", message: "The service returned an unexpected batch response. Nothing was saved." };
+  }
+}
+
+export async function saveBothFinalTimetableDrafts(_previous: BothSaveState, formData: FormData): Promise<BothSaveState> {
+  await requireExaminationAdmin();
+  if (formData.get("confirm_save") !== "yes") return { status: "error", title: "Confirm the new generation",
+    message: "Saving runs a fresh coordinated generation. Confirm that both saved drafts may differ from these previews." };
+  const checked = await checkedBoth(formData);
+  if (!checked.ok) return checked.state;
+  const response = await examinationRequest<{ timetables: { timetable_id: number; draft_number: number; period_code: string; status: string }[] }>(
+    "/api/v1/timetables/drafts/both-semesters", { method: "POST", body: checked.body, timeoutMs: BOTH_TIMEOUT_MS, sessionExpiredPath: GENERATION_LOGIN });
+  if (!response.ok) {
+    const state = failure(response.error);
+    return { ...state, title: "Both drafts were not confirmed saved", message: response.error.status === 0 || response.error.status >= 500
+      ? "The connection was interrupted. Both drafts may have been saved. Check Saved timetables before retrying."
+      : `Neither draft was saved. ${state.message}` };
+  }
+  const rows = response.data.timetables;
+  if (!Array.isArray(rows) || rows.length !== 2 || new Set(rows.map((t) => t.timetable_id)).size !== 2
+    || new Set(rows.map((t) => t.period_code)).size !== 2 || rows.some((t) => !Number.isSafeInteger(t.timetable_id) || t.timetable_id < 1
+      || t.status !== "DRAFT" || !checked.periods.some((p) => p.period_code === t.period_code))) {
+    return { status: "error", title: "Check Saved timetables", message: "The save response could not be verified. Check both cycles before retrying." };
+  }
+  return { status: "saved", timetables: rows.map((t) => ({ timetableId: t.timetable_id, draftNumber: t.draft_number, periodCode: publicText(t.period_code) })) };
 }

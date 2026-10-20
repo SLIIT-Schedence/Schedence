@@ -9,8 +9,12 @@ from typing import Annotated, Literal
 from fastapi import Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.context import AuthContext
-from app.auth.dependencies import get_auth
+from app.auth.dependencies import (
+    ExamAccess,
+    current_institution,
+    require_exam_data_access,
+    require_exam_settings_admin,
+)
 from app.database import get_session, get_write_session
 from app.exam_periods import DatabaseExamPeriodStore, ExamPeriodService
 from app.module_details import DatabaseModuleDetailsStore, ModuleDetailsService
@@ -99,40 +103,46 @@ def get_scheduling_settings_store(
 
 def get_scheduling_settings_reader(
     store: Annotated[SchedulingSettingsStore, Depends(get_scheduling_settings_store)],
-    auth: Annotated[AuthContext, Depends(get_auth)],
+    access: Annotated[ExamAccess, Depends(require_exam_data_access)],
 ) -> SchedulingSettingsService:
-    # The institution in which the caller's examination permissions are checked.
-    return SchedulingSettingsService(store, auth.settings.institution_id)
+    # The institution in which the caller's examinations:read permission was checked.
+    return SchedulingSettingsService(store, access.institution_id)
 
 
 def get_scheduling_settings_writer(
     session: Annotated[AsyncSession, Depends(get_write_session)],
-    auth: Annotated[AuthContext, Depends(get_auth)],
+    access: Annotated[ExamAccess, Depends(require_exam_settings_admin)],
 ) -> SchedulingSettingsService:
     """A writable session (read-only for dry runs); the service commits explicitly."""
-    return SchedulingSettingsService(DatabaseSchedulingSettingsStore(session), auth.settings.institution_id)
+    return SchedulingSettingsService(DatabaseSchedulingSettingsStore(session), access.institution_id)
 
 
 SchedulingSettingsReaderDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_reader)]
 SchedulingSettingsWriterDep = Annotated[SchedulingSettingsService, Depends(get_scheduling_settings_writer)]
 
 
-def get_timetable_generator(
-    request: Request, auth: Annotated[AuthContext, Depends(get_auth)],
-) -> TimetableGenerator:
-    """Reads finish (and their transactions close) before the solver starts; nothing is written."""
+def get_timetable_generator(request: Request) -> TimetableGenerator:
+    """Reads finish (and their transactions close) before the solver starts; nothing is written.
+
+    The institution is the one the route's permission check resolved (read when the
+    generator runs, after every dependency); that check also requires it to own the dataset.
+    """
     state = request.app.state
 
     async def load_settings():
         async with session_scope(state.session_factory, commit=False) as session:  # read-only, closed at once
             return await SchedulingSettingsService(
-                DatabaseSchedulingSettingsStore(session), auth.settings.institution_id).active()
+                DatabaseSchedulingSettingsStore(session), current_institution(request)).active()
 
     async def load_snapshot(period_code, policy, module_codes, calendar=None, seating_preferences=None):
+        institution_id = current_institution(request)
         # One REPEATABLE READ, READ ONLY transaction for every input table.
+        # institution_id: the APPROVED / PUBLISHED timetables of the institution's other cycles are read in the
+        # same transaction and become fixed constraints.
         return await load_database_snapshot(state.engine, period_code=period_code, policy=policy,
                                             module_codes=module_codes, from_cycle=True, calendar=calendar,
-                                            seating_preferences=seating_preferences)
+                                            seating_preferences=seating_preferences,
+                                            institution_id=institution_id)
 
     return TimetableGenerator(load_snapshot, load_settings, request.app.state.generation_lock)
 

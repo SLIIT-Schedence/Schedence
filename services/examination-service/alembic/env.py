@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, pool
 
 from schedence_db import load_settings
 
-from app.db import scheduling_settings_models, seating_models, seed_models, timetable_models  # noqa: F401  (registers the tables on Base.metadata)
+from app.db import dataset_models, scheduling_settings_models, seating_models, seed_models, timetable_models  # noqa: F401  (registers the tables on Base.metadata)
 from app.db.base import SCHEMA, Base
 
 config = context.config

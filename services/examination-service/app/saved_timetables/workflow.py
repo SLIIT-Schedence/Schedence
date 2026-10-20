@@ -8,7 +8,11 @@ Before every status change, in one transaction with the timetable row locked:
 3. the inputs must not be stale: the active scheduling settings, the seating
    capacities and a freshly loaded input snapshot must equal those the timetable
    was generated from, and the independent H1-H11 validator must accept the
-   stored timetable against the *current* inputs.
+   stored timetable against the *current* inputs;
+4. with the institution's approvals and publications serialised, the timetable must not clash
+   with an APPROVED or PUBLISHED timetable of another cycle (X1 venue, X2 student; see
+   app.scheduling.protected). Those timetables are read again every time, so a change to them
+   after the draft was saved is always seen.
 
 A stale timetable is never approved or published: the answer lists what changed
 and the admin regenerates a new draft. At most one timetable per cycle is
@@ -24,10 +28,12 @@ from uuid import UUID
 
 from app.exam_periods.rules import saved_calendar
 from app.generation.service import TimetableGenerator
+from app.generation.both_semesters import restore_batch_configuration
 from app.generation.preferences import checked_saved_preferences, snapshot_document
 from app.saved_timetables.content import content_fingerprint, rebuild_timetable
 from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableWorkflowError
 from app.saved_timetables.store import Row, TimetableStore
+from app.scheduling.protected import CROSS_RULES
 from app.scheduling.contracts import Violation
 from app.scheduling.inputs import SnapshotError
 from app.scheduling.validation import validate_timetable
@@ -35,6 +41,9 @@ from app.scheduling.validation import validate_timetable
 HARD_RULES = [f"H{i}" for i in range(1, 12)]
 STALE_MESSAGE = ("This timetable no longer matches the current inputs or settings and was not changed. "
                  "Regenerate it as a new draft (POST /timetables/{timetable_id}/regenerate) and approve that.")
+CROSS_MESSAGE = ("This timetable clashes with an approved or published timetable of another examination cycle (a "
+                 "shared venue, or a student who would sit both) and was not changed. Regenerate it as a new draft "
+                 "(POST /timetables/{timetable_id}/regenerate): generation now works around those timetables.")
 REQUIRED_STATUS = {"approve": "DRAFT", "publish": "APPROVED"}
 STATUS_MESSAGES = {
     ("approve", "APPROVED"): "This timetable is already approved.",
@@ -66,6 +75,8 @@ async def current_problems(generator: TimetableGenerator, header: Row, sessions:
         # A timetable generated with a selected calendar is checked against that calendar, never the saved period's.
         calendar = saved_calendar(header.get("inputs"))
         preferences = checked_saved_preferences(header)
+        if preferences is not None:
+            preferences = (restore_batch_configuration(header, preferences[0]), preferences[1])
     except ValueError:
         return [_problem("STALE_INPUTS", "The stored exam calendar or scheduling preferences cannot be verified.")]
     try:
@@ -98,6 +109,8 @@ async def current_problems(generator: TimetableGenerator, header: Row, sessions:
 
 async def _checked(store: TimetableStore, generator: TimetableGenerator, institution_id: UUID, timetable_id: int,
                    action: str, expected_revision: int) -> tuple[Row, dict[str, Any]]:
+    # A consistent institution-before-row/cycle order prevents replacement-publication deadlocks.
+    await store.lock_protected(institution_id)
     header = await store.lock(institution_id, timetable_id)
     if header is None:
         raise SavedTimetableNotFoundError()
@@ -117,9 +130,12 @@ async def _checked(store: TimetableStore, generator: TimetableGenerator, institu
     if stored != header["content_fingerprint"]:
         raise TimetableWorkflowError("INTEGRITY", "The stored sessions, rooms or seats no longer match what was "
                                                   "saved. The timetable cannot be " + f"{action}d.")
+    # Cycles protect each other: only one approval or publication of the institution runs at a time, so the
+    # protected timetables read below cannot change before this change is committed.
     problems = await current_problems(generator, header, sessions, rooms, seats)
     if problems:
-        raise TimetableWorkflowError("STALE", STALE_MESSAGE, problems)
+        crossing = any(p["rule"] in CROSS_RULES for p in problems)
+        raise TimetableWorkflowError("STALE", CROSS_MESSAGE if crossing else STALE_MESSAGE, problems)
     details = {"rules_checked": HARD_RULES, "content_fingerprint": stored,
                **{k: header[k] for k in ("input_fingerprint", "settings_version", "settings_fingerprint",
                                          "seating_ruleset_version", "capacity_fingerprint")}}

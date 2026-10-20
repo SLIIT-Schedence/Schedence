@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -16,6 +17,7 @@ from uuid import UUID
 from app.db.timetable_models import STATUS_CHANGES
 from app.saved_timetables.errors import TimetableWorkflowError
 from app.saved_timetables.store import CREATE_REASON, ListFilter, NewTimetable, Row, TimetableDetail, workflow_values
+from app.scheduling.protected import PROTECTED_STATUSES, ProtectedSchedule, build_protected_schedule, count_overlapping_drafts
 
 _PREPARED = {"revision": 1, "approved_by": None, "approved_at": None, "published_by": None, "published_at": None,
              "content_fingerprint": None, "source_timetable_id": None}
@@ -95,6 +97,25 @@ class MemoryTimetableStore:
 
     async def lock_cycle(self, institution_id: UUID, period_code: str) -> None:
         return None
+
+    async def lock_protected(self, institution_id: UUID) -> None:
+        return None
+
+    async def protected_schedule(self, institution_id: UUID, *, exclude_period_code: str, start_date: dt.date,
+                                 end_date: dt.date, student_ids: Collection[str], minimum_break_minutes: int = 0) -> ProtectedSchedule:
+        others = [(t, h) for i, t, h in self._work.timetables if i == institution_id
+                  and h["period_code"] != exclude_period_code]
+        protected = [(t, h) for t, h in others if h["status"] in PROTECTED_STATUSES]
+        drafts = [{"inputs": h["inputs"]} for _, h in others if h["status"] == "DRAFT"]
+        keyed = lambda rows, h: [{**r, "timetable_id": h["timetable_id"]} for r in rows]  # noqa: E731
+        return build_protected_schedule(
+            [h for _, h in protected],
+            [r for t, h in protected for r in keyed(t.sessions, h)],
+            [r for t, h in protected for r in keyed(t.rooms, h)],
+            [r for t, h in protected for r in keyed(t.seats, h)],
+            window=(start_date, end_date), student_ids=student_ids,
+            overlapping_drafts=count_overlapping_drafts(drafts, (start_date, end_date)),
+            minimum_break_minutes=minimum_break_minutes)
 
     async def allocations(self, timetable_id: int) -> tuple[list[Row], list[Row], list[Row]]:
         timetable = next(t for _, t, h in self._work.timetables if h["timetable_id"] == timetable_id)

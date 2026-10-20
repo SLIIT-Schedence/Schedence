@@ -17,6 +17,7 @@ from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
 from app.sources.types import ExamPeriod
 from app.api.analysis_schemas import EvaluationAnalysisOut
+from app.api.cross_timetable_schemas import CrossTimetableOut
 
 T = TypeVar("T")
 
@@ -521,6 +522,10 @@ class OptimizationOut(_Out):
 
 
 class GenerationInputsOut(_Out):
+    batch: dict[str, str] | None = Field(None, description="Both-Semesters generation context; informational, never an approval or reservation.")
+    cross_timetable: CrossTimetableOut | None = Field(
+        None, description="APPROVED / PUBLISHED timetables of other cycles that were applied as fixed constraints "
+                          "(null for timetables saved before cross-cycle checks, and for offline runs).")
     scheduling_preferences: dict[str, Any] | None = Field(
         None, description="Versioned complete effective settings and seating snapshot; null for legacy timetables.")
     period_code: str

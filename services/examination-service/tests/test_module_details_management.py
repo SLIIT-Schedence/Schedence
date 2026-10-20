@@ -22,7 +22,7 @@ from app.module_details.rules import EDITABLE_FIELDS, details_fingerprint, detai
 from app.seed.generator import generate_dataset
 from app.seed.records import ExamPeriodModule
 from app.sources import DatasetSource
-from auth_support import INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context
+from auth_support import INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context, own_dataset
 from schedence_auth.testing import TokenFactory
 
 MODULES = "/api/v1/modules"
@@ -55,7 +55,7 @@ def store() -> MemoryModuleDetailsStore:
 
 @pytest.fixture
 def client(tokens, identity, store) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_source] = lambda: SOURCE
     app.dependency_overrides[get_module_details_writer] = lambda: ModuleDetailsService(store)
     return TestClient(app)

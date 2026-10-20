@@ -12,11 +12,13 @@ always write a history row in the same transaction.
 
 from __future__ import annotations
 
+import datetime as dt
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 from uuid import UUID
 
-from sqlalchemy import func, insert, select, text, update
+from sqlalchemy import and_, func, insert, select, text, update
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,7 @@ from app.saved_timetables.errors import (
     SavedTimetablesNotConfiguredError,
     TimetableWorkflowError,
 )
+from app.scheduling.protected import PROTECTED_STATUSES, ProtectedSchedule, build_protected_schedule, count_overlapping_drafts
 
 Row = dict[str, Any]
 CREATE_REASON = "Saved as a new draft"
@@ -81,6 +84,21 @@ class TimetableStore(Protocol):
 
     async def lock_cycle(self, institution_id: UUID, period_code: str) -> None:
         """Serialise saves and publications of one examination cycle until the end of the transaction."""
+
+    async def lock_protected(self, institution_id: UUID) -> None:
+        """Serialise approvals and publications of the whole institution until the end of the transaction.
+
+        Cycles protect each other, so two cycles must not become protected at the same time unchecked.
+        """
+
+    async def protected_schedule(self, institution_id: UUID, *, exclude_period_code: str, start_date: dt.date,
+                                 end_date: dt.date, student_ids: Collection[str], minimum_break_minutes: int = 0) -> ProtectedSchedule:
+        """The APPROVED / PUBLISHED timetables of the institution's other cycles that overlap the dates.
+
+        Read only. Includes sessions near date boundaries within minimum_break_minutes,
+        with their venues and the seats of student_ids only.
+        DRAFT timetables are not protected; those with overlapping dates are only counted.
+        """
 
     async def allocations(self, timetable_id: int) -> tuple[list[Row], list[Row], list[Row]]:
         """Every stored session, room and seat of a timetable already found in the institution."""
@@ -144,6 +162,50 @@ class DatabaseTimetableStore:
         await self._lock_timeout()
         await self._execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                             {"key": f"exam_timetables:{institution_id}:{period_code}"})
+
+    async def lock_protected(self, institution_id: UUID) -> None:
+        await self._lock_timeout()
+        await self._execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                            {"key": f"exam_timetables_protected:{institution_id}"})
+
+    async def protected_schedule(self, institution_id: UUID, *, exclude_period_code: str, start_date: dt.date,
+                                 end_date: dt.date, student_ids: Collection[str], minimum_break_minutes: int = 0) -> ProtectedSchedule:
+        other = (ExamTimetable.institution_id == institution_id, ExamTimetable.period_code != exclude_period_code)
+        headers = [r._asdict() for r in await self._execute(
+            select(ExamTimetable.timetable_id, ExamTimetable.period_code, ExamTimetable.period_name, ExamTimetable.status,
+                   ExamTimetable.draft_number, ExamTimetable.revision, ExamTimetable.inputs)
+            .where(*other, ExamTimetable.status.in_(PROTECTED_STATUSES)))]
+        drafts = [r._asdict() for r in await self._execute(
+            select(ExamTimetable.inputs).where(*other, ExamTimetable.status == "DRAFT"))]
+        window = (start_date, end_date)
+        overlapping = count_overlapping_drafts(drafts, window)
+        ids = [h["timetable_id"] for h in headers]
+        if not ids:
+            return ProtectedSchedule((), overlapping)
+        gap = dt.timedelta(minutes=minimum_break_minutes)
+        first = dt.datetime.combine(start_date, dt.time()) - gap
+        last = dt.datetime.combine(end_date + dt.timedelta(days=1), dt.time()) + gap
+        in_window = (ExamTimetableSession.timetable_id.in_(ids), ExamTimetableSession.starts_at < last,
+                     ExamTimetableSession.ends_at > first)
+
+        def of_session(model):  # the rows of model that belong to one of the sessions inside the dates
+            return and_(model.timetable_id == ExamTimetableSession.timetable_id,
+                        model.session_id == ExamTimetableSession.session_id)
+
+        sessions = await self._execute(select(
+            ExamTimetableSession.timetable_id, ExamTimetableSession.session_id, ExamTimetableSession.module_code,
+            ExamTimetableSession.starts_at, ExamTimetableSession.ends_at).where(*in_window))
+        rooms = await self._execute(
+            select(ExamTimetableRoom.timetable_id, ExamTimetableRoom.session_id, ExamTimetableRoom.venue_id)
+            .join(ExamTimetableSession, of_session(ExamTimetableRoom)).where(*in_window))
+        seats = await self._execute(
+            select(ExamTimetableSeat.timetable_id, ExamTimetableSeat.session_id, ExamTimetableSeat.student_id)
+            .join(ExamTimetableSession, of_session(ExamTimetableSeat))
+            .where(*in_window, ExamTimetableSeat.student_id.in_(student_ids)))
+        return build_protected_schedule(
+            headers, [r._asdict() for r in sessions], [r._asdict() for r in rooms], [r._asdict() for r in seats],
+            window=window, student_ids=student_ids, overlapping_drafts=overlapping,
+            minimum_break_minutes=minimum_break_minutes)
 
     async def save(self, institution_id: UUID, timetable: NewTimetable) -> Row:
         period_code = timetable.header["period_code"]

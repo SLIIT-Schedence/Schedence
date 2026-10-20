@@ -21,7 +21,7 @@ from app.main import create_app
 from app.seed.generator import generate_dataset
 from app.seed.records import ExamPeriodModule
 from app.sources import DatasetSource
-from auth_support import INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context
+from auth_support import INSTITUTION, ROLE_PERMISSIONS, FakeIdentityService, make_auth_context, own_dataset
 from schedence_auth.testing import TokenFactory
 
 PERIODS = "/api/v1/exam-periods"
@@ -61,7 +61,7 @@ def store() -> MemoryExamPeriodStore:
 
 @pytest.fixture
 def client(tokens, identity, store) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_source] = lambda: SOURCE
     app.dependency_overrides[get_exam_period_writer] = lambda: ExamPeriodService(store)
     return TestClient(app)

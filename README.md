@@ -252,6 +252,7 @@ py -3.11 -m venv .venv
 python -m pip install -e ./packages/db-core -e ./packages/auth-core
 python -m pip install --group services/identity-service/pyproject.toml:dev --group services/academic-data-service/pyproject.toml:dev
 python -m pip install -e "./services/examination-service[dev]"
+python -m pip install -e "./services/teaching-service[dev,persistence]"
 
 # every time:
 python scripts\run_services.py            # Ctrl+C stops everything

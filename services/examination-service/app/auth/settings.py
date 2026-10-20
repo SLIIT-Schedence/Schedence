@@ -8,9 +8,8 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from uuid import UUID
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import Field, field_validator
 
 from schedence_auth import CognitoSettings, load_settings_model
 from schedence_db import find_env_file
@@ -29,11 +28,8 @@ class ExaminationAuthSettings(CognitoSettings):
         default=15, ge=0, le=300, description="How long read requests may reuse a caller's permissions."
     )
     identity_timeout_seconds: float = Field(default=5, gt=0, le=30)
-    # Examination data belongs to one institution: permissions are checked there only.
-    institution_id: UUID = Field(
-        validation_alias=AliasChoices("institution_id", "EXAMINATION_INSTITUTION_ID", "SLIIT_INSTITUTION_ID"),
-        description="Institution whose examination data this service holds (default: SLIIT_INSTITUTION_ID).",
-    )
+    # No institution is configured: each request's institution comes from the caller's
+    # permissions (see app.auth.dependencies). Any number of institutions can exist.
     frontend_url: str = "http://localhost:3000"
 
     @field_validator("identity_service_url", "frontend_url")

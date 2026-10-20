@@ -18,7 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from schedence_db import create_db_engine, dispose_engine, load_settings
 
-from app.auth.dependencies import get_current_user, require_exam_data_access
+from app.auth.dependencies import get_current_user, require_dataset_read, require_exam_data_access
 from app.database import close_database, open_database
 from app.main import create_app
 from app.seed.generator import generate_dataset
@@ -75,6 +75,7 @@ def test_live_api_end_to_end() -> None:
     # authentication itself is covered by test_auth.py). /health/db stays public.
     app = create_app()
     app.dependency_overrides[require_exam_data_access] = lambda: None
+    app.dependency_overrides[require_dataset_read] = lambda: None
     app.dependency_overrides[get_current_user] = lambda: None
     # psycopg async needs a selector event loop on Windows.
     with TestClient(app, backend_options={"loop_factory": asyncio.SelectorEventLoop}) as client:

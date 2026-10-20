@@ -43,6 +43,7 @@ from auth_support import (  # noqa: E402
     ROLE_PERMISSIONS,
     FakeIdentityService,
     make_auth_context,
+    own_dataset,
 )
 from schedence_auth.testing import TokenFactory  # noqa: E402
 
@@ -105,7 +106,7 @@ def harness() -> Harness:
 
 
 def make_client(tokens, identity, harness) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_timetable_generator] = lambda: harness.generator(app.state.generation_lock)
     return TestClient(app)
 
@@ -343,7 +344,7 @@ def test_missing_settings_tables_are_a_safe_503(tokens, identity, admin) -> None
     async def missing():
         raise SchedulingSettingsNotConfiguredError()
 
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_timetable_generator] = lambda: TimetableGenerator(
         harness.generator(app.state.generation_lock)._load_snapshot, missing, app.state.generation_lock)
     response = TestClient(app).post(URL, headers=admin, json=body())
@@ -355,7 +356,7 @@ def test_a_second_request_while_generating_is_429(tokens, identity, admin, harne
         def locked(self) -> bool:
             return True
 
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_timetable_generator] = lambda: harness.generator(Busy())
     response = TestClient(app).post(URL, headers=admin, json=body())
     assert response.status_code == 429 and response.headers["Retry-After"] == "30"

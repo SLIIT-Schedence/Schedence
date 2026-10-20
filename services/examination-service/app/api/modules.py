@@ -14,15 +14,14 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.api.deps import MODULE_CODE, AcademicYear, ExamType, ModuleDetailsWriterDep, SourceDep, Specialization
 from app.api.schemas import ModuleExamDetailsChangeOut, ModuleOut, UpdateModuleExamDetailsIn
-from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin
-from app.auth.principal import Principal
+from app.auth.dependencies import ExamAccess, require_dataset_admin, require_dataset_read
 from app.module_details.rules import details_fingerprint, details_of
 from app.sources.types import Module
 
 router = APIRouter(prefix="/modules", tags=["modules"])
 
-ReadAccess = [Depends(require_exam_data_access)]
-ModuleAdmin = Annotated[Principal, Depends(require_exam_settings_admin)]
+ReadAccess = [Depends(require_dataset_read)]
+ModuleAdmin = Annotated[ExamAccess, Depends(require_dataset_admin)]
 DryRun = Annotated[bool, Query(description="Validate and preview the change without saving it")]
 ModuleCodePath = Annotated[str, Path(pattern=MODULE_CODE)]
 

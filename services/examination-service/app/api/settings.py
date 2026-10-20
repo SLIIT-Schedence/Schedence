@@ -24,13 +24,12 @@ from app.api.schemas import (
     SetDefaultSeatingIn,
     SetVenueSeatingIn,
 )
-from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin
-from app.auth.principal import Principal
+from app.auth.dependencies import ExamAccess, require_dataset_admin, require_dataset_read
 from app.seating.service import SeatingChange
 
 router = APIRouter(prefix="/settings/exam-seating", tags=["settings"])
 
-SettingsAdmin = Annotated[Principal, Depends(require_exam_settings_admin)]
+SettingsAdmin = Annotated[ExamAccess, Depends(require_dataset_admin)]
 DryRun = Annotated[bool, Query(description="Preview the change without saving it")]
 VenueIdPath = Annotated[str, Path(pattern=VENUE_ID)]
 
@@ -39,7 +38,7 @@ def _change_out(change: SeatingChange) -> SeatingChangeOut:
     return SeatingChangeOut.model_validate(change)
 
 
-@router.get("", response_model=ExamSeatingSettingsOut, dependencies=[Depends(require_exam_data_access)])
+@router.get("", response_model=ExamSeatingSettingsOut, dependencies=[Depends(require_dataset_read)])
 async def get_exam_seating(
     service: SeatingReaderDep,
     history_limit: Annotated[int, Query(ge=0, le=500, description="Newest history rows to return")] = 20,
