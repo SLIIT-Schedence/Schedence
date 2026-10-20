@@ -1,0 +1,25 @@
+{
+  "teaching_input": {
+    "staff_members": [{"staff_id": "SYNTHETIC-STAFF", "staff_name": "Synthetic lecturer", "position": "Synthetic", "staff_type": "ACADEMIC"}],
+    "module_offerings": [{"offering_id": "SYNTHETIC-OFFERING", "module_code": "SYNTHETIC-CODE", "module_name": "Synthetic lecture content", "academic_year": 1, "semester": 1, "specialization": "SYNTHETIC-SPECIALIZATION", "degree_type": "Synthetic", "stream": "WEEKDAY"}],
+    "teaching_team_members": [{"offering_id": "SYNTHETIC-OFFERING", "staff_id": "SYNTHETIC-STAFF", "role": "LIC"}],
+    "student_groups": [
+      {"group_id": "SYNTHETIC-GROUP-1.1", "academic_year": 1, "semester": 1, "stream": "WEEKDAY", "student_count": 120},
+      {"group_id": "SYNTHETIC-GROUP-1.2", "academic_year": 1, "semester": 1, "stream": "WEEKDAY", "student_count": 120}
+    ],
+    "session_requirements": [
+      {"requirement_id": "SYNTHETIC-REQ-A", "offering_id": "SYNTHETIC-OFFERING", "group_id": "SYNTHETIC-GROUP-1.1", "session_type": "LECTURE", "duration_minutes": 120, "sessions_per_week": 2},
+      {"requirement_id": "SYNTHETIC-REQ-B", "offering_id": "SYNTHETIC-OFFERING", "group_id": "SYNTHETIC-GROUP-1.2", "session_type": "LECTURE", "duration_minutes": 120, "sessions_per_week": 2}
+    ]
+  },
+  "group_specializations": {
+    "SYNTHETIC-GROUP-1.1": "SYNTHETIC-SPECIALIZATION",
+    "SYNTHETIC-GROUP-1.2": "SYNTHETIC-SPECIALIZATION"
+  },
+  "policy": {"allow_combination": true},
+  "population_evidence": [{
+    "group_ids": ["SYNTHETIC-GROUP-1.1", "SYNTHETIC-GROUP-1.2"],
+    "relationship": "DISJOINT",
+    "evidence_reference": "synthetic:confirmed-cohort-partition"
+  }]
+}

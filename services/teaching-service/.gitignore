@@ -1,0 +1,6 @@
+# Keep local academic datasets, mapping files, and validation reports out of Git.
+*.xlsx
+*.xls
+*.xlsm
+local-data/
+.env

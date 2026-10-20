@@ -1,0 +1,13 @@
+{
+  "reference": "user-requested:step12a34:coordinated-cohort-search-not-official-semester-dates",
+  "num_search_workers": 1,
+  "lab_variables_first": true,
+  "strategy": "COORDINATED_COHORTS",
+  "max_time_seconds": 30.0,
+  "stress_test_seconds": 15.0,
+  "scenarios": [
+    {"name": "A-semester-1", "semesters": [1]},
+    {"name": "B-semester-2", "semesters": [2]},
+    {"name": "C-simultaneous-semesters-stress-test", "semesters": [1, 2]}
+  ]
+}

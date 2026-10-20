@@ -187,15 +187,19 @@ async function Overview() {
           )}
         </Card>
 
-        <Card title="Teaching timetables">
+        <Card title="Teaching timetables" actions={<ViewAll href="/academic/timetables">Open timetables</ViewAll>}>
           <div className="flex gap-4 px-5 py-5">
             <ToneIcon icon="calendar_month" tone="neutral" />
             <div className="min-w-0 text-sm leading-6 text-muted">
-              <p className="font-semibold text-ink">Not connected yet</p>
+              <p className="font-semibold text-ink">
+                <Link href="/academic/timetables" className="hover:text-primary-strong hover:underline">
+                  View validated timetable versions
+                </Link>
+              </p>
               <p className="mt-1">
-                Generating and approving teaching timetables will appear here once the teaching timetable service joins
-                Schedence. It will read the staff and administrative hours shown on this console, so keeping them right
-                now means fewer clashes later.
+                Weekly timetables by student group, lecturer and venue, with each version&apos;s solver and validation
+                status. Timetables read the staff and administrative hours shown on this console, so keeping them right
+                means fewer clashes.
               </p>
               {withoutHours.length > 0 && (
                 <p className="mt-3 flex gap-2 rounded-xl bg-danger-soft px-3 py-2.5 text-[13px] leading-5 text-danger">

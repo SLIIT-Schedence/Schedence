@@ -30,15 +30,15 @@ const { AcademicGroups } = load("src/app/(examination)/exams/generate/_component
   "@/lib/examination-module-browser": browser, "./period-calendar": { fieldClass: "field", secondaryButton: "secondary" },
 });
 
-const module = (code, name, year, semester, specializations, total, repeat, extra = {}) => ({
+const makeModule = (code, name, year, semester, specializations, total, repeat, extra = {}) => ({
   module_code: code, module_name: name, academic_year: year, semester, specializations, delivery_mode: "regular",
   candidate_count: total, repeat_candidates: repeat, normal_candidates: repeat === null ? null : total - repeat, ...extra,
 });
 const MODULES = [
-  module("IT1010", "Introduction to Programming", 1, 2, ["CYBER", "DS", "IT", "SE"], 118, 4),
-  module("IT2040", "Database Management Systems", 2, 2, ["DS", "IT", "SE"], 90, 6, { delivery_mode: "block" }),
-  module("SE3020", "Distributed Systems", 3, 2, ["SE"], 28, 0),
-  module("IT1060", "Software Process Modeling", 1, 1, ["IT"], 35, 5),
+  makeModule("IT1010", "Introduction to Programming", 1, 2, ["CYBER", "DS", "IT", "SE"], 118, 4),
+  makeModule("IT2040", "Database Management Systems", 2, 2, ["DS", "IT", "SE"], 90, 6, { delivery_mode: "block" }),
+  makeModule("SE3020", "Distributed Systems", 3, 2, ["SE"], 28, 0),
+  makeModule("IT1060", "Software Process Modeling", 1, 1, ["IT"], 35, 5),
 ];
 const MAPPING = [
   ...MODULES.slice(0, 3).map((item) => ({ period_code: "C", module_code: item.module_code, candidate_scope: "all" })),
@@ -66,7 +66,7 @@ test("year, semester, specialization and search filter the mapped modules for di
 test("candidate counts are exact per module, repeat-only modules examine repeats only, and unknown splits stay unknown", () => {
   assert.deepEqual(browser.cycleCandidates(MODULES[0], "all"), { normal: 114, repeat: 4, total: 118, repeatOnly: false });
   assert.deepEqual(browser.cycleCandidates(MODULES[3], "repeat_only"), { normal: 0, repeat: 5, total: 5, repeatOnly: true });
-  const unknown = module("IT9000", "Unknown split", 1, 1, ["IT"], 20, null);
+  const unknown = makeModule("IT9000", "Unknown split", 1, 1, ["IT"], 20, null);
   assert.deepEqual(browser.cycleCandidates(unknown, "all"), { normal: null, repeat: null, total: 20, repeatOnly: false });
   assert.deepEqual(browser.cycleCandidates(unknown, "repeat_only"), { normal: 0, repeat: null, total: null, repeatOnly: true });
 });
@@ -80,7 +80,7 @@ test("the module browser shows real details, counts and the full-generation remi
     assert.ok(html.includes(text), text);
   }
   assert.ok(!html.includes("Clear filters"), "no filters are active initially");
-  const unsplit = renderToStaticMarkup(createElement(AcademicGroups, { modules: [module("IT1010", "Programming", 1, 2, ["IT"], 118, null)], mapping: MAPPING.slice(0, 1) }));
+  const unsplit = renderToStaticMarkup(createElement(AcademicGroups, { modules: [makeModule("IT1010", "Programming", 1, 2, ["IT"], 118, null)], mapping: MAPPING.slice(0, 1) }));
   assert.ok(unsplit.includes("could not be read, so only the total is shown"));
   const empty = renderToStaticMarkup(createElement(AcademicGroups, { modules: [], mapping: MAPPING }));
   assert.ok(empty.includes("No module details available"));

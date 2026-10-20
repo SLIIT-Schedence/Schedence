@@ -11,6 +11,10 @@ const NAV: ConsoleNavItem[] = [
   { href: "/academic", label: "Overview", icon: "dashboard" },
   { href: "/academic/staff", label: "Staff", icon: "badge", detailLabel: "Staff member" },
   { href: "/academic/positions", label: "Positions", icon: "work", detailLabel: "Position" },
+  { href: "/academic/timetables", label: "Teaching timetables", icon: "calendar_month" },
+  { href: "/academic/assigned-sessions", label: "Assigned sessions", icon: "menu_book" },
+  { href: "/academic/workload", label: "Staff workload", icon: "schedule" },
+  { href: "/academic/fairness", label: "Workload fairness", icon: "group" },
 ];
 
 /** Academic Admins also hold rescheduling permissions; that work lives in its own console. */

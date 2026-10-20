@@ -18,6 +18,7 @@ export const ICON_NAMES = [
   "dashboard",
   "domain_add",
   "domain_disabled",
+  "download",
   "edit",
   "edit_note",
   "error",

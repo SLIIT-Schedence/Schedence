@@ -263,6 +263,7 @@ python scripts\run_services.py --reload   # auto-restart on code changes
 | Identity Service | http://localhost:8001 | http://localhost:8001/docs |
 | Academic Data Service | http://localhost:8002 | http://localhost:8002/docs |
 | Examination Service | http://localhost:8003 | http://localhost:8003/docs |
+| Teaching Service | http://localhost:8004 | http://localhost:8004/docs |
 
 The launcher works in five steps:
 1. It wakes the Neon compute and checks the connection with `SELECT 1`. Credentials are never printed.

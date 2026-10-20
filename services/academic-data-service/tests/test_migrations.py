@@ -57,6 +57,10 @@ def test_migration_only_touches_the_academic_schema(migration_sql: str) -> None:
     assert "CREATE TABLE academic.alembic_version" in migration_sql
     statements = [s.strip() for s in migration_sql.split(";") if s.strip() and not s.strip().startswith("--")]
     for statement in statements:
-        assert re.match(r"(DROP|TRUNCATE|DELETE|ALTER)\b", statement) is None, statement
+        assert re.match(r"(DROP|TRUNCATE|DELETE)\b", statement) is None, statement
+        if statement.startswith("ALTER"):
+            from app.models.teaching_inputs import TEACHING_INPUT_TABLES
+            names = "|".join(table.name for table in TEACHING_INPUT_TABLES)
+            assert re.fullmatch(rf"ALTER TABLE academic\.({names}) (ENABLE|FORCE) ROW LEVEL SECURITY", statement), statement
         if statement.startswith(("CREATE TABLE", "CREATE INDEX", "CREATE UNIQUE INDEX", "INSERT INTO", "UPDATE")):
             assert f" {SCHEMA}." in statement, statement
