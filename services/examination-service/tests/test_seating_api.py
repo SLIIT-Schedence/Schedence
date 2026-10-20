@@ -26,6 +26,7 @@ from auth_support import (
     ROLE_PERMISSIONS,
     FakeIdentityService,
     make_auth_context,
+    own_dataset,
 )
 from schedence_auth.testing import TokenFactory
 
@@ -51,7 +52,7 @@ def store() -> MemorySeatingStore:
 
 
 def _client(tokens, identity, store, **kwargs) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_source] = lambda: SOURCE
     app.dependency_overrides[get_seating_store] = lambda: store
     app.dependency_overrides[get_seating_writer] = lambda: SeatingService(store, SOURCE)

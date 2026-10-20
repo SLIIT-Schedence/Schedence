@@ -11,7 +11,10 @@ requires a Cognito access token. GET routes require ``examinations:read``
 seating and scheduling-settings PUT/DELETE routes, exam period POST/PUT
 routes and the module exam-details PUT require ``examinations:manage``, and
 ``POST /api/v1/timetables/generate`` and ``/drafts`` require
-``examinations:generate``, in this service's institution (see ``app.auth``).
+``examinations:generate``, in the request's institution. That institution
+comes from the caller's permissions (or the ``X-Institution-Id`` header, which
+is checked against them); dataset routes also require it to own the imported
+dataset (see ``app.auth.dependencies``).
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import exam_periods, health, modules, scheduling_settings, settings, students, timetables, venues
 from app.api.errors import register_error_handlers
 from app.auth.context import AuthContext, build_auth_context
-from app.auth.dependencies import get_current_user, require_exam_data_access
+from app.auth.dependencies import INSTITUTION_HEADER, get_current_user, require_dataset_read
 from app.auth.settings import load_auth_settings
 from app.database import close_database, open_database
 
@@ -64,7 +67,7 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
         allow_origins=[auth.settings.frontend_url],
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", INSTITUTION_HEADER],
     )
     register_error_handlers(app)
     app.include_router(health.router)  # public
@@ -72,7 +75,7 @@ def create_app(auth: AuthContext | None = None) -> FastAPI:
     # Authenticate every data request; each route also has a permission check.
     api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(get_current_user)])
     for module in (students, venues):
-        api.include_router(module.router, dependencies=[Depends(require_exam_data_access)])
+        api.include_router(module.router, dependencies=[Depends(require_dataset_read)])
     # These mix read and write operations, so they check each operation.
     api.include_router(modules.router)
     api.include_router(exam_periods.router)

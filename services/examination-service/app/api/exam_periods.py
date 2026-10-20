@@ -22,16 +22,15 @@ from app.api.schemas import (
     ExamPeriodOut,
     UpdateExamPeriodIn,
 )
-from app.auth.dependencies import require_exam_data_access, require_exam_settings_admin
-from app.auth.principal import Principal
+from app.auth.dependencies import ExamAccess, require_dataset_admin, require_dataset_read
 from app.exam_periods import PeriodChange
 from app.exam_periods.rules import period_fingerprint
 from app.sources.types import ExamPeriod
 
 router = APIRouter(prefix="/exam-periods", tags=["exam periods"])
 
-ReadAccess = [Depends(require_exam_data_access)]
-PeriodAdmin = Annotated[Principal, Depends(require_exam_settings_admin)]
+ReadAccess = [Depends(require_dataset_read)]
+PeriodAdmin = Annotated[ExamAccess, Depends(require_dataset_admin)]
 DryRun = Annotated[bool, Query(description="Validate and preview the change without saving it")]
 PeriodCodePath = Annotated[str, Path(pattern=PERIOD_CODE)]
 

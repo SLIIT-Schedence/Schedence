@@ -11,8 +11,10 @@ from uuid import UUID
 
 import httpx
 import jwt
+from fastapi import Request
 
 from app.auth.context import AuthContext
+from app.auth.dependencies import ExamAccess, get_dataset_owner
 from app.auth.identity_client import IdentityPermissionsClient
 from app.auth.principal import Principal
 from app.auth.settings import ExaminationAuthSettings
@@ -80,12 +82,17 @@ class FakeIdentityService:
 
 def test_settings(**overrides) -> ExaminationAuthSettings:
     values = dict(app_env="testing", aws_region=TEST_REGION, cognito_user_pool_id=TEST_POOL_ID,
-                  cognito_app_client_id=TEST_CLIENT_ID, identity_service_url="http://identity.test",
-                  institution_id=INSTITUTION)
+                  cognito_app_client_id=TEST_CLIENT_ID, identity_service_url="http://identity.test")
     return ExaminationAuthSettings(_env_file=None, **{**values, **overrides})
 
 
 test_settings.__test__ = False  # a helper, not a pytest test
+
+
+def own_dataset(app, institution: UUID | None = INSTITUTION):
+    """Without a database: ``institution`` owns the imported dataset (``None``: nobody does)."""
+    app.dependency_overrides[get_dataset_owner] = lambda: institution
+    return app
 
 
 def make_auth_context(tokens: TokenFactory | None = None, identity: FakeIdentityService | None = None,
@@ -105,3 +112,17 @@ EXAM_ADMIN = Principal(
     permissions_by_institution={INSTITUTION: frozenset(ROLE_PERMISSIONS["EXAMINATION_ADMIN"])},
     roles_by_institution={INSTITUTION: frozenset({"EXAMINATION_ADMIN"})},
 )
+
+EXAM_ACCESS = ExamAccess(EXAM_ADMIN, INSTITUTION)
+
+
+def as_exam_admin(app, *dependencies, access: ExamAccess = EXAM_ACCESS):
+    """Replace permission checks: each one passes as ``access`` and records its institution like the real one."""
+
+    def override(request: Request) -> ExamAccess:
+        request.state.exam_institution = access.institution_id
+        return access
+
+    for dependency in dependencies:
+        app.dependency_overrides[dependency] = override
+    return app

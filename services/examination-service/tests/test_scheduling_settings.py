@@ -10,11 +10,14 @@ from __future__ import annotations
 import copy
 import json
 import uuid
+from typing import Annotated
 
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_scheduling_settings_store, get_scheduling_settings_writer, get_seating_store, get_source
+from app.auth.dependencies import ExamAccess, require_exam_settings_admin
 from app.main import create_app
 from app.scheduling.configuration import MANDATORY_RULES, SETTINGS_FORMAT, SchedulingConfiguration, changed_fields
 from app.scheduling.contracts import SchedulingValidationError
@@ -36,6 +39,7 @@ from auth_support import (
     ROLE_PERMISSIONS,
     FakeIdentityService,
     make_auth_context,
+    own_dataset,
 )
 from schedence_auth.testing import TokenFactory
 
@@ -289,11 +293,15 @@ def identity() -> FakeIdentityService:
 
 @pytest.fixture
 def client(tokens, identity, store) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_source] = lambda: SOURCE
     app.dependency_overrides[get_seating_store] = lambda: MemorySeatingStore()
     app.dependency_overrides[get_scheduling_settings_store] = lambda: store
-    app.dependency_overrides[get_scheduling_settings_writer] = lambda: SchedulingSettingsService(store, INSTITUTION)
+
+    def writer(access: Annotated[ExamAccess, Depends(require_exam_settings_admin)]) -> SchedulingSettingsService:
+        return SchedulingSettingsService(store, access.institution_id)  # as the real writer, without a database
+
+    app.dependency_overrides[get_scheduling_settings_writer] = writer
     return TestClient(app)
 
 
@@ -386,7 +394,7 @@ def test_missing_storage_is_a_safe_503(tokens, identity, admin) -> None:
             raise SchedulingSettingsNotConfiguredError()
 
     missing = MissingTables()
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_scheduling_settings_store] = lambda: missing
     app.dependency_overrides[get_scheduling_settings_writer] = lambda: SchedulingSettingsService(missing, INSTITUTION)
     client = TestClient(app)
@@ -417,10 +425,33 @@ def test_read_needs_read_and_write_needs_manage(client, tokens, identity, permis
     assert response.status_code == (200 if "examinations:manage" in permissions else 403)
 
 
-def test_permissions_in_another_institution_do_not_count(client, tokens, identity) -> None:
-    auth = headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
-    assert client.get(SETTINGS, headers=auth).status_code == 403
-    assert client.put(SETTINGS, headers=auth, json=body()).status_code == 403
+def test_institutions_cannot_see_or_change_each_others_settings(client, tokens, identity, admin, store) -> None:
+    mine = edited(optimization__s1_weight=30)
+    assert client.put(SETTINGS, headers=admin, json=body(mine)).status_code == 200
+    other = headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
+    seen = client.get(SETTINGS, headers=other).json()
+    assert (seen["institution_id"], seen["version"], seen["settings"]) == (str(OTHER_INSTITUTION), 0, defaults())
+    # A write by OTHER_INSTITUTION creates its own settings; this institution's stay as they were.
+    assert client.put(SETTINGS, headers=other, json=body(edited(optimization__s1_weight=5))).status_code == 200
+    assert client.get(SETTINGS, headers=admin).json()["settings"] == mine
+    assert store._committed.settings[INSTITUTION].settings == mine
+    # Naming the other institution does not help without a permission there.
+    named = {**other, "X-Institution-Id": str(INSTITUTION)}
+    assert client.get(SETTINGS, headers=named).status_code == 403
+    assert client.put(SETTINGS, headers=named, json=body(defaults(), version=1)).status_code == 403
+    assert client.get(SETTINGS, headers=admin).json()["version"] == 1
+
+
+def test_settings_in_two_institutions_need_the_institution_header(client, tokens, identity, store) -> None:
+    sub = identity.register({INSTITUTION: (["EXAMINATION_ADMIN"], ROLE_PERMISSIONS["EXAMINATION_ADMIN"]),
+                             OTHER_INSTITUTION: (["EXAMINATION_ADMIN"], ROLE_PERMISSIONS["EXAMINATION_ADMIN"])})
+    both = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
+    assert client.get(SETTINGS, headers=both).status_code == 400
+    assert client.put(SETTINGS, headers=both, json=body()).status_code == 400
+    assert INSTITUTION not in store._committed.settings and OTHER_INSTITUTION not in store._committed.settings
+    chosen = {**both, "X-Institution-Id": str(OTHER_INSTITUTION)}
+    assert client.put(SETTINGS, headers=chosen, json=body()).status_code == 200
+    assert set(store._committed.settings) == {OTHER_INSTITUTION}
 
 
 # --- The scheduler uses the saved settings ------------------------------------------------------------------
@@ -670,7 +701,8 @@ async def test_repair_needs_manage_permission(client, tokens, identity, store, p
     auth = headers(tokens, identity, "CUSTOM", permissions=permissions)
     assert client.put(SETTINGS, headers=auth, params=REPLACE, json=repair()).status_code == 403
     other = headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
-    assert client.put(SETTINGS, headers=other, params=REPLACE, json=repair()).status_code == 403
+    # Reaches only its own settings (none saved: version 0), never this institution's.
+    assert client.put(SETTINGS, headers=other, params=REPLACE, json=repair()).status_code == 409
     assert store._committed.settings[INSTITUTION].settings == broken
 
 
