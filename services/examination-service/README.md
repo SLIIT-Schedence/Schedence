@@ -776,9 +776,9 @@ existing policy class:
   Same versioning, row lock, single transaction, `dry_run` and `changed: false`
   behaviour as the seating settings.
 * **Ownership:** settings are stored per institution: the one in which the
-  admin's `examinations:manage` permission is checked (`SLIIT_INSTITUTION_ID`).
-  Nothing else is assigned an owner. If `SLIIT_INSTITUTION_ID` changes, the
-  new institution starts with the defaults; the old settings stay in the history.
+  admin's `examinations:manage` permission is checked (see
+  [Institutions](#institutions-multi-institution-migration-0012)). Each
+  institution starts with the defaults and never sees another's settings.
 * `data/scheduling_settings.prototype.json` is the default document.
 * **Server-side limits** (in `app/scheduling/policy.py`, so they apply to the
   API, saved settings, the command line and library calls alike):
@@ -1074,7 +1074,7 @@ and nothing is stored. `/generate` is unchanged and still saves nothing.
   `GET /api/v1/timetables/{timetable_id}` (sessions, venues, seat counts).
 * Seats (`examinations:generate` or `examinations:approve`):
   `GET /api/v1/timetables/{timetable_id}/seats` (paged; `session_id`).
-* Every query is limited to this service's institution; another institution's
+* Every query is limited to the request's institution; another institution's
   timetable is `404`. Downgrade refuses to drop saved timetables unless
   `-x drop_saved_timetables=true`.
 
@@ -1111,6 +1111,75 @@ publish also takes `replace_published`.
 * No notifications are sent yet. Downgrade refuses to drop workflow history
   unless `-x drop_timetable_workflow=true`.
 
+## Institutions (multi-institution, migration 0012)
+
+The service has **no institution setting**. A System Admin creates institutions
+in the Identity Service at any time, and each request's institution comes from
+the caller:
+
+1. Identity returns the caller's permissions per institution
+   (`/me/permissions`).
+2. The route's permission check (`app/auth/dependencies.py`) keeps the
+   institutions where the caller holds the needed `examinations:` permission:
+   * exactly one: that institution is used;
+   * several: the caller must send `X-Institution-Id: <uuid>`, else `400`
+     (the service never picks one);
+   * none: `403`.
+   `X-Institution-Id` is only a choice among the caller's own institutions:
+   naming one where the caller lacks the permission gives `403`, and a value
+   that is not a UUID gives `400`. The web app sends only the bearer token,
+   which is enough for an admin of one institution.
+3. Saved timetables (and their seats and history) and scheduling settings are
+   stored per institution and read and written only in that institution.
+   Another institution's timetable gives `404`, as an unknown one does.
+
+**The imported dataset.** Modules (with their exam details), students,
+registrations, venues, venue blocks, exam periods and seating rules are one
+imported dataset with global keys (`module_code`, `period_code`, `venue_id`).
+`examinations.exam_dataset_owner` (one row) names the one institution allowed
+to read and change it, and to run the solver on it (generate, save a draft,
+regenerate, approve, publish). Every other institution gets `403` ("This
+institution has no examination dataset in this service") on those routes, and
+so does everyone while the table is empty. Giving each institution its own
+dataset would need institution keys on every seed table; that is not done yet.
+
+**Existing SLIIT data.** Rows saved before 0012 carry the old
+`SLIIT_INSTITUTION_ID` in `institution_id` (`exam_timetables`,
+`exam_timetable_history`, `exam_scheduling_settings`,
+`exam_scheduling_settings_history`). They are not changed. They stay readable by
+that institution's Examination Admins when the Identity Service's institution ID
+for SLIIT is the same UUID, which is what `SLIIT_INSTITUTION_ID` held. Migration
+0012 makes that institution the dataset owner:
+
+| Existing rows | Migration 0012 |
+|---|---|
+| one institution ID (the old `SLIIT_INSTITUTION_ID`) | it becomes the dataset owner |
+| none (new database) | table left empty; run `python -m app.dataset_owner --institution-id <uuid>` |
+| several | stops; run `alembic -x dataset_owner=<uuid> upgrade 0012` |
+
+`python -m app.dataset_owner --institution-id <uuid> [--dry-run] [--replace]`
+assigns the owner later. It never replaces an existing owner without
+`--replace`. If the SLIIT institution was created in Identity with a new ID,
+the old rows are not mapped automatically: they would need a reviewed data
+update of the four tables above, plus `--replace`.
+
+`SLIIT_INSTITUTION_ID` and `EXAMINATION_INSTITUTION_ID` are no longer read; an
+old `.env` that still has them is fine.
+
+### Applying 0012 (after review)
+
+0012 only creates `exam_dataset_owner` and inserts at most one row; it changes
+no existing row or table. On the shared Neon database, check first:
+
+```powershell
+cd services/examination-service
+alembic upgrade 0011:0012 --sql   # review the SQL; nothing runs
+alembic upgrade 0012
+```
+
+Downgrade (`alembic downgrade 0011`) drops the table. Without it, no
+institution can read the dataset.
+
 ## API
 
 Start the server from `services/examination-service` (Windows needs the
@@ -1140,13 +1209,16 @@ Reuses the team's authentication; there is no separate login system.
    Service is down the request is refused (`503`, fail closed). Role or permission
    headers from the browser are ignored.
 3. Every `/api/v1` route requires authentication. Examination GET routes require
-   `examinations:read` in the institution `SLIIT_INSTITUTION_ID`.
+   `examinations:read` in the request's institution: the caller's only
+   institution with that permission, or the one named in `X-Institution-Id`
+   (see [Institutions](#institutions-multi-institution-migration-0012)).
+   Dataset routes also need that institution to own the dataset.
 4. Seating and scheduling-settings changes (`PUT`/`DELETE /api/v1/settings/exam-seating/...`,
    `PUT /api/v1/settings/scheduling`), including
    dry runs, require `examinations:manage` in that institution. They do not also
    require `examinations:read`. Writes always ask Identity again (no cache).
 5. `POST /api/v1/timetables/generate` requires `examinations:generate` in that
-   institution (not also `read` or `manage`).
+   institution (not also `read` or `manage`), and the dataset owner.
 
 Only `EXAMINATION_ADMIN` receives these permissions in the Identity catalog.
 Its existing `examinations:generate`, `examinations:approve`,
@@ -1171,11 +1243,14 @@ them to `EXAMINATION_ADMIN`. The code change does not update Neon. Existing
 admins without the new grants will receive `403` until that step is complete.
 No database schema migration or Cognito change is needed.
 
-`/health` and `/health/db` are public. Errors: `401` (no or invalid token),
-`403` (no permission, disabled or unknown account), `503` (Identity Service
-unavailable). Settings (repository-root `.env`): `AWS_REGION`, `COGNITO_USER_POOL_ID`,
-`COGNITO_APP_CLIENT_ID`, `SLIIT_INSTITUTION_ID`, optional `IDENTITY_SERVICE_URL`
-(default `http://localhost:8001`) and `FRONTEND_URL` (CORS).
+`/health` and `/health/db` are public. Errors: `400` (permission in several
+institutions without `X-Institution-Id`, or a malformed one), `401` (no or
+invalid token), `403` (no permission, disabled or unknown account, or the
+institution does not own the dataset), `503` (Identity Service unavailable).
+Settings (repository-root `.env`): `AWS_REGION`, `COGNITO_USER_POOL_ID`,
+`COGNITO_APP_CLIENT_ID`, optional `IDENTITY_SERVICE_URL`
+(default `http://localhost:8001`) and `FRONTEND_URL` (CORS). No institution
+variable is needed.
 
 To call the API locally, run the Identity Service too
 (`python scripts
