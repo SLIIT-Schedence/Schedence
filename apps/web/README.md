@@ -23,6 +23,7 @@ Fill in the rest of `.env.local` (see [.env.example](.env.example)). Every varia
 | `AUTH_COGNITO_ISSUER` | `https://cognito-idp.<region>.amazonaws.com/<user pool id>` |
 | `IDENTITY_SERVICE_URL` | `http://localhost:8001` |
 | `ACADEMIC_SERVICE_URL` | `http://localhost:8002` (Academic Admin console) |
+| `TEACHING_SERVICE_URL` | `http://localhost:8004` (Academic Admin teaching timetables) |
 
 In the Cognito console, open **App clients → Schedence-Web → App client information → Edit** and, under **Authentication flows**, make sure these are selected:
 
