@@ -37,6 +37,7 @@ from typing import Literal
 from fastapi import HTTPException, status
 
 from app.exam_periods.rules import ExamCalendar
+from app.generation.preferences import effective_configuration, saved_preferences, snapshot_document
 from app.scheduling.configuration import SchedulingConfiguration
 from app.scheduling.contracts import SchedulingValidationError, Violation
 from app.scheduling.evaluation import TimetableEvaluation, evaluate_timetable
@@ -93,6 +94,9 @@ class GenerationRequest:
     mode: Mode = "feasibility"
     time_limit_seconds: float | None = None  # may only lower the saved limit
     calendar: ExamCalendar | None = None  # None = the saved period's calendar
+    scheduling_preferences: dict | None = None  # None retains the legacy active-default contract
+    stored_preferences: dict | None = None  # trusted saved snapshot, never accepted from an API request
+    stored_settings_version: int = 0
 
 
 @dataclass(frozen=True)
@@ -108,6 +112,7 @@ class GenerationOutcome:
     validation_violations: tuple[Violation, ...]
     evaluation: TimetableEvaluation | None  # S1-S5 scores of the returned timetable
     wall_time_seconds: float
+    preferences_snapshot: dict | None = None
 
 
 def _solver_settings(saved: SolverSettings, request: GenerationRequest) -> SolverSettings:
@@ -149,26 +154,47 @@ class TimetableGenerator:
             return await self._generate(request)
 
     async def current_inputs(self, period_code: str, module_codes: tuple[str, ...] | None,
-                             calendar: ExamCalendar | None = None) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
+                             calendar: ExamCalendar | None = None, *, configuration: SchedulingConfiguration | None = None,
+                             seating_preferences: dict | None = None) -> tuple[SchedulingConfiguration, int, InputSnapshot]:
         """The active settings and a fresh input snapshot, loaded as for a generation (no solver, no lock).
 
         Used to check that a saved timetable still matches its inputs. Raises
         :class:`SnapshotError` when the inputs can no longer be loaded.
         """
-        configuration, version = await self._load_settings()
-        snapshot = await self._snapshot(period_code, configuration.scheduling, module_codes, calendar)
+        version = 0
+        if configuration is None:
+            configuration, version = await self._load_settings()
+        snapshot = await self._snapshot(period_code, configuration.scheduling, module_codes, calendar, seating_preferences)
         return configuration, version, snapshot
 
-    async def _snapshot(self, period_code, policy, module_codes, calendar) -> InputSnapshot:
+    async def _snapshot(self, period_code, policy, module_codes, calendar, seating_preferences=None) -> InputSnapshot:
         extra = {} if calendar is None else {"calendar": calendar}
+        if seating_preferences is not None:
+            extra["seating_preferences"] = seating_preferences
         return await self._load_snapshot(period_code, policy, module_codes, **extra)
 
     async def _generate(self, request: GenerationRequest) -> GenerationOutcome:
-        configuration, version = await self._load_settings()
+        custom = request.scheduling_preferences is not None or request.stored_preferences is not None
+        seating_preferences = None
+        if request.stored_preferences is not None:
+            restored = saved_preferences({"scheduling_preferences": request.stored_preferences})
+            configuration, stored = restored
+            version = request.stored_settings_version
+            seating_preferences = {"default_percentage": stored["seating"]["default_percentage"]}
+        else:
+            configuration, version = await self._load_settings()
+            if request.scheduling_preferences is not None:
+                try:
+                    configuration = effective_configuration(configuration, request.scheduling_preferences)
+                except ValueError as exc:
+                    raise GenerationInputError((Violation("PREFERENCES", str(exc)),)) from None
+                seating_preferences = request.scheduling_preferences.get("seating", {})
         solver_settings = _solver_settings(configuration.solver, request)
+        if custom:
+            configuration = replace(configuration, solver=solver_settings)
         try:
             snapshot = await self._snapshot(request.period_code, configuration.scheduling, request.module_codes,
-                                            request.calendar)
+                                            request.calendar, seating_preferences)
         except SnapshotError as exc:
             raise GenerationInputError(exc.violations) from None
         errors = _scope_errors(snapshot)
@@ -207,4 +233,5 @@ class TimetableGenerator:
         logger.info("Generated exam timetable: period=%s mode=%s modules=%d status=%s seconds=%.1f settings_version=%s",
                     request.period_code, request.mode, len(snapshot.modules), status_.value, wall, version)
         return GenerationOutcome(request, snapshot, configuration, version, solver_settings, status_, timetable,
-                                 result, violations, evaluation, wall)
+                                 result, violations, evaluation, wall,
+                                 snapshot_document(configuration, snapshot.capacities) if custom else None)

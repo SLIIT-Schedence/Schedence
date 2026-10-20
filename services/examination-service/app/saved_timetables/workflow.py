@@ -24,6 +24,7 @@ from uuid import UUID
 
 from app.exam_periods.rules import saved_calendar
 from app.generation.service import TimetableGenerator
+from app.generation.preferences import checked_saved_preferences, snapshot_document
 from app.saved_timetables.content import content_fingerprint, rebuild_timetable
 from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableWorkflowError
 from app.saved_timetables.store import Row, TimetableStore
@@ -64,17 +65,24 @@ async def current_problems(generator: TimetableGenerator, header: Row, sessions:
     try:
         # A timetable generated with a selected calendar is checked against that calendar, never the saved period's.
         calendar = saved_calendar(header.get("inputs"))
+        preferences = checked_saved_preferences(header)
     except ValueError:
-        return [_problem("STALE_INPUTS", "The stored exam calendar of this timetable cannot be read.")]
+        return [_problem("STALE_INPUTS", "The stored exam calendar or scheduling preferences cannot be verified.")]
     try:
-        configuration, version, snapshot = await generator.current_inputs(header["period_code"], module_codes, calendar)
+        extra = {} if preferences is None else {
+            "configuration": preferences[0],
+            "seating_preferences": {"default_percentage": preferences[1]["seating"]["default_percentage"]},
+        }
+        configuration, version, snapshot = await generator.current_inputs(header["period_code"], module_codes, calendar, **extra)
     except SnapshotError as exc:
         return [_problem("STALE_INPUTS", "The inputs of this timetable can no longer be loaded."),
                 *(_problem(v.constraint, v.message) for v in exc.violations)]
-    if version != header["settings_version"] or configuration.fingerprint != header["settings_fingerprint"]:
+    if preferences is None and (version != header["settings_version"] or configuration.fingerprint != header["settings_fingerprint"]):
         problems.append(_problem("STALE_SETTINGS", f"The scheduling settings changed (version "
                                                    f"{header['settings_version']} -> {version})."))
     capacities = snapshot.capacities
+    if preferences is not None and snapshot_document(configuration, capacities)["fingerprint"] != preferences[1]["fingerprint"]:
+        problems.append(_problem("STALE_CAPACITIES", "The source seating rules, venue capacities or effective seating configuration changed."))
     if (capacities.ruleset_version != header["seating_ruleset_version"]
             or capacities.fingerprint != header["capacity_fingerprint"]):
         problems.append(_problem("STALE_CAPACITIES", f"The exam seating capacities changed (rule version "

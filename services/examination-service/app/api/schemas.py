@@ -12,6 +12,7 @@ from app.api.deps import MODULE_CODE, PERIOD_CODE
 from app.exam_periods.rules import MAX_EXCLUSIONS, NEW_PERIOD_CODE, ExamCalendar, build_period
 from app.module_details.rules import ExamDetails
 from app.generation.service import MAX_API_TIME_LIMIT_SECONDS, MAX_MODULES
+from app.generation.preferences import validate_preferences
 from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
 from app.sources.types import ExamPeriod
@@ -386,6 +387,14 @@ class GenerationCalendarIn(_In):
 
 
 class GenerateTimetableIn(_In):
+    scheduling_preferences: dict[str, Any] | None = Field(
+        None, description="Optional per-timetable overrides. Omit for legacy active-default behavior; {} freezes the current defaults. Never changes institution settings.")
+
+    @field_validator("scheduling_preferences")
+    @classmethod
+    def _preferences(cls, value: dict | None) -> dict | None:
+        return None if value is None else validate_preferences(value)
+
     period_code: str = Field(pattern=PERIOD_CODE, description="Exam period, e.g. PP1-2026-S2-FINAL")
     calendar: GenerationCalendarIn | None = Field(
         None, description="Optional exam calendar for this generation (validated like a period). Omit to use the "
@@ -510,6 +519,8 @@ class OptimizationOut(_Out):
 
 
 class GenerationInputsOut(_Out):
+    scheduling_preferences: dict[str, Any] | None = Field(
+        None, description="Versioned complete effective settings and seating snapshot; null for legacy timetables.")
     period_code: str
     period_name: str
     exam_kind: ExamKind

@@ -1004,6 +1004,54 @@ POST /api/v1/timetables/generate
   fails independent validation is never returned (`MODEL_INVALID`).
 * Requires the `[solver]` extra (`ortools`) on the API server; without it `503`.
 
+### Per-timetable scheduling preferences
+
+Both `/api/v1/timetables/generate` and `/api/v1/timetables/drafts` accept an optional
+`scheduling_preferences` object. For example:
+
+```json
+{
+  "period_code": "PP1-2026-S2-FINAL",
+  "mode": "optimized",
+  "scheduling_preferences": {
+    "scheduling": {"permitted_start_times": ["09:00", "13:30"], "minimum_break_minutes": 90, "max_rooms_per_exam": 4, "max_sessions_per_exam": 3},
+    "solver": {"time_limit_seconds": 120, "num_search_workers": 1, "random_seed": 17},
+    "optimization": {"s1_weight": 40, "preparation_target_minutes": 3000},
+    "fairness": {"enabled": true, "max_individual_increase_points": 5},
+    "seating": {"default_percentage": 60}
+  }
+}
+```
+
+Only the supported scheduling controls, solver controls, S1-S5 weights, workload
+thresholds/reference values, baseline budget and fairness limits may be overridden.
+Unknown fields, venue compatibility/module exceptions, precision scales and
+automatic fairness relaxation are rejected. Cross-field validation uses the actual
+institution defaults before loading solver inputs. API time limits remain at most
+300 seconds and search workers at most 16. A separate `time_limit_seconds` may only
+lower the effective timetable limit. H1-H11 remain mandatory.
+
+Omitting preferences (or sending null) retains the legacy active-default behavior.
+Sending `{}` opts into a frozen copy of the current scheduling defaults and default
+seating percentage. Venue-specific seating rules remain authoritative; no settings
+PUT or database write is made during generation. Preferences and `calendar` are
+independent and can be used together.
+
+For opted-in timetables, `inputs.scheduling_preferences` records the complete
+effective settings, default seating and venue overrides, original capacity identity,
+effective capacity identity, source seating ruleset version and a versioned SHA-256
+fingerprint. Save Draft stores this in the existing immutable `inputs` JSONB column;
+no migration or trigger change is required. `settings_version` records the source
+defaults version, while `settings_fingerprint` identifies the effective configuration.
+
+Approval/publication reconstruct fresh source inputs with the stored configuration
+and selected calendar. Module, registration, venue, block, source seating/capacity,
+content-integrity and revision checks still run. Changes to another timetable's
+preferences never change defaults or stale this timetable. Regeneration preserves
+the stored scheduling preferences, default seating and calendar while refreshing
+source inputs and venue-specific rules. Legacy snapshots without preferences keep
+their existing checks. Corrupt or unsupported snapshots fail closed.
+
 ## Saved draft timetables (migration 0010)
 
 `POST /api/v1/timetables/drafts` takes the same body as `/generate`, generates,

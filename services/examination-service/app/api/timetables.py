@@ -76,6 +76,7 @@ from app.exam_periods.rules import saved_calendar
 from app.generation.service import GenerationOutcome, GenerationRequest
 from app.saved_timetables import ListFilter, NewTimetable, TimetableDetail, workflow
 from app.saved_timetables.content import content_fingerprint
+from app.generation.preferences import checked_saved_preferences
 from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableNotSavedError, TimetableWorkflowError
 from app.scheduling.optimization import OptimizationResult
 from app.scheduling.validation import validate_timetable
@@ -153,6 +154,7 @@ def _present(outcome: GenerationOutcome) -> GeneratedTimetableOut:
             solver_version=solver_version,
         ),
         inputs=GenerationInputsOut(
+            scheduling_preferences=outcome.preferences_snapshot,
             period_code=period.period_code, period_name=period.period_name, exam_kind=period.exam_kind,
             calendar_source="period" if outcome.request.calendar is None else "selected",
             start_date=period.start_date, end_date=period.end_date,
@@ -225,6 +227,7 @@ def _request(body: GenerateTimetableIn) -> GenerationRequest:
         period_code=body.period_code,
         module_codes=None if body.module_codes is None else tuple(body.module_codes), mode=body.mode,
         time_limit_seconds=body.time_limit_seconds, calendar=None if body.calendar is None else body.calendar.to_calendar(),
+        scheduling_preferences=body.scheduling_preferences,
     )
 
 
@@ -432,12 +435,15 @@ async def regenerate_timetable(
     header = source.header
     try:
         calendar = saved_calendar(header["inputs"])  # the same calendar as the source timetable
+        preferences = checked_saved_preferences(header)
     except ValueError:
-        raise TimetableWorkflowError("INTEGRITY", "The stored exam calendar of this timetable cannot be read.") from None
+        raise TimetableWorkflowError("INTEGRITY", "The stored calendar or scheduling preferences cannot be verified.") from None
     request = GenerationRequest(
         period_code=header["period_code"],
         module_codes=None if header["module_codes"] is None else tuple(header["module_codes"]),
         mode=body.mode or header["mode"], time_limit_seconds=body.time_limit_seconds, calendar=calendar,
+        stored_preferences=preferences[1] if preferences else None,
+        stored_settings_version=header["settings_version"],
     )
     return await _generate_and_save(request, generator, auth, open_store, admin, source_timetable_id=timetable_id)
 
