@@ -2,9 +2,11 @@
 
 import { requireExaminationAdmin } from "@/lib/examination-access";
 import { examinationRequest, type ExaminationApiError } from "@/lib/examination-api";
-import { listExamPeriods, listExamModules, type ExamModule } from "@/lib/examination";
+import { listExamPeriods, listExamModules, type ExamModule, type ExamPeriod } from "@/lib/examination";
 import { calendarErrors, type ExamCalendarInput, parseCalendar } from "@/lib/examination-calendar";
 import type { GeneratedTimetable, GenerationProblem, GenerationState, SaveDraftState, WorkloadScore } from "@/lib/examination-generation-types";
+import { parseSchedulingPreferences, publicPreferences, type SchedulingPreferences } from "@/lib/examination-settings";
+import { publicAnalysis } from "@/lib/examination-evaluation";
 
 const GENERATION_TIMEOUT_MS = 360_000;
 const GENERATION_LOGIN = "/login?error=SessionExpired&callbackUrl=%2Fexams%2Fgenerate";
@@ -37,6 +39,10 @@ function failure(error: ExaminationApiError): Extract<GenerationState, { status:
 
 function publicWorkload(score: WorkloadScore | null): WorkloadScore | null {
   return score === null ? null : {
+    ...Object.fromEntries((["objective_units", "same_day_student_pairs", "student_days_with_multiple_exams", "short_gap_student_pairs",
+      "difficult_pairs_below_target", "minimum_gap_minutes", "median_gap_minutes", "lower_decile_gap_minutes", "maximum_window_exams",
+      "maximum_window_load_points", "worst_student_weighted_penalty", "repeat_student_mean_weighted_penalty"] as const)
+      .filter((key) => score[key] !== undefined).map((key) => [key, score[key]])),
     total_weighted_penalty: score.total_weighted_penalty,
     penalties: score.penalties.map((penalty) => ({
       constraint: publicText(penalty.constraint), weight: penalty.weight,
@@ -46,14 +52,18 @@ function publicWorkload(score: WorkloadScore | null): WorkloadScore | null {
 }
 
 /** Explicitly pick public fields; never spread raw responses or individual seating/scoring records. */
-function publicResult(raw: GeneratedTimetable, catalog: ExamModule[]): GeneratedTimetable {
+function publicResult(raw: GeneratedTimetable, catalog: ExamModule[], period: ExamPeriod, generatedAt: string): GeneratedTimetable {
   const problems = (items: GenerationProblem[]) => items.map((item) => ({ rule: publicText(item.rule), message: publicText(item.message) }));
   const fairness = raw.optimization?.fairness;
   return {
-    status: raw.status, generated: raw.generated,
+    status: raw.status, generated: raw.generated, generated_at: generatedAt,
+    analysis: publicAnalysis(raw.analysis),
     solver: { mode: raw.solver.mode, time_limit_seconds: raw.solver.time_limit_seconds, wall_time_seconds: raw.solver.wall_time_seconds },
     inputs: {
+      scheduling_preferences: publicPreferences(raw.inputs.scheduling_preferences),
       period_code: publicText(raw.inputs.period_code), period_name: publicText(raw.inputs.period_name),
+      academic_year_label: period.academic_year_label ? publicText(period.academic_year_label) : undefined,
+      semester: period.semester, exam_kind: period.exam_kind,
       modules: raw.inputs.modules, students: raw.inputs.students,
       calendar: raw.inputs.start_date && raw.inputs.end_date ? {
         source: raw.inputs.calendar_source === "selected" ? "selected" : "period",
@@ -96,8 +106,8 @@ function publicResult(raw: GeneratedTimetable, catalog: ExamModule[]): Generated
   };
 }
 
-type GenerationBody = { period_code: string; mode: string; time_limit_seconds?: number; calendar?: ExamCalendarInput };
-type Checked = { ok: true; body: GenerationBody } | { ok: false; state: Extract<GenerationState, { status: "error" }> };
+type GenerationBody = { period_code: string; mode: string; time_limit_seconds?: number; calendar?: ExamCalendarInput; scheduling_preferences?: SchedulingPreferences };
+type Checked = { ok: true; body: GenerationBody; period: ExamPeriod } | { ok: false; state: Extract<GenerationState, { status: "error" }> };
 
 /**
  * The checks shared by preview and save: trusted FINAL cycle, valid mode, limit and selected exam calendar, unchanged
@@ -109,6 +119,12 @@ async function checkedGeneration(formData: FormData): Promise<Checked> {
   const limitText = input(formData, "time_limit_seconds");
   const limit = limitText === "" ? undefined : Number(limitText);
   const fieldErrors: Record<string, string> = {};
+  const preferencesText = input(formData, "scheduling_preferences");
+  let preferences: SchedulingPreferences | null = null;
+  if (preferencesText) {
+    try { preferences = parseSchedulingPreferences(JSON.parse(preferencesText)); } catch { preferences = null; }
+    if (!preferences) fieldErrors.scheduling_preferences = "Check the Advanced Settings in the Generate step. Only supported, valid preferences can be submitted.";
+  }
   if (!/^[A-Z0-9-]{1,32}$/.test(periodCode)) fieldErrors.period_code = "Choose a FINAL examination cycle.";
   if (mode !== "feasibility" && mode !== "optimized") fieldErrors.mode = "Choose Feasibility or Optimized.";
   if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0 || limit > 300)) {
@@ -125,7 +141,8 @@ async function checkedGeneration(formData: FormData): Promise<Checked> {
   // Re-read trusted cycle data on every submission, including forged/stale forms.
   const periods = await listExamPeriods();
   if (!periods.ok) return { ok: false, state: failure(periods.error) };
-  if (!periods.data.some((period) => period.period_code === periodCode && period.exam_kind === "FINAL")) {
+  const period = periods.data.find((period) => period.period_code === periodCode && period.exam_kind === "FINAL");
+  if (!period) {
     return { ok: false, state: { status: "error", title: "FINAL cycle unavailable", message: "Select an available FINAL cycle. Refresh this page if the cycle list has changed.", fieldErrors: { period_code: "This cycle is not an available FINAL examination cycle." } } };
   }
   if (calendar) {
@@ -151,7 +168,7 @@ async function checkedGeneration(formData: FormData): Promise<Checked> {
       return { ok: false, state: { status: "error", httpStatus: 409, title: "Scheduling or seating settings changed", message: "Reload the cycle and review the current settings before generating." } };
     }
   }
-  return { ok: true, body: { period_code: periodCode, mode, ...(limit === undefined ? {} : { time_limit_seconds: limit }), ...(calendar ? { calendar } : {}) } };
+  return { ok: true, period, body: { period_code: periodCode, mode, ...(limit === undefined ? {} : { time_limit_seconds: limit }), ...(calendar ? { calendar } : {}), ...(preferences ? { scheduling_preferences: preferences } : {}) } };
 }
 
 export async function generateFinalTimetable(_previous: GenerationState, formData: FormData): Promise<GenerationState> {
@@ -159,12 +176,13 @@ export async function generateFinalTimetable(_previous: GenerationState, formDat
   const checked = await checkedGeneration(formData);
   if (!checked.ok) return checked.state;
   const result = await examinationRequest<GeneratedTimetable>("/api/v1/timetables/generate", {
-    method: "POST", timeoutMs: GENERATION_TIMEOUT_MS, sessionExpiredPath: GENERATION_LOGIN, body: checked.body,
+    method: "POST", timeoutMs: GENERATION_TIMEOUT_MS, sessionExpiredPath: GENERATION_LOGIN, body: { ...checked.body, include_analysis: true },
   });
   if (!result.ok) return failure(result.error);
+  const generatedAt = new Date().toISOString();
   const catalog = await listExamModules();
   try {
-    const output = publicResult(result.data, catalog.ok ? catalog.data : []);
+    const output = publicResult(result.data, catalog.ok ? catalog.data : [], checked.period, generatedAt);
     if (!catalog.ok) output.notices.push("Specialization metadata could not be loaded. Specialization filters are unavailable for this result.");
     return { status: "complete", result: output };
   } catch {

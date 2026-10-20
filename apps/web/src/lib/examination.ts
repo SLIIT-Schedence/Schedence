@@ -63,6 +63,7 @@ export type SavedTimetableDetail = SavedTimetable & {
   module_codes: string[] | null;
   solver: { mode: "feasibility" | "optimized"; time_limit_seconds: number; wall_time_seconds: number };
   inputs: {
+    scheduling_preferences?: import("@/lib/examination-settings").PreferencesSnapshot | null;
     period_code: string; period_name: string; exam_kind: "MID" | "FINAL"; start_date: string; end_date: string;
     exam_days: string[]; modules: number; repeat_only_modules: number; students: number; registrations: number;
     // The calendar used; absent in timetables saved before per-generation calendars.

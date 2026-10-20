@@ -1,7 +1,14 @@
 // Browser-safe view contracts. Only aggregate counts and timetable rows are returned by the action.
+import type { PreferencesSnapshot } from "@/lib/examination-settings";
+import type { EvaluationAnalysis } from "./examination-evaluation";
 export type GenerationMode = "feasibility" | "optimized";
 export type GenerationProblem = { rule: string; message: string };
 export type WorkloadScore = {
+  objective_units?: number;
+  same_day_student_pairs?: number; student_days_with_multiple_exams?: number; short_gap_student_pairs?: number;
+  difficult_pairs_below_target?: number; minimum_gap_minutes?: number | null; median_gap_minutes?: number | null;
+  lower_decile_gap_minutes?: number | null; maximum_window_exams?: number; maximum_window_load_points?: number;
+  worst_student_weighted_penalty?: number; repeat_student_mean_weighted_penalty?: number | null;
   total_weighted_penalty: number;
   penalties: { constraint: string; weight: number; penalty_points: number; weighted_points: number }[];
 };
@@ -35,11 +42,16 @@ export type GenerationSession = {
   rooms: { venue_id: string; venue_name: string; seats: number }[];
 };
 export type GeneratedTimetable = {
+  analysis?: EvaluationAnalysis | null;
+  /** Server response completion time, retained across display filters and downloads. */
+  generated_at?: string;
   status: "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "UNKNOWN" | "MODEL_INVALID";
   generated: boolean;
   solver: { mode: GenerationMode; time_limit_seconds: number; wall_time_seconds: number };
   inputs: {
+    scheduling_preferences?: PreferencesSnapshot | null;
     period_code: string; period_name: string; modules: number; students: number;
+    academic_year_label?: string; semester?: number; exam_kind?: string;
     /** The exam calendar the service actually used (null when an older service did not report it). */
     calendar?: GenerationCalendar | null;
     // Raw service fields, read by the server action only.

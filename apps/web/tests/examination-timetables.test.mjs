@@ -186,6 +186,8 @@ test("publish needs PUBLISH, archives the published timetable only when chosen, 
 function saveAction(response) {
   const calls = [];
   const actions = load("src/lib/examination-generation-actions.ts", {
+    "@/lib/examination-evaluation": load("src/lib/examination-evaluation.ts", {}),
+    "@/lib/examination-settings": load("src/lib/examination-settings.ts", {}),
     "@/lib/examination-calendar": load("src/lib/examination-calendar.ts", {}),
     "@/lib/examination-access": { requireExaminationAdmin: async () => {} },
     "@/lib/examination": {
@@ -213,6 +215,19 @@ test("saving a draft needs explicit confirmation and posts a fresh generation to
   assert.equal(h.calls[0][0], "/api/v1/timetables/drafts");
   assert.deepEqual(h.calls[0][1].body, { period_code: "FINAL-CYCLE", mode: "optimized", time_limit_seconds: 30 });
   assert.equal(h.calls[0][1].timeoutMs, 360_000);
+});
+
+test("Save Draft forwards the same supported timetable preferences without a global PUT", async () => {
+  const h = saveAction({ ok: true, data: { timetable_id: 12, draft_number: 4, period_code: "FINAL-CYCLE", status: "DRAFT" } });
+  const preferences = { scheduling: { minimum_break_minutes: 90 }, seating: { default_percentage: 60 } };
+  assert.equal((await h.save({ scheduling_preferences: JSON.stringify(preferences) })).status, "saved");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0][0], "/api/v1/timetables/drafts");
+  assert.equal(h.calls[0][1].method, "POST");
+  assert.deepEqual(h.calls[0][1].body.scheduling_preferences, preferences);
+  const refused = saveAction({ ok: true, data: {} });
+  assert.equal((await refused.save({ scheduling_preferences: '{"H1":false}' })).status, "error");
+  assert.equal(refused.calls.length, 0);
 });
 
 test("a refused or interrupted save says what happened and never invents a draft", async () => {
