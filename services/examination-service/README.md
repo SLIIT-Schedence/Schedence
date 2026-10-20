@@ -1253,3 +1253,33 @@ databases:
 $env:SCHEDENCE_TEST_POSTGRES_URL = "postgresql://postgres@127.0.0.1:5432/postgres"
 python -m pytest tests/test_seating_postgres.py
 ```
+
+### Optional preparation-gap evaluation (Generate only)
+
+`POST /api/v1/timetables/generate` accepts `include_analysis: true` (default `false`).
+The optional `analysis` response is computed in a worker from the frozen input snapshot and actual
+assigned sittings, with the independent H1–H11 validator run again. It never changes assignments,
+institution defaults or stored timetables. Draft saving, approval, publication and regeneration keep
+their existing contracts; analysis is not persisted. No migration is required.
+
+Baseline and selected summaries share input/effective-configuration fingerprints and include the
+existing independent S1–S5 scores. The baseline is the optimizer's real feasibility solution; a Basic
+run has no comparison baseline. Module difficulty and applied thresholds come from the frozen inputs.
+The mean is the pooled sum of consecutive end-to-next-start gaps divided by their count. Median and
+lower decile use that same population (lower-decile index `floor((count - 1) / 10)`). Single-exam
+students contribute no gaps. All-pair short/difficult counts include nonconsecutive exams and are
+student-pair counts, not distinct module-pair counts. End times include reserved reading time.
+
+Cohorts use actual registered student year/specialization membership. Normal-only students have no
+repeat registration; the disjoint repeat group includes students with any repeat registration and
+considers all their scheduled exams. Only aggregate cohort statistics and shared-candidate counts
+are returned; no student identifiers, names, seats or individual schedules are exposed.
+
+Additional analysis is skipped above 100,000 student-exam pairs per timetable, with an explicit
+unavailable reason. Responses return at most 128 cohort summaries and 100 difficult session-pair
+groups per timetable (closest gaps, below-target pairs first). Truncation flags and total counts are
+explicit; summaries remain exact within the analysis limit. Pair-detail tables are full-cycle data,
+not cohort-filtered. Unsupported/missing cohorts are unavailable, not inferred from module mappings.
+Soft targets are preferences, not guarantees or validated measurements of stress.
+
+Focused local checks (no database): `python -m pytest -q tests/test_preparation_analysis.py`.

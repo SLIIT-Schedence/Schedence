@@ -22,6 +22,7 @@ settings, an unavailable database or solver with 503.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from collections import Counter
 from typing import Annotated
@@ -80,6 +81,8 @@ from app.generation.preferences import checked_saved_preferences
 from app.saved_timetables.errors import SavedTimetableNotFoundError, TimetableNotSavedError, TimetableWorkflowError
 from app.scheduling.optimization import OptimizationResult
 from app.scheduling.validation import validate_timetable
+from app.api.analysis_schemas import EvaluationAnalysisOut
+from app.generation.analysis import build_analysis
 
 router = APIRouter(prefix="/timetables", tags=["timetables"])
 
@@ -219,7 +222,11 @@ async def generate_timetable(
 
     Without ``module_codes``: every module of the period's cycle mapping. With them: only those modules.
     """
-    return _present(await generator.generate(_request(body)))
+    outcome = await generator.generate(_request(body))
+    presented = _present(outcome)
+    if body.include_analysis:
+        presented.analysis = EvaluationAnalysisOut.model_validate(await asyncio.to_thread(build_analysis, outcome))
+    return presented
 
 
 def _request(body: GenerateTimetableIn) -> GenerationRequest:

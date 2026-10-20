@@ -16,6 +16,7 @@ from app.generation.preferences import validate_preferences
 from app.scheduling.configuration import SchedulingConfiguration
 from app.seating.rules import MAX_PERCENTAGE, MIN_PERCENTAGE
 from app.sources.types import ExamPeriod
+from app.api.analysis_schemas import EvaluationAnalysisOut
 
 T = TypeVar("T")
 
@@ -387,6 +388,7 @@ class GenerationCalendarIn(_In):
 
 
 class GenerateTimetableIn(_In):
+    include_analysis: bool = Field(False, description="Generate only: optional bounded aggregate preparation-gap analysis. Never saved to a timetable.")
     scheduling_preferences: dict[str, Any] | None = Field(
         None, description="Optional per-timetable overrides. Omit for legacy active-default behavior; {} freezes the current defaults. Never changes institution settings.")
 
@@ -579,6 +581,7 @@ class ExcludedRegistrationsOut(_Out):
 
 
 class GeneratedTimetableOut(_Out):
+    analysis: EvaluationAnalysisOut | None = None
     status: Literal["OPTIMAL", "FEASIBLE", "INFEASIBLE", "UNKNOWN", "MODEL_INVALID"]
     generated: bool = Field(description="True only when a validated timetable is returned in sessions")
     persisted: Literal[False] = Field(False, description="Generated timetables are not saved yet")
