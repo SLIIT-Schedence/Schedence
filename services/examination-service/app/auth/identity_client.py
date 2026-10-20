@@ -13,12 +13,14 @@ package for both is a possible later refactor.
 
 Role or permission headers sent by the frontend are never read. Results are
 cached for a few seconds for reads only (keyed by a SHA-256 of the token, never
-the token itself); writes always fetch fresh permissions. If the Identity
-Service cannot be reached the request is refused (fail closed).
+the token itself); writes always fetch fresh permissions. Concurrent reads with
+a cold cache share one Identity lookup per token. If the Identity Service
+cannot be reached the request is refused (fail closed).
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -51,14 +53,32 @@ class IdentityPermissionsClient:
         self.clock = clock
         self.max_entries = max_entries
         self._cache: OrderedDict[str, tuple[float, Principal]] = OrderedDict()
+        self._lookups: dict[str, asyncio.Future[Principal]] = {}
 
     async def principal_for(self, token: str, claims: AccessTokenClaims, *, fresh: bool = False) -> Principal:
         key = hashlib.sha256(token.encode()).hexdigest()
-        now = self.clock()
         cached = self._cache.get(key)
-        if not fresh and cached and cached[0] > now:
+        if not fresh and cached and cached[0] > self.clock():
             return cached[1]
+        if fresh:
+            return await self._fetch(key, token, claims)
 
+        # A page can send many reads at once while the cache is cold. They share one Identity lookup per token
+        # (every caller still gets Identity's real answer, or the same failure) instead of flooding it and timing out.
+        lookup = self._lookups.get(key)
+        if lookup is None:
+            lookup = self._lookups[key] = asyncio.ensure_future(self._fetch(key, token, claims))
+            lookup.add_done_callback(lambda done: self._finished(key, done))
+        return await asyncio.shield(lookup)  # one caller disconnecting must not cancel the others' lookup
+
+    def _finished(self, key: str, lookup: asyncio.Future[Principal]) -> None:
+        if self._lookups.get(key) is lookup:
+            del self._lookups[key]
+        if not lookup.cancelled():
+            lookup.exception()  # mark retrieved: every waiter may already have left
+
+    async def _fetch(self, key: str, token: str, claims: AccessTokenClaims) -> Principal:
+        now = self.clock()
         try:
             response = await self.http.get(f"{self.base_url}{PERMISSIONS_PATH}", timeout=self.timeout,
                                            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
