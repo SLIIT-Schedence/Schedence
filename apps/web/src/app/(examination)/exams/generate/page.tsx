@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Generate FINAL timetable" };
 export default function GeneratePage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Generate FINAL timetable" description="Select the examination, review its calendar, academic groups and scheduling rules, then generate and explore a full-cycle timetable." actions={<RefreshButton label="Refresh examinations" />} />
+      <PageHeader title="Generate FINAL timetable" description="Select the exam, choose dates, review modules, then generate and explore a full-cycle timetable. Optimized mode is recommended." actions={<RefreshButton label="Refresh examinations" />} />
       <Suspense fallback={<PageSkeleton />}>
         <GenerationWorkspace />
       </Suspense>
