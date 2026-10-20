@@ -7,13 +7,14 @@ import { Badge, Card, EmptyState, first, LoadError, PageHeader, query, TableSkel
 import { Icon } from "@/components/icon";
 import { getAcademicContext } from "@/lib/academic";
 import { allSessions, chooseVersion, groupLabel, SESSION_TYPES, TEACHING_SERVICE, type TimetableSession } from "@/lib/teaching";
-import { DraftNotice, LABEL, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields, hoursText } from "../_teaching/teaching-ui";
+import { HISTORICAL_PREVIEW, isHistoricalPreview } from "@/lib/teaching-preview";
+import { DraftNotice, LABEL, PreviewNotice, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields, hoursText } from "../_teaching/teaching-ui";
 
 export const metadata: Metadata = { title: "Assigned sessions" };
 
 type SearchParams = PageProps<"/academic/assigned-sessions">["searchParams"];
 
-const KEYS = ["semester", "version", "year", "type", "lecturer"] as const;
+const KEYS = ["semester", "version", "year", "type", "lecturer", "source"] as const;
 const DAY_ORDER = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
 const dayName = (day: string) => day.charAt(0) + day.slice(1).toLowerCase();
 
@@ -37,10 +38,13 @@ async function Sessions({ searchParams }: { searchParams: SearchParams }) {
   const raw = await searchParams;
   const params = Object.fromEntries(KEYS.map((key) => [key, first(raw[key])?.slice(0, 300)])) as Partial<Record<(typeof KEYS)[number], string>>;
   const institution = context.primary;
+  // The Historical Experimental Preview is read from its saved export, never as this institution's data.
+  const source = isHistoricalPreview(params.source) ? HISTORICAL_PREVIEW : undefined;
+  const tenant = source ?? institution.id;
 
-  const chosen = await chooseVersion(institution.id, params);
+  const chosen = await chooseVersion(tenant, params);
   if (chosen.status !== "ok") {
-    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref="/academic/assigned-sessions" />;
+    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref={`/academic/assigned-sessions${query({ source })}`} />;
   }
   const { choice } = chosen;
   const { version, semester } = choice;
@@ -48,7 +52,7 @@ async function Sessions({ searchParams }: { searchParams: SearchParams }) {
   const year = years.find((value) => String(value) === params.year);
   const type = params.type && params.type in SESSION_TYPES ? params.type : undefined;
 
-  const result = await allSessions(institution.id, version.version_id, { semester, academic_year: year });
+  const result = await allSessions(tenant, version.version_id, { semester, academic_year: year });
   if (!result.ok) {
     return (
       <Card>
@@ -66,14 +70,14 @@ async function Sessions({ searchParams }: { searchParams: SearchParams }) {
   const options = [...new Map(result.data.map((session) => [session.lecturer.staff_id, session.lecturer.staff_name]))].sort((a, b) => a[1].localeCompare(b[1]));
   const lecturer = options.some(([id]) => id === params.lecturer) ? params.lecturer : undefined;
   const weekly = (staffId: string) =>
-    `/academic/timetables${query({ semester, version: version.version_id, view: "lecturer", lecturer: staffId })}`;
+    `/academic/timetables${query({ semester, version: version.version_id, view: "lecturer", lecturer: staffId, source })}`;
 
   return (
     <>
-      <DraftNotice version={version} />
+      {source ? <PreviewNotice institution={institution.name} backHref="/academic/assigned-sessions" versionId={version.version_id} semester={semester} year={year} /> : <DraftNotice version={version} />}
       <Card>
         <Form action="/academic/assigned-sessions" className="grid gap-3 p-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-6">
-          <VersionFields choice={choice} />
+          <VersionFields choice={choice} source={source} />
           <label className={LABEL}>
             Academic year
             <select name="year" defaultValue={year ?? ""} className={`mt-1 ${SELECT}`}>
@@ -137,7 +141,7 @@ async function Sessions({ searchParams }: { searchParams: SearchParams }) {
                 return (
                   <li key={id} className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/academic/assigned-sessions${query({ semester, version: version.version_id, year, type, lecturer: id })}`}
+                      <Link href={`/academic/assigned-sessions${query({ semester, version: version.version_id, year, type, lecturer: id, source })}`}
                         className="font-semibold text-ink hover:text-primary-strong hover:underline">
                         {entry.name}
                       </Link>

@@ -20,6 +20,7 @@ class TeachingSettings(CognitoSettings):
     teaching_database_env_file: Path | None = None
     teaching_generation_mode: Literal["DISABLED", "DEVELOPMENT", "DURABLE_ISOLATED"] = "DISABLED"
     teaching_generation_job_database_config: Path | None = None
+    teaching_generation_prepared_manifest: Path | None = None
     teaching_generation_institutions: tuple[UUID, ...] = ()
     teaching_generation_artifact_directory: Path | None = None
     teaching_generation_database: str | None = None
@@ -31,6 +32,9 @@ class TeachingSettings(CognitoSettings):
     # LOCAL_PREVIEW serves saved, gate-validated local runs read-only (development only, never production).
     teaching_read_store: Literal["DATABASE", "LOCAL_PREVIEW"] = "DATABASE"
     teaching_local_preview_manifest: Path | None = None
+    # Read-only generation input readiness (owner-record validation of a prepared snapshot; never stores or solves).
+    teaching_generation_readiness: Literal["DISABLED", "DEVELOPMENT"] = "DISABLED"
+    teaching_generation_timezone: str = "Asia/Colombo"
 
     @field_validator("identity_service_url")
     @classmethod
@@ -53,6 +57,7 @@ class TeachingRuntime:
     bindings: object = field(default_factory=MissingAcademicBindings)
     shutdown_hooks: tuple = ()
     generations: object | None = None
+    readiness: object | None = None
 
 
 def local_preview_runtime(settings):
@@ -75,14 +80,20 @@ def build_runtime():
     from .store import DatabaseTimetableStore
     shared_env = os.environ.get("SCHEDENCE_ENV_FILE") or find_env_file()
     settings = load_settings_model(TeachingSettings, shared_env)
+    validate_prepared_mode(settings)
     if settings.teaching_read_store == "LOCAL_PREVIEW":
         return local_preview_runtime(settings)
     db = load_settings(env_prefix="TEACHING_", env_file=settings.teaching_database_env_file or shared_env, db_echo=False)
-    engine = create_db_engine(db, direct=True, hide_parameters=True)
+    # A long-lived API process keeps a small pre-pinged pool on the direct endpoint: opening a TLS connection to
+    # Neon costs seconds, which a per-request NullPool paid on every read (db-core's direct default suits
+    # short-lived scripts). Sized by TEACHING_DB_POOL_SIZE / TEACHING_DB_MAX_OVERFLOW.
+    from sqlalchemy.pool import AsyncAdaptedQueuePool
+    engine = create_db_engine(db, direct=True, hide_parameters=True, poolclass=AsyncAdaptedQueuePool)
     http = httpx.AsyncClient(follow_redirects=False)
     runtime = TeachingRuntime(build_verifier(settings),
         IdentityPermissionsClient(settings.identity_service_url, http, timeout=settings.identity_timeout_seconds),
         DatabaseTimetableStore(create_session_factory(engine)), shutdown_hooks=(http.aclose, engine.dispose))
+    prepared_inputs = None
     if settings.teaching_generation_mode in {"DEVELOPMENT", "DURABLE_ISOLATED"}:
         from schedence_teaching.generation.inputs import DatabaseGenerationInputs
         from schedence_teaching.generation.jobs import DevelopmentGenerationJobs
@@ -111,6 +122,14 @@ def build_runtime():
                 raise ValueError("durable isolated generation requires a private database configuration and institution allowlist")
             config = json.loads(settings.teaching_generation_job_database_config.read_text(encoding="utf-8"))
             repository = PostgresJobRepository(config["runtime_url"], institution_limit=settings.teaching_generation_per_institution_limit)
+            if settings.teaching_generation_prepared_manifest is not None:
+                from schedence_teaching.generation.prepared_inputs import IsolatedPreparedInputs
+                prepared_inputs = IsolatedPreparedInputs.from_path(repository,
+                    {schema: engines[schema] for schema in ("academic", "resource")}, DatabaseTarget(*target_values),
+                    settings.teaching_generation_prepared_manifest)
+                if set(settings.teaching_generation_institutions) != {prepared_inputs.manifest.request.institution_id}:
+                    raise ValueError("prepared generation must allow only its manifest institution")
+                inputs = prepared_inputs
             runtime.generations = DurableGenerationJobs(repository, inputs, executor,
                 institutions=settings.teaching_generation_institutions, enabled=True,
                 max_timeout_seconds=settings.teaching_generation_max_timeout_seconds,
@@ -119,4 +138,38 @@ def build_runtime():
             # from the isolated result database, never mistaken for Neon drafts.
             runtime.store = DatabaseTimetableStore(repository.factory)
         runtime.shutdown_hooks += tuple(engines[schema].dispose for schema in ("academic", "resource"))
+    if settings.teaching_generation_readiness == "DEVELOPMENT":
+        runtime.readiness = readiness_runtime(settings, shared_env)
+        runtime.readiness.stored_inputs = prepared_inputs
+        runtime.shutdown_hooks += runtime.readiness.shutdown_hooks
     return runtime
+
+
+def validate_prepared_mode(settings):
+    if settings.teaching_generation_prepared_manifest is not None and (
+            settings.app_env != "development" or settings.teaching_generation_mode != "DURABLE_ISOLATED"
+            or settings.teaching_read_store != "DATABASE" or settings.teaching_database_env_file is None
+            or settings.teaching_generation_readiness != "DEVELOPMENT"):
+        raise ValueError("prepared input snapshots require development-only isolated persistence and read-only owner readiness")
+
+
+def readiness_runtime(settings, shared_env):
+    """Development-only, read-only input readiness: restricted Academic/Resource readers, no writes, no solver."""
+    from sqlalchemy.pool import AsyncAdaptedQueuePool
+    from schedence_db import create_db_engine, load_settings
+    from schedence_teaching.generation.readiness import GenerationReadiness, PreparationSources, PreparedDocuments
+    from schedence_teaching.persistence.database_read import DatabaseTarget
+    from schedence_teaching.pilot.__main__ import LOCAL_DATA, SERVICE_ROOT
+    if settings.app_env == "production":
+        raise ValueError("generation readiness is a development capability")
+    target_values = (settings.teaching_generation_database, settings.teaching_generation_project_id, settings.teaching_generation_branch_id)
+    if settings.teaching_database_env_file is None or not all(target_values):
+        raise ValueError("generation readiness requires the restricted owner credentials file and an explicit database target")
+    engines = {schema: create_db_engine(load_settings(env_prefix=schema.upper() + "_", env_file=settings.teaching_database_env_file,
+        db_echo=False), direct=True, hide_parameters=True, poolclass=AsyncAdaptedQueuePool) for schema in ("academic", "resource")}
+    sources = PreparationSources(LOCAL_DATA / "pilot-previews/step12a33-resumed-reviewed",
+        LOCAL_DATA / "pilot-previews/step12a35-experimental-calendar/reviewed-results",
+        SERVICE_ROOT / "examples/pp1-experimental-calendar.json", settings.teaching_generation_timezone)
+    readiness = GenerationReadiness(engines, DatabaseTarget(*target_values), PreparedDocuments(sources))
+    readiness.shutdown_hooks = tuple(engine.dispose for engine in engines.values())
+    return readiness

@@ -1,5 +1,6 @@
 import "server-only";
 import { type ApiError, type ApiResult, type RequestOptions, type Service, serviceRequest, serviceUrl } from "@/lib/service-api";
+import { HISTORICAL_PREVIEW, previewSessions, previewTimetables, previewValidation, previewWorkload } from "@/lib/teaching-preview";
 
 // Read side of the Teaching Timetables view. teaching-service verifies the caller's token and Identity grants,
 // scopes every read to one institution and withholds unpublished drafts from lecturers and students, so the
@@ -54,6 +55,9 @@ export type TimetableSummary = {
   };
   institution_policy_revision?: string;
   full_scope_expected_occurrences?: number;
+  /** Administrative readers only: the stored input snapshot and its source-labelled checksums. */
+  input_snapshot_id?: string;
+  policy_sources?: { label: string; sha256: string; provenance_kind: string }[];
   /** Present only on local development previews of unpublished experimental drafts. */
   preview_label?: string;
 };
@@ -120,12 +124,16 @@ type Filters = {
 };
 
 // --------------------------------------------------------------------------------------------- reads
+// Passing HISTORICAL_PREVIEW instead of an institution ID reads the saved preview export (lib/teaching-preview);
+// it is never sent to the service as an institution.
 
-export function listTimetables(institutionId: string) {
+export function listTimetables(institutionId: string): Promise<ApiResult<Page<TimetableSummary>>> {
+  if (institutionId === HISTORICAL_PREVIEW) return previewTimetables();
   return teachingRequest<Page<TimetableSummary>>("/timetables", { query: { institution_id: institutionId, page_size: 100 } });
 }
 
 export function getValidation(institutionId: string, versionId: string) {
+  if (institutionId === HISTORICAL_PREVIEW) return previewValidation(versionId);
   return teachingRequest<TimetableValidation>(`/timetables/${encodeURIComponent(versionId)}/validation`, {
     query: { institution_id: institutionId },
   });
@@ -135,6 +143,7 @@ export function getValidation(institutionId: string, versionId: string) {
 const MAX_SESSION_PAGES = 20;
 
 export async function allSessions(institutionId: string, versionId: string, filters: Filters = {}): Promise<ApiResult<TimetableSession[]>> {
+  if (institutionId === HISTORICAL_PREVIEW) return previewSessions(versionId, filters);
   const items: TimetableSession[] = [];
   for (let page = 1; page <= MAX_SESSION_PAGES; page++) {
     const result = await teachingRequest<Page<TimetableSession>>(`/timetables/${encodeURIComponent(versionId)}/sessions`, {
@@ -186,6 +195,9 @@ export type TimetableView = {
   venues: Option[];
   venue: string;
   sessions: TimetableSession[];
+  /** Sessions in the whole semester of this version, and per academic year (a combined session counts once per year it serves). */
+  semesterSessionCount: number;
+  yearSessionCounts: Record<number, number>;
 };
 
 export type ViewResult = { status: "empty" } | { status: "error"; error: ApiError } | { status: "ok"; view: TimetableView };
@@ -307,6 +319,10 @@ export async function loadTimetableView(institutionId: string, params: ViewParam
       venues,
       venue,
       sessions: sessions.toSorted((a, b) => a.teaching_date.localeCompare(b.teaching_date) || a.start_minute - b.start_minute),
+      semesterSessionCount: semesterSessions.data.length,
+      yearSessionCounts: Object.fromEntries(
+        years.map((value) => [value, semesterSessions.data.filter((row) => row.coverage.some((item) => item.academic_year === value)).length]),
+      ),
     },
   };
 }
@@ -402,6 +418,8 @@ export type StoredFairness = {
 
 export type WorkloadReport = {
   version_id: string;
+  /** The stored snapshot's academic term, exactly as the generation request must repeat it. */
+  academic_term_reference?: string;
   logical_status: string;
   validation_passed: boolean;
   hard_violations: number;
@@ -432,6 +450,7 @@ export type WorkloadReport = {
 
 /** The service's lecturer workload report for one validated version (institution-wide Teaching read access only). */
 export function getWorkloadReport(institutionId: string, versionId: string, filters: { semester?: number } = {}) {
+  if (institutionId === HISTORICAL_PREVIEW) return previewWorkload(versionId);
   return teachingRequest<WorkloadReport>("/reports/lecturer-workload", {
     query: { institution_id: institutionId, version_id: versionId, ...filters },
   });

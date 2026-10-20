@@ -1,5 +1,7 @@
 """GET-only routes using shared Cognito verification then trusted Identity grants."""
 
+import asyncio
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -13,6 +15,7 @@ from .errors import ApiError
 from .runtime import build_runtime
 from .service import TimetableReadService
 
+logger = logging.getLogger(__name__)
 bearer = HTTPBearer(auto_error=False, scheme_name="BearerToken", description="Existing Cognito access token.")
 router = APIRouter(prefix="/timetables", tags=["teaching timetables"])
 
@@ -27,8 +30,11 @@ async def authenticate(request: Request, credentials: Annotated[HTTPAuthorizatio
         async with request.app.state.runtime_lock:
             if request.app.state.runtime is None:
                 try:
-                    request.app.state.runtime = build_runtime()
+                    # Configuration loading and heavy imports run off the event loop, so a slow or failing
+                    # build never stalls health checks or other requests.
+                    request.app.state.runtime = await asyncio.to_thread(build_runtime)
                 except Exception:
+                    logger.exception("Teaching runtime configuration failed")
                     raise ApiError(503, "AUTH_UNAVAILABLE", "Teaching API authentication is not configured.") from None
     runtime = request.app.state.runtime
     try:

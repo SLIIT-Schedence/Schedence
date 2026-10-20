@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Card, EmptyState, first, formatDate, LoadError, PageSkeleton, TableSkeleton } from "@/components/console/ui";
 import { Icon } from "@/components/icon";
-import { type Appointment, getStaff, getWorkload, listAppointments, type Workload } from "@/lib/academic";
+import { type Appointment, getAcademicContext, getStaff, getWorkload, listAppointments, type Workload } from "@/lib/academic";
 import { isUuid } from "@/lib/identity-records";
 import {
   ACADEMIC_SERVICE,
@@ -19,6 +19,7 @@ import {
   StaffAvatar,
   UNIT_TYPES,
 } from "../../_components/academic-ui";
+import { AssignedModulesCard, AvailabilityCard, TeachingWorkloadCard } from "./_components/teaching-sections";
 
 export const metadata: Metadata = { title: "Staff member" };
 
@@ -56,6 +57,9 @@ async function StaffDetail({ params, searchParams }: { params: Params; searchPar
     );
   }
   const member = result.data;
+  const institution =
+    (await getAcademicContext())?.institutions.find((row) => row.id === member.institutionId)?.name ?? "This institution";
+  const teaching = { institutionId: member.institutionId, institution, staffNumber: member.staffNumber, fullName: member.fullName };
 
   return (
     <div className="space-y-6">
@@ -110,6 +114,16 @@ async function StaffDetail({ params, searchParams }: { params: Params; searchPar
           <AppointmentsCard staffId={member.id} searchParams={searchParams} />
         </Suspense>
       </div>
+
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <Suspense fallback={<Card title="Assigned modules"><TableSkeleton rows={3} /></Card>}>
+          <AssignedModulesCard {...teaching} />
+        </Suspense>
+        <Suspense fallback={<Card title="Teaching workload"><TableSkeleton rows={3} /></Card>}>
+          <TeachingWorkloadCard {...teaching} />
+        </Suspense>
+      </div>
+      <AvailabilityCard />
     </div>
   );
 }

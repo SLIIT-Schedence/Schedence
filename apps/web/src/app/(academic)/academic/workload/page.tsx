@@ -8,13 +8,14 @@ import { Icon } from "@/components/icon";
 import { allStaff, getAcademicContext, getWorkload } from "@/lib/academic";
 import { chooseVersion, getWorkloadReport, rankLabel, TEACHING_SERVICE, type WorkloadStaff } from "@/lib/teaching";
 import { ACADEMIC_SERVICE } from "../_components/academic-ui";
-import { DraftNotice, Explain, hoursText, LABEL, minutesAsHours, percent, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields } from "../_teaching/teaching-ui";
+import { HISTORICAL_PREVIEW, isHistoricalPreview } from "@/lib/teaching-preview";
+import { DraftNotice, Explain, hoursText, LABEL, minutesAsHours, percent, PreviewNotice, SELECT, SUBMIT, TeachingUnavailable, VersionBadges, VersionFields } from "../_teaching/teaching-ui";
 
 export const metadata: Metadata = { title: "Staff workload" };
 
 type SearchParams = PageProps<"/academic/workload">["searchParams"];
 
-const KEYS = ["semester", "version", "kind", "status", "staff"] as const;
+const KEYS = ["semester", "version", "kind", "status", "staff", "source"] as const;
 const STATUS: Record<string, string> = { EXCEEDED: "Above target", MET: "Meets target", BELOW_TARGET: "Below target", NONE: "No target", ZERO: "No sessions" };
 
 export default function StaffWorkloadPage({ searchParams }: PageProps<"/academic/workload">) {
@@ -37,13 +38,16 @@ async function Workload({ searchParams }: { searchParams: SearchParams }) {
   const raw = await searchParams;
   const params = Object.fromEntries(KEYS.map((key) => [key, first(raw[key])?.slice(0, 300)])) as Partial<Record<(typeof KEYS)[number], string>>;
   const institution = context.primary;
+  // The Historical Experimental Preview is read from its saved export, never as this institution's data.
+  const source = isHistoricalPreview(params.source) ? HISTORICAL_PREVIEW : undefined;
+  const tenant = source ?? institution.id;
 
-  const chosen = await chooseVersion(institution.id, params);
+  const chosen = await chooseVersion(tenant, params);
   if (chosen.status !== "ok") {
-    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref="/academic/workload" />;
+    return <TeachingUnavailable status={chosen.status} error={chosen.status === "error" ? chosen.error : undefined} institution={institution.name} retryHref={`/academic/workload${query({ source })}`} />;
   }
   const { choice } = chosen;
-  const report = await getWorkloadReport(institution.id, choice.version.version_id);
+  const report = await getWorkloadReport(tenant, choice.version.version_id);
   if (!report.ok) {
     return (
       <Card>
@@ -61,14 +65,14 @@ async function Workload({ searchParams }: { searchParams: SearchParams }) {
   const selected = data.staff.find((row) => row.staff_id === params.staff);
   const above = data.staff.filter((row) => row.target_status === "EXCEEDED").length;
   const href = (changes: Record<string, string | undefined>) =>
-    `/academic/workload${query({ semester: choice.semester, version: choice.version.version_id, kind, status, ...changes })}`;
+    `/academic/workload${query({ semester: choice.semester, version: choice.version.version_id, kind, status, source, ...changes })}`;
 
   return (
     <>
-      <DraftNotice version={choice.version} />
+      {source ? <PreviewNotice institution={institution.name} backHref="/academic/workload" versionId={choice.version.version_id} /> : <DraftNotice version={choice.version} />}
       <Card>
         <Form action="/academic/workload" className="grid gap-3 p-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-5">
-          <VersionFields choice={choice} />
+          <VersionFields choice={choice} source={source} />
           <label className={LABEL}>
             Staff type
             <select name="kind" defaultValue={kind ?? ""} className={`mt-1 ${SELECT}`}>
@@ -111,7 +115,7 @@ async function Workload({ searchParams }: { searchParams: SearchParams }) {
           label="Above own target" value={above} hint={`${data.totals.staff_with_hard_cap_violations} hard-cap violations`} />
       </div>
 
-      {selected && <StaffDetail staff={selected} closeHref={href({})} />}
+      {selected && <StaffDetail staff={selected} closeHref={href({})} preview={Boolean(source)} />}
 
       <Card title="Staff" description={`${rows.length} of ${data.staff.length} staff · hours are teaching contact hours in this version`}>
         {rows.length === 0 ? (
@@ -193,9 +197,10 @@ function TargetBadge({ status }: { status: WorkloadStaff["target_status"] }) {
 }
 
 /** One person: teaching breakdown, sealed limits, and current administrative hours from the Academic Data Service. */
-async function StaffDetail({ staff, closeHref }: { staff: WorkloadStaff; closeHref: string }) {
-  const register = await allStaff();
-  const record = register.ok ? register.data.items.find((row) => row.staffNumber === staff.staff_id) : undefined;
+async function StaffDetail({ staff, closeHref, preview = false }: { staff: WorkloadStaff; closeHref: string; preview?: boolean }) {
+  // A preview staff number belongs to the saved run's institution: never matched against this institution's register.
+  const register = preview ? undefined : await allStaff();
+  const record = register?.ok ? register.data.items.find((row) => row.staffNumber === staff.staff_id) : undefined;
   const admin = record ? await getWorkload(record.id) : undefined;
   const adminHours = admin?.ok && admin.data.aggregate.computed ? admin.data.aggregate.totalHoursPerWeek : null;
   const facts: [string, string][] = [
@@ -233,7 +238,9 @@ async function StaffDetail({ staff, closeHref }: { staff: WorkloadStaff; closeHr
         </div>
         <div className="space-y-3">
           <p className="text-[13px] font-semibold text-muted">Administrative workload (Academic Data Service, current)</p>
-          {!register.ok ? (
+          {!register ? (
+            <p className="text-sm text-muted">Not shown for the Historical Experimental Preview: its staff belong to the saved run&apos;s own institution, not your staff register.</p>
+          ) : !register.ok ? (
             <LoadError error={register.error} what="the staff register" retryHref={closeHref} service={ACADEMIC_SERVICE} />
           ) : !record ? (
             <p className="text-sm text-muted">No staff record with number {staff.staff_id} in your institution&apos;s staff register, so current administrative hours are unavailable.</p>
