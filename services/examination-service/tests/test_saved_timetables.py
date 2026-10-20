@@ -31,6 +31,7 @@ from auth_support import (  # noqa: E402
     ROLE_PERMISSIONS,
     FakeIdentityService,
     make_auth_context,
+    own_dataset,
 )
 from schedence_auth.testing import TokenFactory  # noqa: E402
 from test_timetable_generation import DATASET, PERIOD, SHARED, Harness, body, headers  # noqa: E402
@@ -62,7 +63,7 @@ def store() -> MemoryTimetableStore:
 
 @pytest.fixture
 def client(tokens, identity, harness, store) -> TestClient:
-    app = create_app(make_auth_context(tokens, identity))
+    app = own_dataset(create_app(make_auth_context(tokens, identity)))
     app.dependency_overrides[get_timetable_generator] = lambda: harness.generator(app.state.generation_lock)
     app.dependency_overrides[get_saved_timetable_reader] = lambda: store
 
@@ -237,13 +238,52 @@ def test_only_examination_admins_use_saved_timetables(client, tokens, identity, 
     assert client.get(f"{LIST}/{saved['timetable_id']}/seats", headers=auth).status_code == expected
 
 
-def test_permissions_in_another_institution_do_not_count(client, tokens, identity, admin) -> None:
+APPROVAL = {"expected_revision": 1, "reason": "Checked by the examination board"}
+
+
+def test_another_institution_cannot_read_or_change_these_timetables(client, tokens, identity, admin, store) -> None:
     saved = _save(client, admin)
+    tid = saved["timetable_id"]
     auth = headers(tokens, identity, "EXAMINATION_ADMIN", institution=OTHER_INSTITUTION)
+    # OTHER_INSTITUTION sees only its own (none) and cannot run the solver on a dataset it does not own.
     assert client.post(DRAFTS, headers=auth, json=body()).status_code == 403
-    assert client.get(LIST, headers=auth).status_code == 403
-    assert client.get(f"{LIST}/{saved['timetable_id']}", headers=auth).status_code == 403
-    assert client.get(f"{LIST}/{saved['timetable_id']}/seats", headers=auth).status_code == 403
+    assert client.get(LIST, headers=auth).json()["total"] == 0
+    for url in (f"{LIST}/{tid}", f"{LIST}/{tid}/seats", f"{LIST}/{tid}/history"):
+        assert client.get(url, headers=auth).status_code == 404, url
+    for action in ("approve", "publish"):
+        assert client.post(f"{LIST}/{tid}/{action}", headers=auth, json=APPROVAL).status_code == 403
+    assert client.post(f"{LIST}/{tid}/regenerate", headers=auth, json={}).status_code == 403
+    # Naming the owning institution does not help without a permission there.
+    named = {**auth, "X-Institution-Id": str(INSTITUTION)}
+    assert client.get(f"{LIST}/{tid}", headers=named).status_code == 403
+    assert client.post(f"{LIST}/{tid}/approve", headers=named, json=APPROVAL).status_code == 403
+    assert client.get(f"{LIST}/{tid}", headers=admin).json()["status"] == "DRAFT"  # unchanged
+
+
+def test_this_institution_cannot_read_or_change_another_institutions_timetables(client, admin, store) -> None:
+    other = asyncio.run(store.save(OTHER_INSTITUTION, NewTimetable({"period_code": PERIOD, "summary": {}})))
+    asyncio.run(store.commit())
+    tid = other["timetable_id"]
+    for url in (f"{LIST}/{tid}", f"{LIST}/{tid}/seats", f"{LIST}/{tid}/history"):
+        assert client.get(url, headers=admin).status_code == 404, url
+    for action in ("approve", "publish"):
+        assert client.post(f"{LIST}/{tid}/{action}", headers=admin, json=APPROVAL).status_code == 404
+    assert client.post(f"{LIST}/{tid}/regenerate", headers=admin, json={}).status_code == 404
+    assert client.get(f"{LIST}/{tid}", headers={**admin, "X-Institution-Id": str(OTHER_INSTITUTION)}).status_code == 403
+    header = asyncio.run(store.get(OTHER_INSTITUTION, tid)).header
+    assert (header["status"], header["revision"]) == ("DRAFT", 1)  # unchanged
+
+
+def test_permission_in_two_institutions_needs_the_institution_header(client, tokens, identity, admin) -> None:
+    mine = _save(client, admin)
+    sub = identity.register({INSTITUTION: (["EXAMINATION_ADMIN"], ROLE_PERMISSIONS["EXAMINATION_ADMIN"]),
+                             OTHER_INSTITUTION: (["EXAMINATION_ADMIN"], ROLE_PERMISSIONS["EXAMINATION_ADMIN"])})
+    both = {"Authorization": f"Bearer {tokens.access_token(sub)}"}
+    assert client.get(LIST, headers=both).status_code == 400
+    assert client.post(DRAFTS, headers=both, json=body()).status_code == 400
+    listed = client.get(LIST, headers={**both, "X-Institution-Id": str(INSTITUTION)}).json()
+    assert [r["timetable_id"] for r in listed["items"]] == [mine["timetable_id"]]
+    assert client.get(LIST, headers={**both, "X-Institution-Id": str(OTHER_INSTITUTION)}).json()["total"] == 0
 
 
 def test_saved_snapshot_is_independent_of_later_input_changes(client, admin, harness) -> None:

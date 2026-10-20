@@ -31,7 +31,9 @@ class TimetableWorkflowError(HTTPException):
 
     Rules: STATUS (wrong current status), REVISION (changed since read), INTEGRITY
     (stored content no longer matches), ALREADY_PUBLISHED, STALE_SETTINGS,
-    STALE_CAPACITIES, STALE_INPUTS and H1-H11 (fails validation on current inputs).
+    STALE_CAPACITIES, STALE_INPUTS, H1-H11 (fails validation on current inputs), X1 / X2 (clash with
+    an APPROVED or PUBLISHED timetable of another cycle) and PROTECTED_CHANGED (such a timetable
+    changed while this one was being generated).
     """
 
     def __init__(self, rule: str, message: str, problems: list[dict[str, str]] = ()) -> None:
