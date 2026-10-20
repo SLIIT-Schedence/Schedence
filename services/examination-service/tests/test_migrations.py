@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 
 from app.db.base import Base
-from app.db import scheduling_settings_models, seating_models, seed_models, timetable_models  # noqa: F401
+from app.db import dataset_models, scheduling_settings_models, seating_models, seed_models, timetable_models  # noqa: F401
 
 from conftest import SERVICE_DIR
 
@@ -257,16 +257,17 @@ def test_url_is_never_written_to_output(upgrade_sql: str) -> None:
 # --- 0007: examination period kind (MID / FINAL) ---------------------------------------------
 
 
-def test_revisions_form_one_chain_ending_at_0011() -> None:
+def test_revisions_form_one_chain_ending_at_0012() -> None:
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(Config(str(SERVICE_DIR / "alembic.ini")))
-    assert script.get_heads() == ["0011"]
+    assert script.get_heads() == ["0012"]
     assert script.get_revision("0007").down_revision == "0006"
     assert script.get_revision("0008").down_revision == "0007"
     assert script.get_revision("0009").down_revision == "0008"
     assert script.get_revision("0010").down_revision == "0009"
     assert script.get_revision("0011").down_revision == "0010"
+    assert script.get_revision("0012").down_revision == "0011"
 
 
 def test_0007_adds_exam_kind_and_existing_periods_become_final(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -422,3 +423,36 @@ def test_0011_downgrade_refuses_to_lose_workflow_history(monkeypatch: pytest.Mon
     assert "workflow history exists" not in skipped
     assert "DROP TABLE examinations.exam_timetable_history" in skipped
     assert "DROP COLUMN content_fingerprint" in skipped
+
+
+# --- 0012: institution that owns the imported dataset ----------------------------------------------------------
+
+
+def test_0012_adds_the_owner_table_and_backfills_from_existing_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = _between(_upgrade_sql(monkeypatch, "0011:0012"))
+    assert set(re.findall(r"CREATE TABLE examinations\.(\w+)", body)) == {"exam_dataset_owner"}
+    for source in ("exam_timetables", "exam_timetable_history", "exam_scheduling_settings",
+                   "exam_scheduling_settings_history"):
+        assert f"SELECT institution_id FROM examinations.{source}" in body
+    # Several institutions: stop. One: it becomes the owner. None: the table stays empty.
+    assert "RAISE EXCEPTION 'Several institutions" in body
+    assert "INSERT INTO examinations.exam_dataset_owner (singleton, institution_id, reason) VALUES (true, owners[1]" in body
+    for forbidden in ("DROP ", "DELETE FROM", "TRUNCATE", "UPDATE examinations", "ALTER TABLE examinations.seed"):
+        assert forbidden not in body  # no existing row or table changes
+
+
+def test_0012_explicit_owner_skips_the_backfill(monkeypatch: pytest.MonkeyPatch) -> None:
+    owner = "33333333-3333-4333-8333-333333333333"
+    body = _between(_sql(monkeypatch, "0011:0012", x=[f"dataset_owner={owner}"]))
+    assert "DO $$" not in body
+    assert "INSERT INTO examinations.exam_dataset_owner" in body and f"'{owner}'" in body
+
+
+def test_0012_rejects_an_invalid_explicit_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(RuntimeError, match="must be an institution ID"):
+        _sql(monkeypatch, "0011:0012", x=["dataset_owner=SLIIT"])
+
+
+def test_0012_downgrade_drops_only_the_owner_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    sql = _sql(monkeypatch, "0012:0011", downgrade=True)
+    assert re.findall(r"DROP TABLE (\S+);", sql) == ["examinations.exam_dataset_owner"]
