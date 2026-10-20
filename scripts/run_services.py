@@ -5,9 +5,12 @@ Usage (PowerShell, repository root, venv active):
     python scripts\\run_services.py --reload     # restart a service when its code changes
     python scripts\\run_services.py --only identity
     python scripts\\run_services.py --only identity --only examination
+    python scripts\\run_services.py --only teaching
     python scripts\\run_services.py --smoke      # start, check /health and /health/db, then stop
+    python scripts\\run_services.py --only teaching --teaching-local-preview services\\teaching-service\\local-data\\frontend-preview\\manifest.json
 
-Services and default ports: identity 8001, academic 8002, examination 8003.
+Services and default ports: identity 8001, academic 8002, examination 8003, teaching 8004.
+Resource Service has database models and migrations only (no HTTP runtime yet), so it is not started.
 
 What it does:
 1. Wakes the Neon compute and checks the connection (SELECT 1). Credentials are never printed.
@@ -16,7 +19,11 @@ What it does:
 3. Starts each service with uvicorn on its own port, prefixes its log lines, and waits for /health.
 4. Ctrl+C stops everything. If one service crashes, the others are stopped too.
 
-Entry point of each service: services/<name>/app/main.py -> create_app() (uvicorn --factory).
+Entry point of each service: services/<name>/app/main.py -> create_app() (uvicorn --factory); the Teaching
+Service uses services/teaching-service/src/schedence_teaching/main.py -> create_app(). It has /health but no
+/health/db (it reads timetable data per request), so its database line reads "not checked".
+--teaching-local-preview opts in to Teaching's read-only, development-only local preview store; it is never
+enabled implicitly.
 """
 
 from __future__ import annotations
@@ -46,6 +53,10 @@ class Service:
     schema: str
     default_port: int
     color: str
+    app: str = "app.main:create_app"
+    app_dir: str | None = None  # relative to the service directory
+    reload_dirs: tuple[str, ...] = ("app",)
+    db_health: bool = True  # whether the service exposes /health/db
 
     @property
     def directory(self) -> Path:
@@ -56,9 +67,11 @@ SERVICES = (
     Service("identity", "identity-service", "identity", 8001, "\033[36m" if COLOUR else ""),
     Service("academic", "academic-data-service", "academic", 8002, "\033[35m" if COLOUR else ""),
     Service("examination", "examination-service", "examinations", 8003, "\033[33m" if COLOUR else ""),
+    Service("teaching", "teaching-service", "teaching", 8004, "\033[34m" if COLOUR else "",
+            app="schedence_teaching.main:create_app", app_dir="src", reload_dirs=("src",), db_health=False),
 )
 # Services that ask the Identity Service for the caller's permissions.
-IDENTITY_CLIENTS = ("academic", "examination")
+IDENTITY_CLIENTS = ("academic", "examination", "teaching")
 
 
 def say(message: str) -> None:
@@ -148,12 +161,22 @@ class Running:
         return self.process.poll() is None
 
 
-def start(service: Service, port: int, *, host: str, reload: bool, env_overrides: dict[str, str]) -> Running:
-    command = [sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory", "--host", host, "--port", str(port)]
+def uvicorn_command(service: Service, port: int, *, host: str, reload: bool) -> list[str]:
+    command = [sys.executable, "-m", "uvicorn", service.app, "--factory", "--host", host, "--port", str(port)]
+    if service.app_dir:
+        command += ["--app-dir", service.app_dir]
     if os.name == "nt":
         command += ["--loop", "asyncio:SelectorEventLoop"]  # psycopg async needs a selector loop on Windows
     if reload:
-        command += ["--reload", "--reload-dir", "app", "--reload-dir", str(ROOT / "packages")]
+        command += ["--reload"]
+        for directory in service.reload_dirs:
+            command += ["--reload-dir", directory]
+        command += ["--reload-dir", str(ROOT / "packages")]
+    return command
+
+
+def start(service: Service, port: int, *, host: str, reload: bool, env_overrides: dict[str, str]) -> Running:
+    command = uvicorn_command(service, port, host=host, reload=reload)
     env = {**os.environ, "PYTHONUNBUFFERED": "1", **env_overrides}
     process = subprocess.Popen(command, cwd=service.directory, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, encoding="utf-8", errors="replace", bufsize=1)
@@ -205,6 +228,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--identity-port", type=int, default=8001)
     parser.add_argument("--academic-port", type=int, default=8002)
     parser.add_argument("--examination-port", type=int, default=8003)
+    parser.add_argument("--teaching-port", type=int, default=8004)
+    parser.add_argument("--teaching-local-preview", metavar="MANIFEST",
+                        help="Development only: serve saved, validated local timetable runs read-only from this manifest")
     parser.add_argument("--skip-db-check", action="store_true")
     parser.add_argument("--smoke", action="store_true", help="Start, check /health and /health/db, then stop")
     args = parser.parse_args(argv)
@@ -213,7 +239,8 @@ def main(argv: list[str] | None = None) -> int:
         os.system("")  # enable ANSI colours in older Windows consoles
     os.chdir(ROOT)  # the root .env is found from here
     services = [s for s in SERVICES if not args.only or s.key in args.only]
-    ports = {"identity": args.identity_port, "academic": args.academic_port, "examination": args.examination_port}
+    ports = {"identity": args.identity_port, "academic": args.academic_port, "examination": args.examination_port,
+             "teaching": args.teaching_port}
 
     busy = [f"{s.name} ({ports[s.key]})" for s in services if port_in_use(ports[s.key])]
     if busy:
@@ -228,6 +255,12 @@ def main(argv: list[str] | None = None) -> int:
         for key in IDENTITY_CLIENTS:
             if key in overrides:
                 overrides[key]["IDENTITY_SERVICE_URL"] = f"http://127.0.0.1:{args.identity_port}"
+    if args.teaching_local_preview:
+        if "teaching" not in overrides:
+            say("--teaching-local-preview needs the teaching service (add --only teaching or start all services).")
+            return 1
+        overrides["teaching"].update(TEACHING_READ_STORE="LOCAL_PREVIEW",
+                                     TEACHING_LOCAL_PREVIEW_MANIFEST=str(Path(args.teaching_local_preview).resolve()))
 
     processes: list[Running] = []
     try:
@@ -245,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
 
         ok = True
         for running in processes:
+            if not running.service.db_health:
+                say(f"  {running.service.name:<22} http://localhost:{running.port}/docs   (database: not checked - no /health/db)")
+                continue
             try:
                 db = httpx.get(f"http://127.0.0.1:{running.port}/health/db", timeout=60).json()
                 state = db.get("status")
