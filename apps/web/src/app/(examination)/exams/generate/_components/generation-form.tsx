@@ -11,6 +11,7 @@ import type { GenerationMode, GenerationState, SaveDraftState } from "@/lib/exam
 import { type ExamChoice, type ExamOption, initialChoice, isGeneratable } from "@/lib/examination-selection";
 import type { CycleReview } from "@/lib/examination-workspace-types";
 import { GenerationResults } from "./generation-results";
+import { ProtectionPreview } from "./protection-preview";
 import { fieldClass, primaryButton, secondaryButton } from "./period-calendar";
 import { AcademicGroups } from "./academic-groups";
 import { ExamSelection } from "./exam-selection";
@@ -171,6 +172,10 @@ export function GenerationForm({ cycles }: { cycles: ExamOption[] }) {
     {step === 1 && review && calendar && <GenerationCalendar period={review.period} calendar={calendar} onChange={changeCalendar}
       permittedStarts={appliedForm?.permitted_start_times ?? review.scheduling.settings.scheduling?.permitted_start_times} disabled={pending} />}
     {step === 2 && review && <AcademicGroups modules={review.modules} mapping={review.mapping} />}
+    {step === GENERATE && review && calendar && used && calendarValid && <ProtectionPreview
+      key={`${review.period.period_code}:${calendar.start_date}:${calendar.end_date}:${used.minimum_break_minutes}`}
+      periodCode={review.period.period_code} start={calendar.start_date} end={calendar.end_date}
+      minimumBreak={Number(used.minimum_break_minutes)} disabled={pending} />}
     {settingsDirty && step !== GENERATE && <p role="status" className="rounded-xl bg-secondary-soft p-4 text-sm text-secondary-ink">You have unapplied Advanced Settings. Your edits are kept. Open Advanced Settings in the Generate step, then Apply Preferences or Reset to Defaults before generating.</p>}
     {step === GENERATE && review && calendar && used && institution && <Card title="4. Generate your timetable" description="Check the summary, then generate the full examination timetable. You can download the result before deciding whether to save a draft." actions={<Badge tone="primary">FINAL · Full cycle</Badge>}>
       <form action={generate} onKeyDown={blockEnterSubmit} className="space-y-5 p-5" aria-busy={pending}>
