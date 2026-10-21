@@ -90,6 +90,23 @@ export type GenerationInputs = {
     configuration_label: string;
     prepared_snapshot_sha256: string;
   } | null;
+  /** Institution-wide owner totals, present even when `inputs` could not be validated (neither scoped nor validated). */
+  owner_records?: {
+    staff: number;
+    modules: number;
+    student_groups: number;
+    teaching_team_entries: number;
+    venues: number;
+    lecturer_preferences: number;
+  } | null;
+  /** The stored Teaching input snapshot readiness assessed; a generation request quotes these exact references. */
+  prepared_snapshot?: {
+    snapshot_id: string;
+    academic_term_reference: string;
+    calendar_label: GenerationBody["calendar_label"];
+    calendar_reference: string;
+    scheduling_policy_reference: string;
+  } | null;
   generation_enabled: boolean;
   snapshot_stored: boolean;
   university_approved: false;
@@ -271,7 +288,24 @@ export const checkReadiness = cache(async (institutionId: string, semester: 1 | 
     checks.push({ key: "snapshot", title: "Stored input snapshot", status: "MISSING", detail: `The Teaching Service could not be read (${listing.error.message}).` });
   } else {
     snapshot = snapshotFor(listing.data.items, semester) ?? null;
-    if (!snapshot) {
+    const prepared = inputs.ok ? inputs.data.prepared_snapshot ?? null : null;
+    if (!snapshot && prepared && inputs.ok) {
+      // No generated version yet: solve the stored input snapshot readiness just validated. The Teaching Service
+      // re-binds it to the owners' records and re-checks every reference before it accepts the job.
+      checks.push({ key: "snapshot", title: "Stored input snapshot", status: "READY",
+        detail: `Prepared input snapshot for Semester ${semester} is stored in the Teaching Service and re-checked against the owners' records before solving.` });
+      const data = inputs.data.inputs;
+      scopeSummary = data ? { groups: data.student_groups, specializations: data.specializations,
+        blocked: data.blocked_scopes.map((row) => ({ year: row.academic_year, stream: row.stream, specialization: row.specialization })) } : null;
+      if (granted && selected.ok && inputs.data.ready) {
+        body = { institution_id: institutionId, snapshot_id: prepared.snapshot_id,
+          academic_term_reference: prepared.academic_term_reference, semester,
+          ...(year ? { academic_years: [year] } : {}), ...(stream ? { streams: [stream] } : {}),
+          calendar_label: prepared.calendar_label, calendar_reference: prepared.calendar_reference,
+          scheduling_policy_reference: prepared.scheduling_policy_reference, policy_version: "HISTORICAL_SNAPSHOT",
+          strategy: "MONOLITHIC", ...TIME_LIMITS, scheduling_rules: selected.rules };
+      }
+    } else if (!snapshot) {
       checks.push({
         key: "snapshot",
         title: "Stored input snapshot",

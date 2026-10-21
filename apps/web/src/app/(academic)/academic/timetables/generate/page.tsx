@@ -102,7 +102,7 @@ async function Wizard({ searchParams }: { searchParams: SearchParams }) {
         >
           {step === "scope" && <ScopeStep scope={scope} rulesSelection={rulesSelection} />}
           {step === "inputs" && <InputsStep scope={scope} institutionId={institution.id} institution={institution.name} rulesSelection={rulesSelection} />}
-          {step === "rules" && <RulesStep scope={scope} institutionId={institution.id} rulesSelection={rulesSelection} />}
+          {step === "rules" && <RulesStep scope={scope} institutionId={institution.id} rulesSelection={rulesSelection} validate={value("validated") === "1"} />}
           {step === "readiness" && <ReadinessStep scope={scope} institutionId={institution.id} rulesSelection={rulesSelection} />}
           {step === "generate" && <GenerateStep scope={scope} institutionId={institution.id} institution={institution.name} job={job} rulesSelection={rulesSelection} />}
         </Suspense>
@@ -232,7 +232,7 @@ function ScopeStep({ scope, rulesSelection }: { scope: Scope; rulesSelection?: s
 
 // ------------------------------------------------------------------------------------------- 2. inputs
 
-function InputTile({ icon, title, status, value, children }: { icon: IconName; title: string; status: "available" | "missing"; value: string; children: ReactNode }) {
+function InputTile({ icon, title, status, value, children }: { icon: IconName; title: string; status: "available" | "recorded" | "missing"; value: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line p-4">
       <div className="flex items-center justify-between gap-2">
@@ -240,7 +240,13 @@ function InputTile({ icon, title, status, value, children }: { icon: IconName; t
           <Icon name={icon} size={18} className="text-secondary" />
           {title}
         </span>
-        {status === "available" ? <Badge tone="accent">Loaded</Badge> : <Badge tone="neutral">Not available</Badge>}
+        {status === "available" ? (
+          <Badge tone="accent">Loaded</Badge>
+        ) : status === "recorded" ? (
+          <Badge tone="primary">Not validated</Badge>
+        ) : (
+          <Badge tone="neutral">Not available</Badge>
+        )}
       </div>
       <p className="text-xl font-semibold tracking-tight text-ink">{value}</p>
       <div className="text-[13px] leading-5 text-muted">{children}</div>
@@ -257,28 +263,35 @@ async function InputsStep({ scope, institutionId, institution, rulesSelection }:
       ? "Input readiness is not enabled in this Teaching Service deployment."
       : `The inputs could not be validated (${assessed.error.message}).`
     : "The inputs did not pass owner-record validation; see Check readiness.";
-  const tile = (value: number | undefined, unit: string) => (data && value !== undefined ? `${value} ${unit}` : "Not available");
-  const status = data ? "available" : "missing";
+  // Without validated inputs, still show what the owner services hold, labelled as institution-wide and unvalidated.
+  const records = !data && assessed.ok ? assessed.data.owner_records ?? null : null;
+  const blocker = assessed.ok ? assessed.data.checks.find((row) => row.status === "MISSING") : undefined;
+  const fallback = records
+    ? `On record for the whole institution, not yet validated for this scope${blocker ? `: ${blocker.detail}` : "."}`
+    : reason;
+  const tile = (value: number | undefined, recorded: number | undefined, unit: string) =>
+    data && value !== undefined ? `${value} ${unit}` : records && recorded !== undefined ? `${recorded} ${unit}` : "Not available";
+  const status = data ? "available" : records ? "recorded" : "missing";
   return (
     <>
       <div className="grid gap-3 px-5 py-5 sm:grid-cols-2 xl:grid-cols-3">
-        <InputTile icon="badge" title="Staff" status={status} value={tile(data?.staff, "staff")}>
-          {data ? (staff ? staff.byRank.slice(0, 4).map(([rank, count]) => `${rank} ${count}`).join(" · ") : "Validated against the staff register.") : reason}
+        <InputTile icon="badge" title="Staff" status={status} value={tile(data?.staff, records?.staff, "staff")}>
+          {data ? (staff ? staff.byRank.slice(0, 4).map(([rank, count]) => `${rank} ${count}`).join(" · ") : "Validated against the staff register.") : fallback}
         </InputTile>
-        <InputTile icon="menu_book" title="Modules" status={status} value={tile(data?.modules, "modules")}>
-          {data ? `${data.module_offerings} module offerings and ${data.session_requirements} weekly session requirements in this scope.` : reason}
+        <InputTile icon="menu_book" title="Modules" status={status} value={tile(data?.modules, records?.modules, "modules")}>
+          {data ? `${data.module_offerings} module offerings and ${data.session_requirements} weekly session requirements in this scope.` : fallback}
         </InputTile>
-        <InputTile icon="group" title="Student groups" status={status} value={tile(data?.student_groups, "groups")}>
-          {data ? `${data.specializations.map((name) => name.replaceAll("_", " ").toLowerCase()).join(", ") || "No tracks"}.` : reason}
+        <InputTile icon="group" title="Student groups" status={status} value={tile(data?.student_groups, records?.student_groups, "groups")}>
+          {data ? `${data.specializations.map((name) => name.replaceAll("_", " ").toLowerCase()).join(", ") || "No tracks"}.` : fallback}
         </InputTile>
-        <InputTile icon="group" title="Teaching teams" status={status} value={tile(data?.teaching_team_entries, "entries")}>
-          {data ? "Lecturer and instructor assignments to the modules in this scope." : reason}
+        <InputTile icon="group" title="Teaching teams" status={status} value={tile(data?.teaching_team_entries, records?.teaching_team_entries, "entries")}>
+          {data ? "Lecturer and instructor assignments to the modules in this scope." : fallback}
         </InputTile>
-        <InputTile icon="meeting_room" title="Venues" status={status} value={tile(data?.venues, "venues")}>
-          {data ? "Campus-confirmed venue inventory with capacities and lab types." : reason}
+        <InputTile icon="meeting_room" title="Venues" status={status} value={tile(data?.venues, records?.venues, "venues")}>
+          {data ? "Campus-confirmed venue inventory with capacities and lab types." : fallback}
         </InputTile>
-        <InputTile icon="schedule" title="Lecturer preferences" status={status} value={tile(data?.lecturer_preferences, "preferences")}>
-          {data ? "Working-day and weekend preferences from the lecturer preference records." : reason}
+        <InputTile icon="schedule" title="Lecturer preferences" status={status} value={tile(data?.lecturer_preferences, records?.lecturer_preferences, "preferences")}>
+          {data ? "Working-day and weekend preferences from the lecturer preference records." : fallback}
         </InputTile>
       </div>
       {data && (
@@ -304,8 +317,19 @@ async function InputsStep({ scope, institutionId, institution, rulesSelection }:
 
 // -------------------------------------------------------------------------------------------- 3. rules
 
-async function RulesStep({ scope, institutionId, rulesSelection }: { scope: Scope; institutionId: string; rulesSelection?: string }) {
-  const result = await getGenerationInputs(institutionId, scope.semester, scope.year, scope.stream);
+async function RulesStep({ scope, institutionId, rulesSelection, validate }: { scope: Scope; institutionId: string; rulesSelection?: string; validate: boolean }) {
+  const requested = parseRulesSelection(rulesSelection);
+  // After "Validate rules" (?validated=1) the Teaching Service checks these exact rules here, so the confirmation
+  // comes from the backend, never from the URL flag, and survives the page re-render a Server Action causes.
+  const checked = validate && requested.ok
+    ? await getGenerationInputs(institutionId, scope.semester, scope.year, scope.stream, rulesSelection)
+    : null;
+  const confirmed = Boolean(checked?.ok && checked.data.ready);
+  const rejection = !checked || confirmed ? undefined : !checked.ok ? checked.error.message
+    : checked.data.checks.filter((row) => row.status === "MISSING").map((row) => row.detail).join(" ") || "The selected rules and inputs did not pass backend validation.";
+  const result = checked?.ok && checked.data.scheduling_rules
+    ? checked
+    : await getGenerationInputs(institutionId, scope.semester, scope.year, scope.stream);
   const report = result.ok ? result.data.scheduling_rules : null;
   const defaults = parseSchedulingRules(report?.experimental_defaults);
   if (!report || !defaults.ok) return <>
@@ -314,10 +338,10 @@ async function RulesStep({ scope, institutionId, rulesSelection }: { scope: Scop
     </EmptyState>
     <Footer back={<BackLink href={stepHref("inputs", scope)} />} />
   </>;
-  const selected = parseRulesSelection(rulesSelection);
-  return <SchedulingRulesForm key={`${institutionId}:${scope.semester}:${scope.year}:${scope.stream}`}
-    defaults={defaults.rules} selected={selected.ok ? selected.rules : defaults.rules} report={report} scope={scope}
-    initialError={rulesSelection && !selected.ok ? selected.error : undefined} />;
+  // A new validation outcome remounts the form, so it starts from the checked rules with nothing marked as edited.
+  return <SchedulingRulesForm key={`${institutionId}:${scope.semester}:${scope.year}:${scope.stream}:${checked ? `${confirmed}:${rulesSelection}` : ""}`}
+    defaults={defaults.rules} selected={requested.ok ? requested.rules : defaults.rules} report={report} scope={scope}
+    validated={confirmed} initialError={rulesSelection && !requested.ok ? requested.error : rejection} />;
 }
 
 // ---------------------------------------------------------------------------------------- 4. readiness
