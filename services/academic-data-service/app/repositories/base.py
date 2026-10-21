@@ -58,11 +58,18 @@ class AuditRepository(Protocol):
     async def for_entity(self, entity_type: str, entity_id: UUID) -> list[AppointmentAuditLog]: ...
 
 
+class TeachingInputRepository(Protocol):
+    async def export(self, institution_id: UUID) -> dict[str, list[dict]]:
+        """Every row of each Teaching input table (plus ``staff``) for one institution, keyed by table name."""
+        ...
+
+
 class AcademicUnitOfWork(Protocol):
     staff: StaffRepository
     positions: PositionRepository
     appointments: AppointmentRepository
     audit: AuditRepository
+    teaching_inputs: TeachingInputRepository
 
     async def commit(self) -> None: ...
 

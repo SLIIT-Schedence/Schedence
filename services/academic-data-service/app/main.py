@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from app.api.dependencies import ContainerDep
-from app.api.v1 import appointments, positions, staff
+from app.api.v1 import appointments, positions, staff, teaching_inputs
 from app.core.config import SERVICE_NAME, load_academic_settings
 from app.core.container import AcademicContainer, build_container
 from app.core.errors import install_exception_handlers
@@ -88,7 +88,7 @@ def create_app(container: AcademicContainer | None = None) -> FastAPI:
     install_exception_handlers(app)
     app.include_router(health_router)
     api = APIRouter(prefix=API_PREFIX)
-    for module in (positions, staff, appointments):
+    for module in (positions, staff, appointments, teaching_inputs):
         api.include_router(module.router)
     app.include_router(api)
     if settings.swagger_oauth_enabled:

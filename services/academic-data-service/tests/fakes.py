@@ -19,6 +19,7 @@ from app.models import (
     Staff,
     StaffAdministrativeAppointment,
 )
+from app.models.teaching_inputs import TEACHING_INPUT_TABLES
 from app.repositories.base import PersistenceConflictError
 
 _TABLES = ("staff", "positions", "policies", "appointments")
@@ -160,6 +161,18 @@ class FakeAuditRepository(_Repo):
         return [e for e in self.s.audit if e.entity_type == entity_type and e.entity_id == entity_id]
 
 
+class FakeTeachingInputRepository(_Repo):
+    """``staff`` comes from the store; the other Teaching input tables from ``store.teaching_rows`` (default empty)."""
+
+    async def export(self, institution_id: UUID) -> dict[str, list[dict]]:
+        result = {"staff": sorted((_columns(s) for s in self.s.staff.values() if s.institution_id == institution_id),
+                                  key=lambda row: row["id"])}
+        for table in TEACHING_INPUT_TABLES:
+            rows = getattr(self.s, "teaching_rows", {}).get(table.name, [])
+            result[table.name] = [dict(r) for r in rows if r["institution_id"] == institution_id]
+        return result
+
+
 class FakeAcademicUnitOfWork:
     def __init__(self, store: FakeAcademicStore) -> None:
         self.store = store
@@ -167,6 +180,7 @@ class FakeAcademicUnitOfWork:
         self.positions = FakePositionRepository(store)
         self.appointments = FakeAppointmentRepository(store)
         self.audit = FakeAuditRepository(store)
+        self.teaching_inputs = FakeTeachingInputRepository(store)
 
     async def commit(self) -> None:
         try:
