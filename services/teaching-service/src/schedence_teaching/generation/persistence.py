@@ -14,6 +14,41 @@ class NoDraftPersistence:
         return None, None
 
 
+class TeachingDatabasePersistence:
+    """Validated drafts saved to Teaching's own tables through the restricted runtime role and forced RLS.
+
+    Uses the API's Teaching session factory (SET ROLE schedence_teaching_runtime), so a write can reach only
+    the teaching schema of the job's institution. Results are saved only after independent validation passed.
+    """
+    mode = "TEACHING_DATABASE"
+
+    def __init__(self, factory):
+        self.factory = factory
+
+    async def preflight(self, request):
+        if request.timetable_series_id is None:
+            return
+        from schedence_teaching.persistence.timetable_service import timetable_reader
+        async with timetable_reader(self.factory, request.institution_id) as repo:
+            await repo.get_series(request.timetable_series_id)
+            latest = await repo.get_latest_draft(request.timetable_series_id)
+            if (latest.version["id"] if latest else None) != request.expected_previous_version_id:
+                raise ApiError(409, "STALE_VERSION", "The timetable history has changed. Select its latest draft.")
+
+    async def save(self, work, result, job_id, actor):
+        from schedence_teaching.persistence.application import verify_runtime_security
+        from schedence_teaching.persistence.repositories import teaching_unit_of_work
+        from schedence_teaching.persistence.timetable_service import persist_generation_result
+        async with teaching_unit_of_work(self.factory, work.request.institution_id) as repo:
+            await verify_runtime_security(repo._session)
+            snapshot = await repo.store_snapshot(work.document)
+            series = work.request.timetable_series_id or await repo.create_series(f"DEVELOPMENT_GENERATION:{job_id}")
+        stored = await persist_generation_result(self.factory, work.request.institution_id, series, snapshot, result,
+            expected_previous_version_id=work.request.expected_previous_version_id,
+            logical_status="VALIDATED", created_by_identity_user_id=actor)
+        return stored.version_id, snapshot
+
+
 class IsolatedDraftPersistence:
     """Fail closed before connecting: no production/Neon write adapter is exposed.
 

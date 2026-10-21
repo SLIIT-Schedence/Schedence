@@ -12,9 +12,11 @@ const PRIMARY = "inline-flex h-10 items-center justify-center gap-2 rounded-xl b
 const INITIAL: RulesState = { status: "idle" };
 const WEIGHT_LABELS = ["Preferred day part", "Not preferred day part", "Preferred free day", "Weekend work pattern"];
 
-export function SchedulingRulesForm({ defaults, selected, report, scope, initialError }: {
+export function SchedulingRulesForm({ defaults, selected, report, scope, validated = false, initialError }: {
   defaults: SchedulingRules; selected: SchedulingRules; report: SchedulingRulesReport;
-  scope: { semester: 1 | 2; year: number | null; stream: string | null }; initialError?: string;
+  scope: { semester: 1 | 2; year: number | null; stream: string | null };
+  /** The Teaching Service validated exactly `selected` while rendering this step. */
+  validated?: boolean; initialError?: string;
 }) {
   const [form, setForm] = useState(() => rulesForm(selected, defaults));
   const [state, action, pending] = useActionState(reviewSchedulingRules, INITIAL);
@@ -112,6 +114,12 @@ export function SchedulingRulesForm({ defaults, selected, report, scope, initial
           </fieldset>
           <p className="mt-3 text-[13px] text-muted">Teaching windows, online-day policy, hard breaks and workload caps cannot be edited here.</p>
         </section>
+        {!edited && validated && (
+          <p role="status" className="flex items-center gap-2 rounded-xl bg-accent p-3 text-sm font-semibold text-accent-ink">
+            <Icon name="check_circle" size={18} filled className="shrink-0" />
+            Rules validated for this scope by the Teaching Service. Nothing has been solved or stored.
+          </p>
+        )}
         {!edited && initialError && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{initialError}</p>}
         {!parsed.ok && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{parsed.error}</p>}
         {currentResult && state.message && <p role={state.status === "error" ? "alert" : "status"} className={`rounded-xl p-3 text-sm ${state.status === "error" ? "bg-danger-soft text-danger" : "bg-background text-ink"}`}>{state.message}</p>}

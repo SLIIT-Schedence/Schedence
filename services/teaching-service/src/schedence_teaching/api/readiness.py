@@ -56,6 +56,25 @@ class InputsOut(BaseModel):
     prepared_snapshot_sha256: str
 
 
+class OwnerRecordsOut(BaseModel):
+    """Institution-wide totals read from the owner services, before any scope or snapshot validation."""
+    staff: int
+    modules: int
+    student_groups: int
+    teaching_team_entries: int
+    venues: int
+    lecturer_preferences: int
+
+
+class PreparedSnapshotOut(BaseModel):
+    """The stored Teaching input snapshot readiness assessed; a generation request quotes these exact references."""
+    snapshot_id: UUID
+    academic_term_reference: str
+    calendar_label: str
+    calendar_reference: str
+    scheduling_policy_reference: str
+
+
 class SchedulingRulesOut(BaseModel):
     selected: SchedulingRules | None
     experimental_defaults: SchedulingRules
@@ -73,6 +92,9 @@ class ReadinessOut(BaseModel):
     ready: bool
     checks: list[CheckOut]
     inputs: InputsOut | None
+    # Present whenever the owner exports were read, even when the inputs cannot be validated (e.g. no prepared snapshot).
+    owner_records: OwnerRecordsOut | None = None
+    prepared_snapshot: PreparedSnapshotOut | None = None
     generation_enabled: bool
     snapshot_stored: bool = False
     university_approved: Literal[False] = False
@@ -147,4 +169,5 @@ async def assess_readiness(auth, semester, institution_id, academic_year, stream
     return ReadinessOut(institution_id=institution, semester=semester, academic_years=sorted(scope.academic_years),
         streams=sorted(scope.streams), ready=result["ready"], checks=result["checks"], inputs=result["inputs"],
         generation_enabled=runtime.generations is not None, scheduling_rules=result.get("scheduling_rules"),
-        stored_input=result.get("stored_input"), snapshot_stored=result.get("stored_input") is not None)
+        stored_input=result.get("stored_input"), snapshot_stored=result.get("stored_input") is not None,
+        owner_records=result.get("owner_records"), prepared_snapshot=result.get("prepared_snapshot"))

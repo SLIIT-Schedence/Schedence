@@ -21,11 +21,13 @@ export async function reviewSchedulingRules(_previous: RulesState, formData: For
   if (!parsed.ok) return { status: "error", message: parsed.error };
   const rulesKey = serializeRules(parsed.rules);
   const scope = parseScope({ semester: field(formData, "semester"), year: field(formData, "year"), stream: field(formData, "stream") });
+  // The rules step reports the outcome itself, validating these exact rules while it renders. A result returned
+  // as state would be lost: every Server Action here re-renders the page, because the auth proxy re-sets the
+  // session cookie on each request and Next.js treats that as a cookie revalidation.
+  const review = wizardHref("rules", scope, rulesKey, { validated: "1" });
+  if (field(formData, "intent") !== "continue") redirect(review);
   const result = await getGenerationInputs(context.primary.id, scope.semester, scope.year, scope.stream, rulesKey);
-  if (!result.ok) return { status: "error", rulesKey, message: result.error.message };
-  if (!result.data.ready) return { status: "error", rulesKey, message: result.data.checks.filter((row) => row.status === "MISSING").map((row) => row.detail).join(" ") || "The selected rules and inputs did not pass backend validation." };
-  if (field(formData, "intent") === "continue") redirect(wizardHref("readiness", scope, rulesKey));
-  return { status: "valid", rulesKey, message: "Rules validated for this scope. Nothing has been solved or stored." };
+  redirect(result.ok && result.data.ready ? wizardHref("readiness", scope, rulesKey) : review);
 }
 
 /**

@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from schedence_teaching.generation.contracts import GenerationJobOut, GenerationRequest
 
@@ -39,12 +39,15 @@ def jobs_for(runtime):
 
 
 @router.post("", status_code=202, response_model=GenerationJobOut, response_model_exclude_none=True, responses=ERROR_RESPONSES)
-async def generate(body: GenerationRequest, response: Response,
+async def generate(body: GenerationRequest, request: Request, response: Response,
                    auth: Annotated[tuple, Depends(authenticate)],
                    idempotency_key: Annotated[str | None, Header(max_length=128)] = None):
     runtime, principal = auth
     generation_institution(principal, body.institution_id)
-    job = await jobs_for(runtime).submit(body, idempotency_key, principal.user_id)
+    jobs = jobs_for(runtime)
+    # Owner-API inputs are read with the caller's own token during submission only; it is never retained.
+    token = {"bearer_token": request.state.teaching_bearer_token} if getattr(jobs, "requires_bearer_token", False) else {}
+    job = await jobs.submit(body, idempotency_key, principal.user_id, **token)
     response.headers["Location"] = f"/api/v1/teaching/generations/{job.job_id}?institution_id={job.institution_id}"
     response.headers["Retry-After"] = "2"
     return job

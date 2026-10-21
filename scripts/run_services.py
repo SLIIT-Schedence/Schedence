@@ -9,8 +9,8 @@ Usage (PowerShell, repository root, venv active):
     python scripts\\run_services.py --smoke      # start, check /health and /health/db, then stop
     python scripts\\run_services.py --only teaching --teaching-local-preview services\\teaching-service\\local-data\\frontend-preview\\manifest.json
 
-Services and default ports: identity 8001, academic 8002, examination 8003, teaching 8004.
-Resource Service has database models and migrations only (no HTTP runtime yet), so it is not started.
+Services and default ports: identity 8001, academic 8002, examination 8003, teaching 8004, resource 8006.
+The Resource Service serves only the read-only venue export Teaching validates against.
 
 What it does:
 1. Wakes the Neon compute and checks the connection (SELECT 1). Credentials are never printed.
@@ -69,9 +69,13 @@ SERVICES = (
     Service("examination", "examination-service", "examinations", 8003, "\033[33m" if COLOUR else ""),
     Service("teaching", "teaching-service", "teaching", 8004, "\033[34m" if COLOUR else "",
             app="schedence_teaching.main:create_app", app_dir="src", reload_dirs=("src",), db_health=False),
+    Service("resource", "resource-service", "resource", 8006, "\033[94m" if COLOUR else "",
+            app="schedence_resource.main:create_app", app_dir="src", reload_dirs=("src",), db_health=False),
 )
 # Services that ask the Identity Service for the caller's permissions.
-IDENTITY_CLIENTS = ("academic", "examination", "teaching")
+IDENTITY_CLIENTS = ("academic", "examination", "teaching", "resource")
+# Owner services the Teaching Service reads generation inputs from (with the caller's token).
+TEACHING_OWNERS = {"academic": "ACADEMIC_SERVICE_URL", "resource": "RESOURCE_SERVICE_URL"}
 
 
 def say(message: str) -> None:
@@ -229,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--academic-port", type=int, default=8002)
     parser.add_argument("--examination-port", type=int, default=8003)
     parser.add_argument("--teaching-port", type=int, default=8004)
+    parser.add_argument("--resource-port", type=int, default=8006)
     parser.add_argument("--teaching-local-preview", metavar="MANIFEST",
                         help="Development only: serve saved, validated local timetable runs read-only from this manifest")
     parser.add_argument("--skip-db-check", action="store_true")
@@ -240,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     os.chdir(ROOT)  # the root .env is found from here
     services = [s for s in SERVICES if not args.only or s.key in args.only]
     ports = {"identity": args.identity_port, "academic": args.academic_port, "examination": args.examination_port,
-             "teaching": args.teaching_port}
+             "teaching": args.teaching_port, "resource": args.resource_port}
 
     busy = [f"{s.name} ({ports[s.key]})" for s in services if port_in_use(ports[s.key])]
     if busy:
@@ -255,6 +260,10 @@ def main(argv: list[str] | None = None) -> int:
         for key in IDENTITY_CLIENTS:
             if key in overrides:
                 overrides[key]["IDENTITY_SERVICE_URL"] = f"http://127.0.0.1:{args.identity_port}"
+    if "teaching" in overrides:
+        for key, variable in TEACHING_OWNERS.items():
+            if key in overrides:
+                overrides["teaching"][variable] = f"http://127.0.0.1:{ports[key]}"
     if args.teaching_local_preview:
         if "teaching" not in overrides:
             say("--teaching-local-preview needs the teaching service (add --only teaching or start all services).")

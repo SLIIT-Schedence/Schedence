@@ -54,13 +54,18 @@ class DevelopmentGenerationJobs:
         self._workers = asyncio.Semaphore(worker_limit)
         self._closed = False
 
+    @property
+    def requires_bearer_token(self):
+        """Inputs read from owner services with the submitting caller's token; it is used only during submit."""
+        return getattr(self.inputs, "requires_bearer_token", False)
+
     def _public(self, job):
         values = job.public.model_dump()
         if job.started_clock is not None and job.public.finished_at is None:
             values["elapsed_seconds"] = monotonic() - job.started_clock
         return GenerationJobOut.model_validate(values)
 
-    async def submit(self, request, key, actor):
+    async def submit(self, request, key, actor, *, bearer_token=None):
         if not self.enabled or self._closed:
             raise ApiError(503, "GENERATION_DISABLED", "No generation worker is enabled in this deployment.")
         if key is None or re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", key) is None:
@@ -90,7 +95,8 @@ class DevelopmentGenerationJobs:
                 raise ApiError(503, "JOB_REGISTRY_FULL", "The development job registry is full; no request was queued.")
             try:
                 async with asyncio.timeout(self.preflight_timeout_seconds):
-                    work = await self.inputs.prepare(request)
+                    work = await (self.inputs.prepare(request, bearer_token=bearer_token) if self.requires_bearer_token
+                                  else self.inputs.prepare(request))
                     await self.persistence.preflight(request)
             except ApiError:
                 raise

@@ -36,9 +36,9 @@ def test_http_owner_inputs_reuse_existing_pre_solve_without_private_files(databa
             owner = 'academic' if request.url.host == 'academic.test' else 'resource'
             return httpx.Response(200, json=export(owner, getattr(evidence, owner)))
         class Prepared:
-            async def get(self, institution, semester):
+            async def find(self, institution, semester):
                 assert institution == TENANT and semester == 1
-                return evidence.document
+                return evidence.snapshot_id, evidence.document
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
             owners = OwnerApiClient(http, 'https://academic.test', 'https://resource.test')
             readiness = ApiGenerationReadiness(owners, Prepared(), academic_path='/api/v1/academic/teaching-inputs',
@@ -46,6 +46,14 @@ def test_http_owner_inputs_reuse_existing_pre_solve_without_private_files(databa
             result = await readiness.assess(TENANT, ReadinessScope(1), bearer_token='caller-one')
             assert result['ready'], result['checks']
             assert result['inputs']['expected_sessions'] > 0
+            assert result['owner_records']['venues'] == len(evidence.resource['venues'])
+            # The stored snapshot a generation request must quote, with the readiness request bound to its real id.
+            prepared = result['prepared_snapshot']
+            assert prepared['snapshot_id'] == evidence.snapshot_id
+            assert prepared['academic_term_reference'] == evidence.document.academic_term_reference
+            sources = {row.label: row.sha256 for row in evidence.document.sources}
+            assert prepared['calendar_reference'] == sources['PP1:calendar-configuration']
+            assert prepared['scheduling_policy_reference'] == sources['PP1:synthetic-elective-registration-evidence']
     asyncio.run(scenario())
     assert len(calls) == 2
 
@@ -109,12 +117,17 @@ def test_missing_snapshot_is_reported_as_missing_never_fabricated(database_fixtu
     class Owners:
         async def get(self,owner,*args,**kwargs): return export(owner,getattr(evidence,owner))
     class Prepared:
-        async def get(self,*args): return None
+        async def find(self,*args): return None
     async def scenario():
         ready=ApiGenerationReadiness(Owners(),Prepared(),academic_path='/api/academic',resource_path='/api/resource')
         result=await ready.assess(TENANT,ReadinessScope(1),bearer_token='caller')
         assert not result['ready'] and result['inputs'] is None
         assert result['checks'][0]['key']=='prepared-input'
+        # Owner totals are still reported, institution-wide and labelled apart from validated inputs.
+        assert result['owner_records']=={'staff':len(evidence.academic['staff']),'modules':len(evidence.academic['modules']),
+            'student_groups':len(evidence.academic['pp1_student_groups']),
+            'teaching_team_entries':len(evidence.academic['module_teaching_teams']),
+            'venues':len(evidence.resource['venues']),'lecturer_preferences':len(evidence.academic['lecturer_preferences'])}
     asyncio.run(scenario())
 
 
@@ -146,6 +159,7 @@ def test_configuration_failures_keep_timetables_and_form_drafts_available(monkey
     monkeypatch.setattr(schedence_db,'load_settings',lambda **kwargs:object())
     monkeypatch.setattr(schedence_db,'create_db_engine',lambda *args,**kwargs:SimpleNamespace(dispose=dispose))
     monkeypatch.setattr(schedence_db,'create_session_factory',lambda engine:object())
+    monkeypatch.setattr(module,'use_database_role',lambda engine,role:None)
     def unavailable(*args,**kwargs): raise ValueError('password=must-not-log')
     monkeypatch.setattr(module,'readiness_runtime',unavailable)
     monkeypatch.setattr(module,'configure_form_sending',unavailable)

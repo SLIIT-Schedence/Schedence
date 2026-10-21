@@ -22,8 +22,16 @@ def service(key):
 
 def test_services_and_default_ports():
     assert [(item.key, item.default_port) for item in rs.SERVICES] == [
-        ("identity", 8001), ("academic", 8002), ("examination", 8003), ("teaching", 8004)]
-    assert not any(item.key == "resource" for item in rs.SERVICES)  # Models and migrations only; no HTTP runtime.
+        ("identity", 8001), ("academic", 8002), ("examination", 8003), ("teaching", 8004), ("resource", 8006)]
+
+
+def test_resource_uses_its_src_entry_point_without_a_database_health_check():
+    resource = service("resource")
+    assert (resource.directory / "src" / "schedence_resource" / "main.py").is_file()
+    assert rs.uvicorn_command(resource, 8006, host="127.0.0.1", reload=False) == [
+        sys.executable, "-m", "uvicorn", "schedence_resource.main:create_app", "--factory", "--host", "127.0.0.1", "--port", "8006",
+        "--app-dir", "src", *LOOP]
+    assert not resource.db_health
 
 
 @pytest.mark.parametrize("key,port", [("identity", 8001), ("academic", 8002), ("examination", 8003)])
@@ -109,9 +117,11 @@ def test_only_teaching_starts_just_teaching_without_a_database_health_check(laun
 
 def test_all_services_start_and_teaching_learns_the_identity_url(launcher):
     assert rs.main(["--skip-db-check", "--smoke"]) == 0
-    assert [key for key, _ in launcher["started"]] == ["identity", "academic", "examination", "teaching"]
-    assert launcher["overrides"]["teaching"]["IDENTITY_SERVICE_URL"] == "http://127.0.0.1:8001"
-    assert len(launcher["db_checked"]) == 3 and not any(":8004/" in url for url in launcher["db_checked"])
+    assert [key for key, _ in launcher["started"]] == ["identity", "academic", "examination", "teaching", "resource"]
+    assert launcher["overrides"]["teaching"] == {"IDENTITY_SERVICE_URL": "http://127.0.0.1:8001",
+        "ACADEMIC_SERVICE_URL": "http://127.0.0.1:8002", "RESOURCE_SERVICE_URL": "http://127.0.0.1:8006"}
+    assert launcher["overrides"]["resource"] == {"IDENTITY_SERVICE_URL": "http://127.0.0.1:8001"}
+    assert len(launcher["db_checked"]) == 3 and not any(":8004/" in url or ":8006/" in url for url in launcher["db_checked"])
 
 
 def test_local_preview_is_explicit_and_teaching_only(launcher, tmp_path):

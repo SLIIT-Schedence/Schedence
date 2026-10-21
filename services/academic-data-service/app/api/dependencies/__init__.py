@@ -17,6 +17,7 @@ from app.repositories.base import AcademicUnitOfWork
 from app.services.appointments import AppointmentService
 from app.services.positions import PositionService
 from app.services.staff import StaffService
+from app.services.teaching_inputs import TeachingInputService
 from schedence_auth import JwksUnavailableError, TokenVerificationError
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,11 @@ def get_appointment_service(uow: UnitOfWorkDep, container: ContainerDep, request
     return AppointmentService(uow, **_kwargs(container, request))
 
 
+def get_teaching_input_service(uow: UnitOfWorkDep, container: ContainerDep, request: Request) -> TeachingInputService:
+    return TeachingInputService(uow, **_kwargs(container, request))
+
+
+TeachingInputServiceDep = Annotated[TeachingInputService, Depends(get_teaching_input_service)]
 PositionServiceDep = Annotated[PositionService, Depends(get_position_service)]
 StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]
 AppointmentServiceDep = Annotated[AppointmentService, Depends(get_appointment_service)]

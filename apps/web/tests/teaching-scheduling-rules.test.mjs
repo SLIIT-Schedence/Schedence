@@ -90,7 +90,10 @@ async function withGeneration(options, execute) {
     if (options.unavailable) return new Response(JSON.stringify({ error: { code: "READINESS_DISABLED", message: "Readiness is disabled." } }), { status: 503 });
     const selection = init.body ? JSON.parse(init.body) : null;
     return new Response(JSON.stringify({ institution_id: "institution", ready: !options.rejected,
-      generation_enabled: options.worker !== false, inputs: options.prepared ? { student_groups: 30, specializations: ["IT"], blocked_scopes: [] } : null,
+      generation_enabled: options.worker !== false,
+      inputs: options.prepared || options.storedSnapshot ? { student_groups: 30, specializations: ["IT"], blocked_scopes: [] } : null,
+      prepared_snapshot: options.storedSnapshot ? { snapshot_id: "teaching-snapshot", academic_term_reference: "teaching-term",
+        calendar_label: "PP1_EXPERIMENTAL_CALENDAR", calendar_reference: "c".repeat(64), scheduling_policy_reference: "d".repeat(64) } : null,
       checks: options.rejected ? [{ key: "scheduling-rules", status: "MISSING", detail: "No approved teaching targets." }] : [],
       scheduling_rules: options.noReport ? null : { ...report(options.mismatch ? defaults() : selection),
         ...(options.inactivePreferences ? { connected: { ...report(selection).connected, lecturer_preferences: false } } : {}) },
@@ -171,6 +174,64 @@ test("a compatible stored snapshot is preferred over a sealed policy when both a
   });
 });
 
+test("without a generated version, the stored input snapshot readiness validated is solved with its exact references", async () => {
+  await withGeneration({ storedSnapshot: true, noSnapshot: true }, async ({ generation }) => {
+    const result = await generation.checkReadiness("institution", 1, 1, "WEEKDAY", rules.serializeRules(selected()));
+    assert.equal(result.ready, true, JSON.stringify(result.checks));
+    assert.equal(result.checks.find((row) => row.key === "snapshot").status, "READY");
+    assert.equal(result.body.snapshot_id, "teaching-snapshot");
+    assert.equal(result.body.academic_term_reference, "teaching-term");
+    assert.equal(result.body.calendar_label, "PP1_EXPERIMENTAL_CALENDAR");
+    assert.equal(result.body.calendar_reference, "c".repeat(64));
+    assert.equal(result.body.scheduling_policy_reference, "d".repeat(64));
+    assert.deepEqual(result.body.scheduling_rules, selected());
+    assert.equal(result.scopeSummary.groups, 30);
+  });
+  for (const options of [{ storedSnapshot: true, noSnapshot: true, worker: false }, { storedSnapshot: true, noSnapshot: true, rejected: true }]) {
+    await withGeneration(options, async ({ generation }) => {
+      const result = await generation.checkReadiness("institution", 1, 1, "WEEKDAY", rules.serializeRules(selected()));
+      assert.equal(result.ready, false, JSON.stringify(options));
+    });
+  }
+  // An existing validated version keeps its established path.
+  await withGeneration({ storedSnapshot: true }, async ({ generation }) => {
+    const result = await generation.checkReadiness("institution", 1, 1, "WEEKDAY", rules.serializeRules(selected()));
+    assert.equal(result.body.snapshot_id, "stored-snapshot");
+  });
+});
+
+test("the job refresher never overlaps refreshes and stops once the job finishes", () => {
+  const timers = [], refreshes = [];
+  let pending = false, cleanup;
+  const react = {
+    useTransition: () => [pending, (callback) => { pending = true; callback(); }],
+    useEffect: (effect) => { cleanup?.(); cleanup = effect(); },
+  };
+  const { JobRefresher } = load("src/app/(academic)/academic/timetables/generate/_components/job-refresher.tsx", {
+    react, "next/navigation": { useRouter: () => ({ refresh: () => refreshes.push(Date.now()) }) },
+  });
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  globalThis.setTimeout = (callback, ms) => { timers.push({ callback, ms, cleared: false }); return timers.length - 1; };
+  globalThis.clearTimeout = (id) => { if (timers[id]) timers[id].cleared = true; };
+  try {
+    JobRefresher({ active: true });
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].ms, 3000);
+    timers[0].callback();
+    assert.equal(refreshes.length, 1);
+    JobRefresher({ active: true }); // Re-rendered while the refresh is still pending: nothing new is scheduled.
+    assert.equal(timers.length, 1);
+    pending = false;
+    JobRefresher({ active: true }); // The refresh committed: exactly one next refresh is scheduled.
+    assert.equal(timers.length, 2);
+    JobRefresher({ active: false }); // Finished job: the scheduled refresh is cancelled and none is added.
+    assert.equal(timers[1].cleared, true);
+    assert.equal(timers.length, 2);
+  } finally {
+    globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear;
+  }
+});
+
 test("a validated isolated input version makes generation ready without creating timetable history", async () => {
   await withGeneration({ prepared: true, noSnapshot: true }, async ({ generation }) => {
     const result = await generation.checkReadiness("institution", 1, 1, "WEEKDAY", rules.serializeRules(selected()));
@@ -207,15 +268,28 @@ function formFor(selection = selected(), intent = "validate") {
 test("Validate and Next only use read-only readiness; successful Next carries the exact selection", async () => {
   await withGeneration({}, async ({ generation, calls }) => {
     const submitted = [], action = actions(generation, submitted);
-    const result = await action.reviewSchedulingRules({ status: "idle" }, formFor());
-    assert.equal(result.status, "valid");
-    assert.equal(result.rulesKey, rules.serializeRules(selected()));
-    await assert.rejects(action.reviewSchedulingRules(result, formFor(selected(), "continue")), (error) => {
+    // Validate hands the exact selection to the rules step, which validates it while rendering (no state to lose).
+    await assert.rejects(action.reviewSchedulingRules({ status: "idle" }, formFor()), (error) => {
+      const url = new URL(error.href, "http://web.test");
+      return url.searchParams.get("step") === "rules" && url.searchParams.get("validated") === "1"
+        && url.searchParams.get("rules") === rules.serializeRules(selected());
+    });
+    await assert.rejects(action.reviewSchedulingRules({ status: "idle" }, formFor(selected(), "continue")), (error) => {
       const url = new URL(error.href, "http://web.test");
       return url.searchParams.get("step") === "readiness" && url.searchParams.get("rules") === rules.serializeRules(selected());
     });
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
     assert.equal(submitted.length, 0);
+  });
+});
+
+test("Next with rules the backend rejects returns to the rules step to show why", async () => {
+  await withGeneration({ rejected: true }, async ({ generation }) => {
+    const action = actions(generation, []);
+    await assert.rejects(action.reviewSchedulingRules({ status: "idle" }, formFor(selected(), "continue")), (error) => {
+      const url = new URL(error.href, "http://web.test");
+      return url.searchParams.get("step") === "rules" && url.searchParams.get("validated") === "1";
+    });
   });
 });
 
@@ -250,7 +324,7 @@ test("stale or invalid forms never call submission; owner failures are visible",
 
 const nodes = (node) => node == null || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
 const text = (node) => node == null || typeof node === "boolean" ? "" : typeof node !== "object" ? String(node) : Array.isArray(node) ? node.map(text).join("") : text(node.props?.children);
-function editor(initial = selected(), initialAction = { status: "idle" }) {
+function editor(initial = selected(), initialAction = { status: "idle" }, extra = {}) {
   const slots = []; let cursor = 0, location = "";
   const react = {
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
@@ -261,7 +335,7 @@ function editor(initial = selected(), initialAction = { status: "idle" }) {
     "react/jsx-runtime": jsxRuntime, react, "@/components/icon": icons, "@/lib/teaching-scheduling-rules": rules,
     "@/lib/teaching-generation-actions": { reviewSchedulingRules: () => assert.fail("no API on render") },
   });
-  const render = () => { cursor = 0; return component.SchedulingRulesForm({ defaults: defaults(), selected: initial, report: report(), scope }); };
+  const render = () => { cursor = 0; return component.SchedulingRulesForm({ defaults: defaults(), selected: initial, report: report(), scope, ...extra }); };
   const all = () => nodes(render());
   return { all, render, location: () => location, markup: () => renderToStaticMarkup(createElement(() => render())),
     history: { replaceState: (_, __, href) => { location = href; } },
@@ -270,6 +344,17 @@ function editor(initial = selected(), initialAction = { status: "idle" }) {
     button: (label) => all().find((node) => node.type === "button" && text(node) === label),
   };
 }
+
+test("a backend-confirmed selection shows the validated banner only until the rules are edited", () => {
+  assert.doesNotMatch(editor().markup(), /Rules validated for this scope/);
+  const view = editor(selected(), { status: "idle" }, { validated: true });
+  assert.match(view.markup(), /Rules validated for this scope by the Teaching Service/);
+  const original = globalThis.window; globalThis.window = { history: view.history };
+  try {
+    view.control("Balance staff workload").props.onChange({ target: { checked: false } });
+  } finally { globalThis.window = original; }
+  assert.doesNotMatch(view.markup(), /Rules validated for this scope/);
+});
 
 test("editor renders loaded selections, protected lunch and visibly disabled unsupported settings", () => {
   const view = editor(), html = view.markup();

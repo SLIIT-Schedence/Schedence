@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from uuid import UUID
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.models import (
     Staff,
     StaffAdministrativeAppointment,
 )
+from app.models.teaching_inputs import TEACHING_INPUT_TABLES
 from app.repositories.base import PersistenceConflictError, PersistenceError
 from schedence_db import describe_db_error
 
@@ -147,6 +148,29 @@ class SqlAuditRepository:
         return list(rows.scalars())
 
 
+class SqlTeachingInputRepository:
+    """Read-only export of the tables Teaching validates generation inputs against."""
+
+    TABLES = (Staff.__table__, *TEACHING_INPUT_TABLES)
+    # One statement for every table: per-table queries cost a Neon round trip each and pushed the export past
+    # Teaching's owner timeout. Identifiers come only from the fixed metadata above, never from the request.
+    EXPORT = text("SELECT json_build_object(" + ", ".join(
+        f"'{t.name}', (SELECT coalesce(json_agg(r ORDER BY r.id), '[]'::json) FROM {t.schema}.{t.name} r"
+        " WHERE r.institution_id = :tenant)" for t in TABLES) + ")")
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def export(self, institution_id: UUID) -> dict[str, list[dict]]:
+        try:
+            # The teaching-input tables use forced institution RLS keyed on this transaction-local setting.
+            await self.session.execute(text("SELECT set_config('schedence.institution_id', :tenant, true)"),
+                                       {"tenant": str(institution_id)})
+            return await self.session.scalar(self.EXPORT, {"tenant": institution_id})
+        except (SQLAlchemyError, OSError) as exc:
+            raise PersistenceError(describe_db_error(exc)) from None
+
+
 class SqlAcademicUnitOfWork:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -155,6 +179,7 @@ class SqlAcademicUnitOfWork:
         self.positions = SqlPositionRepository(session)
         self.appointments = SqlAppointmentRepository(session)
         self.audit = SqlAuditRepository(session)
+        self.teaching_inputs = SqlTeachingInputRepository(session)
 
     async def commit(self) -> None:
         await self._translate(self.session.commit())
