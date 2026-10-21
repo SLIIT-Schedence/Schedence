@@ -203,6 +203,21 @@ def configure_form_sending(runtime, settings, *, http=None):
     runtime.form_sending = FormSending(SqlFormSendingStore(runtime.forms), directory, settings.teaching_forms_public_origin)
 
 
+def configure_form_sending(runtime, settings):
+    """New sending writes are opt-in and restricted to the isolated development result store."""
+    from schedence_teaching.forms.directory import AcademicLecturerDirectory
+    from schedence_teaching.forms.sending import FormSending
+    from schedence_teaching.forms.sending_store import SqlFormSendingStore
+    target = runtime.forms.factory.kw["bind"].url
+    if (settings.app_env != "development" or settings.teaching_generation_mode != "DURABLE_ISOLATED"
+            or target.get_backend_name() != "postgresql" or target.host not in {"127.0.0.1", "localhost", "::1"}
+            or runtime.readiness is None):
+        raise ValueError("Form sending requires isolated loopback PostgreSQL and a restricted Academic owner reader")
+    runtime.form_sending = FormSending(SqlFormSendingStore(runtime.forms),
+        AcademicLecturerDirectory(runtime.readiness.engines["academic"], runtime.readiness.target),
+        settings.teaching_forms_public_origin)
+
+
 def validate_prepared_mode(settings):
     if settings.teaching_generation_prepared_manifest is not None and (
             settings.app_env != "development" or settings.teaching_generation_mode != "DURABLE_ISOLATED"
