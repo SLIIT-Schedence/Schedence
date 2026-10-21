@@ -1,0 +1,124 @@
+{
+  "format": "schedence-reviewed-module-mappings/v1",
+  "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+  "target": {
+    "database": "neondb",
+    "neon_project_id": "super-leaf-21551515",
+    "neon_branch_id": "br-dry-darkness-b549ci92"
+  },
+  "mappings": [
+    {
+      "academic_id": "9d1bf5bd-dd24-4e16-95f4-91988437f8f7",
+      "academic_code": "IT3060",
+      "academic_name": "Human Computer Interaction",
+      "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+      "academic_year": 3,
+      "semester": 1,
+      "degree_type": "Local",
+      "credits": 3,
+      "programs": [
+        "DS",
+        "IT"
+      ],
+      "source_id": "39893d91-b87d-450b-80bb-e9c5392503df",
+      "source_row": 111,
+      "source_sha256": "298297c521e8bb4fe04d82febd13a81dc0750faac401836ffb122f7a1a6fda78",
+      "exam_id": null,
+      "exam_code": null,
+      "exam_name": null,
+      "decision": "VERIFIED_ACADEMIC_ONLY"
+    },
+    {
+      "academic_id": "358eb637-c63d-40fb-83a6-958565563c46",
+      "academic_code": "IE3030",
+      "academic_name": "Wide area Networks",
+      "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+      "academic_year": 3,
+      "semester": 1,
+      "degree_type": "Local",
+      "credits": 4,
+      "programs": [
+        "CSNE"
+      ],
+      "source_id": "39893d91-b87d-450b-80bb-e9c5392503df",
+      "source_row": 40,
+      "source_sha256": "298297c521e8bb4fe04d82febd13a81dc0750faac401836ffb122f7a1a6fda78",
+      "exam_id": "IE3030",
+      "exam_code": "IE3030",
+      "exam_name": "Wide Area Networks",
+      "decision": "VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE"
+    },
+    {
+      "academic_id": "ba735af7-648e-4951-94ac-fa68ed69008d",
+      "academic_code": "IT3061",
+      "academic_name": "Massive Data Processing and cloud Computing",
+      "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+      "academic_year": 3,
+      "semester": 1,
+      "degree_type": "Local",
+      "credits": 4,
+      "programs": [
+        "DS"
+      ],
+      "source_id": "39893d91-b87d-450b-80bb-e9c5392503df",
+      "source_row": 112,
+      "source_sha256": "298297c521e8bb4fe04d82febd13a81dc0750faac401836ffb122f7a1a6fda78",
+      "exam_id": "IT3061",
+      "exam_code": "IT3061",
+      "exam_name": "Massive Data Processing and Cloud Computing",
+      "decision": "VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE"
+    },
+    {
+      "academic_id": "956bed92-6cc5-4b16-9e22-58c1a92b66ac",
+      "academic_code": "IT2100",
+      "academic_name": "Probability and Statistics",
+      "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+      "academic_year": 2,
+      "semester": 2,
+      "degree_type": "Both",
+      "credits": 3,
+      "programs": [
+        "CSNE"
+      ],
+      "source_id": "39893d91-b87d-450b-80bb-e9c5392503df",
+      "source_row": 100,
+      "source_sha256": "298297c521e8bb4fe04d82febd13a81dc0750faac401836ffb122f7a1a6fda78",
+      "exam_id": "IT2100",
+      "exam_code": "IT2100",
+      "exam_name": "Probability and Statistics",
+      "decision": "VERIFIED_EXACT_IDENTITY_DESPITE_CODE_COLLISION"
+    }
+  ],
+  "held_records": [
+    {
+      "academic_id": "45ca97cb-bf9b-4b01-8ec5-77808a8aeed9",
+      "module_code": "IT2100",
+      "name": "Employability Skills Development - Seminar (Non-GPA)",
+      "credits": 1,
+      "programs": [
+        "CYBER",
+        "DS",
+        "IM",
+        "ISE",
+        "IT",
+        "SE"
+      ],
+      "decision": "NO_EXAM_MAPPING_DO_NOT_MERGE_OR_RECODE",
+      "unresolved": "Correct official code, if any, needs curriculum-owner confirmation"
+    }
+  ],
+  "module_gate": {
+    "scope": "Previously inspected 91 local Teaching module definitions; not all future modules",
+    "status": "PASS",
+    "exact_exam_matches": 88,
+    "reviewed_case_equivalents": 2,
+    "academic_only": 1,
+    "verified_total": 91,
+    "source_total": 91,
+    "unresolved_current_scope": []
+  },
+  "migration_gate": "NOT_PASSED: backups, target schema/permissions, experimental-data exclusions and a fresh full dry-run remain",
+  "database_changes": 0,
+  "other_unresolved": "IT3080/IT4100/IE4080 discrepancies and 28 Exam-only codes remain outside this reviewed local scope; do not auto-import or merge",
+  "sha256": "95843558bebc9fcc3bf71290597d631ff0027a16d0886c29ec4bdca4a0c6fc47"
+}

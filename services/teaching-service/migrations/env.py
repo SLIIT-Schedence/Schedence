@@ -9,10 +9,11 @@ def include_name(name, type_, parent_names):
     if type_ == "schema":
         return name == "teaching"
     if type_ == "table":
-        # Durable queue constraints are maintained in frozen revision SQL. Its
-        # separate runtime mapping must never be autogen-dropped as "unknown".
+        # Queue and form-draft constraints are maintained in frozen revision SQL.
+        # Their separate mappings must never be autogen-dropped as "unknown".
         return parent_names.get("schema_name") == "teaching" and name not in {
-            "generation_jobs", "generation_job_attempts"}
+            "generation_jobs", "generation_job_attempts", "form_template_drafts",
+            "form_distributions", "form_distribution_recipients"}
     return True
 
 

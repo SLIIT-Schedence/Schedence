@@ -1,0 +1,397 @@
+{
+  "institution_id": "84651d6d-0c8a-470a-a798-5220666fd367",
+  "versions": {
+    "1": {
+      "artifact_sha256": "7ce157405fc1ab956b3767bd25245697bf0d273214c88c4da395ac1fb133225c",
+      "views": {
+        "academic_staff": {
+          "query": "SELECT t.id, t.institution_id, t.staff_number, t.full_name, t.academic_rank, t.employment_status FROM academic.staff t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.employment_status='ACTIVE'",
+          "sources": {
+            "academic.staff": [
+              "id",
+              "institution_id",
+              "staff_number",
+              "full_name",
+              "academic_rank",
+              "employment_status"
+            ]
+          }
+        },
+        "departments": {
+          "query": "SELECT t.id, t.institution_id, t.name, t.source_id FROM academic.departments t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "academic.departments": [
+              "id",
+              "institution_id",
+              "name",
+              "source_id"
+            ]
+          }
+        },
+        "academic_positions": {
+          "query": "SELECT t.id, t.institution_id, t.code, t.name, t.unit_type, t.is_active FROM academic.administrative_position_types t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.is_active",
+          "sources": {
+            "academic.administrative_position_types": [
+              "id",
+              "institution_id",
+              "code",
+              "name",
+              "unit_type",
+              "is_active"
+            ]
+          }
+        },
+        "modules": {
+          "sources": {
+            "academic.modules": [
+              "id",
+              "institution_id",
+              "module_code",
+              "module_name",
+              "academic_year",
+              "semester",
+              "degree_type",
+              "lecture_minutes",
+              "tutorial_minutes",
+              "workshop_minutes",
+              "lab_minutes",
+              "source_id"
+            ]
+          },
+          "query": "SELECT t.id, t.institution_id, t.module_code, t.module_name, t.academic_year, t.semester, t.degree_type, t.lecture_minutes, t.tutorial_minutes, t.workshop_minutes, t.lab_minutes, t.source_id FROM academic.modules t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NOT EXISTS(SELECT 1 FROM academic.modules other WHERE other.institution_id=t.institution_id AND other.module_code=t.module_code AND other.id<>t.id)"
+        },
+        "specializations": {
+          "query": "SELECT t.id, t.institution_id, t.code, t.name, t.source_id FROM academic.specializations t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "academic.specializations": [
+              "id",
+              "institution_id",
+              "code",
+              "name",
+              "source_id"
+            ]
+          }
+        },
+        "module_specializations": {
+          "query": "SELECT t.id, t.institution_id, t.module_id, t.specialization_id FROM academic.module_specializations t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "academic.module_specializations": [
+              "id",
+              "institution_id",
+              "module_id",
+              "specialization_id"
+            ]
+          }
+        },
+        "venues": {
+          "query": "SELECT t.id, t.institution_id, t.venue_code, t.venue_name, t.venue_type, t.capacity, t.building, t.floor, t.lab_specialization, t.source_id FROM resource.venues t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "resource.venues": [
+              "id",
+              "institution_id",
+              "venue_code",
+              "venue_name",
+              "venue_type",
+              "capacity",
+              "building",
+              "floor",
+              "lab_specialization",
+              "source_id"
+            ]
+          }
+        },
+        "staff_teaching_profiles": {
+          "query": "SELECT p.id,p.institution_id,s.id AS staff_id,p.staff_number,p.staff_type,p.department_id FROM academic.staff_teaching_profiles p JOIN academic.staff s ON s.institution_id=p.institution_id AND s.staff_number=p.staff_number WHERE p.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.employment_status='ACTIVE'",
+          "sources": {
+            "academic.staff_teaching_profiles": [
+              "id",
+              "institution_id",
+              "staff_number",
+              "staff_type",
+              "department_id"
+            ],
+            "academic.staff": [
+              "id",
+              "institution_id",
+              "staff_number",
+              "employment_status"
+            ]
+          }
+        },
+        "teaching_assignments": {
+          "query": "SELECT a.id,a.institution_id,a.module_id,s.id AS staff_id,a.staff_number,a.role,a.source_slot FROM academic.module_teaching_teams a JOIN academic.staff s ON s.institution_id=a.institution_id AND s.staff_number=a.staff_number WHERE a.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.employment_status='ACTIVE'",
+          "sources": {
+            "academic.module_teaching_teams": [
+              "id",
+              "institution_id",
+              "module_id",
+              "staff_number",
+              "role",
+              "source_slot"
+            ],
+            "academic.staff": [
+              "id",
+              "institution_id",
+              "staff_number",
+              "employment_status"
+            ]
+          }
+        },
+        "cohort_totals": {
+          "query": "SELECT c.id,c.institution_id,c.cohort_reference,c.academic_year,c.semester,c.stream,c.student_count,c.source_id,s.provenance_kind FROM academic.cohort_totals c JOIN academic.source_datasets s ON s.institution_id=c.institution_id AND s.id=c.source_id WHERE c.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.provenance_kind='UNIVERSITY_SOURCED'",
+          "sources": {
+            "academic.cohort_totals": [
+              "id",
+              "institution_id",
+              "cohort_reference",
+              "academic_year",
+              "semester",
+              "stream",
+              "student_count",
+              "source_id"
+            ],
+            "academic.source_datasets": [
+              "id",
+              "institution_id",
+              "provenance_kind"
+            ]
+          }
+        },
+        "administrative_appointments": {
+          "query": "SELECT t.id, t.institution_id, t.staff_id, t.position_type_id, t.unit_type, t.unit_code, t.effective_from, t.effective_until, t.admin_hours_override FROM academic.staff_administrative_appointments t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.ended_at IS NULL AND t.effective_from<=CURRENT_DATE AND (t.effective_until IS NULL OR t.effective_until>=CURRENT_DATE)",
+          "sources": {
+            "academic.staff_administrative_appointments": [
+              "id",
+              "institution_id",
+              "staff_id",
+              "position_type_id",
+              "unit_type",
+              "unit_code",
+              "effective_from",
+              "effective_until",
+              "admin_hours_override",
+              "ended_at"
+            ]
+          }
+        },
+        "administrative_workload_policies": {
+          "query": "SELECT w.id,p.institution_id,w.position_type_id,w.version,w.admin_hours_per_week,w.combination_rule,w.cap_hours_per_week,w.effective_from,w.effective_until FROM academic.administrative_workload_policies w JOIN academic.administrative_position_types p ON p.id=w.position_type_id WHERE p.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND p.is_active AND w.effective_from<=CURRENT_DATE AND (w.effective_until IS NULL OR w.effective_until>=CURRENT_DATE)",
+          "sources": {
+            "academic.administrative_workload_policies": [
+              "id",
+              "position_type_id",
+              "version",
+              "admin_hours_per_week",
+              "combination_rule",
+              "cap_hours_per_week",
+              "effective_from",
+              "effective_until"
+            ],
+            "academic.administrative_position_types": [
+              "id",
+              "institution_id",
+              "is_active"
+            ]
+          }
+        },
+        "examination_periods": {
+          "query": "SELECT o.institution_id,p.period_code,p.period_name,p.academic_year_label,p.semester,p.start_date,p.end_date,p.day_start_time,p.day_end_time,p.include_saturdays,p.include_sundays,p.exam_kind FROM examinations.seed_exam_periods p CROSS JOIN examinations.exam_dataset_owner o WHERE o.singleton AND o.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "examinations.seed_exam_periods": [
+              "period_code",
+              "period_name",
+              "academic_year_label",
+              "semester",
+              "start_date",
+              "end_date",
+              "day_start_time",
+              "day_end_time",
+              "include_saturdays",
+              "include_sundays",
+              "exam_kind"
+            ],
+            "examinations.exam_dataset_owner": [
+              "singleton",
+              "institution_id"
+            ]
+          }
+        },
+        "published_exam_sessions": {
+          "query": "SELECT t.institution_id,t.timetable_id,t.revision,t.period_code,s.session_id,s.module_code,s.module_name,s.academic_year,s.semester,s.starts_at,s.ends_at,s.duration_minutes,s.candidates FROM examinations.exam_timetables t JOIN examinations.exam_timetable_sessions s ON s.timetable_id=t.timetable_id WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.status='PUBLISHED' AND t.validation_passed",
+          "sources": {
+            "examinations.exam_timetables": [
+              "institution_id",
+              "timetable_id",
+              "revision",
+              "period_code",
+              "status",
+              "validation_passed"
+            ],
+            "examinations.exam_timetable_sessions": [
+              "timetable_id",
+              "session_id",
+              "module_code",
+              "module_name",
+              "academic_year",
+              "semester",
+              "starts_at",
+              "ends_at",
+              "duration_minutes",
+              "candidates"
+            ]
+          }
+        },
+        "published_exam_rooms": {
+          "query": "SELECT t.institution_id,t.timetable_id,t.revision,r.session_id,r.venue_id,r.venue_name,r.venue_type,r.seats,r.exam_capacity FROM examinations.exam_timetables t JOIN examinations.exam_timetable_rooms r ON r.timetable_id=t.timetable_id WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.status='PUBLISHED' AND t.validation_passed",
+          "sources": {
+            "examinations.exam_timetables": [
+              "institution_id",
+              "timetable_id",
+              "revision",
+              "status",
+              "validation_passed"
+            ],
+            "examinations.exam_timetable_rooms": [
+              "timetable_id",
+              "session_id",
+              "venue_id",
+              "venue_name",
+              "venue_type",
+              "seats",
+              "exam_capacity"
+            ]
+          }
+        },
+        "module_source_records": {
+          "query": "SELECT t.id, t.institution_id, t.module_code, t.module_name, t.academic_year, t.semester, t.degree_type, t.lecture_minutes, t.tutorial_minutes, t.workshop_minutes, t.lab_minutes, t.source_id FROM academic.modules t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "academic.modules": [
+              "id",
+              "institution_id",
+              "module_code",
+              "module_name",
+              "academic_year",
+              "semester",
+              "degree_type",
+              "lecture_minutes",
+              "tutorial_minutes",
+              "workshop_minutes",
+              "lab_minutes",
+              "source_id"
+            ]
+          }
+        },
+        "module_code_conflicts": {
+          "query": "SELECT t.institution_id,t.module_code,count(*) AS source_record_count,array_agg(t.id ORDER BY t.id) AS source_record_ids FROM academic.modules t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid GROUP BY t.institution_id,t.module_code HAVING count(*)>1",
+          "sources": {
+            "academic.modules": [
+              "id",
+              "institution_id",
+              "module_code"
+            ]
+          }
+        }
+      },
+      "reader_role": "schedence_teaching_shared_reader"
+    },
+    "2": {
+      "artifact_sha256": "67f64aefee298ac80200ad164b209f7dd2b1c6fdac880e1043aac255367e8f73",
+      "views": {
+        "experimental_student_groups": {
+          "query": "SELECT g.id,g.institution_id,g.allocation_id,g.plan_reference,g.local_group_reference,g.parent_id,g.student_count,a.cohort_total_id,a.specialization_id,'PP1_EXPERIMENTAL'::text AS data_classification FROM academic.pp1_student_groups g JOIN academic.pp1_specialization_allocations a ON a.institution_id=g.institution_id AND a.id=g.allocation_id WHERE g.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "academic.pp1_student_groups": [
+              "id",
+              "institution_id",
+              "allocation_id",
+              "plan_reference",
+              "local_group_reference",
+              "parent_id",
+              "student_count"
+            ],
+            "academic.pp1_specialization_allocations": [
+              "id",
+              "institution_id",
+              "cohort_total_id",
+              "specialization_id"
+            ]
+          }
+        },
+        "scheduling_inputs": {
+          "query": "SELECT t.id, t.institution_id, t.schema_version, t.content_sha256, t.academic_term_reference, t.timezone_name, t.calendar_label, t.expected_occurrences, t.created_at FROM teaching.input_snapshots t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "teaching.input_snapshots": [
+              "id",
+              "institution_id",
+              "schema_version",
+              "content_sha256",
+              "academic_term_reference",
+              "timezone_name",
+              "calendar_label",
+              "expected_occurrences",
+              "created_at"
+            ]
+          }
+        },
+        "validated_draft_sessions": {
+          "query": "SELECT d.id,d.institution_id,d.version_id,v.version_number,v.lifecycle_status,v.academic_complete,d.teaching_date,d.start_minute,d.end_minute,d.delivery_mode,d.staff_reference,d.venue_reference,d.student_count FROM teaching.deliveries d JOIN teaching.timetable_versions v ON v.institution_id=d.institution_id AND v.id=d.version_id WHERE d.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND v.lifecycle_status='DRAFT_VALIDATED' AND v.validation_passed AND v.solver_success",
+          "sources": {
+            "teaching.deliveries": [
+              "id",
+              "institution_id",
+              "version_id",
+              "teaching_date",
+              "start_minute",
+              "end_minute",
+              "delivery_mode",
+              "staff_reference",
+              "venue_reference",
+              "student_count"
+            ],
+            "teaching.timetable_versions": [
+              "id",
+              "institution_id",
+              "version_number",
+              "lifecycle_status",
+              "academic_complete",
+              "validation_passed",
+              "solver_success"
+            ]
+          }
+        },
+        "staff_workload": {
+          "query": "SELECT d.institution_id,d.version_id,d.staff_reference,d.teaching_date,sum(d.end_minute-d.start_minute)::bigint AS assigned_draft_minutes,sum(d.end_minute-d.start_minute)/60.0 AS assigned_draft_hours FROM teaching.deliveries d JOIN teaching.timetable_versions v ON v.institution_id=d.institution_id AND v.id=d.version_id WHERE d.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND v.lifecycle_status='DRAFT_VALIDATED' AND v.validation_passed AND v.solver_success GROUP BY d.institution_id,d.version_id,d.staff_reference,d.teaching_date",
+          "sources": {
+            "teaching.deliveries": [
+              "institution_id",
+              "version_id",
+              "staff_reference",
+              "teaching_date",
+              "start_minute",
+              "end_minute"
+            ],
+            "teaching.timetable_versions": [
+              "id",
+              "institution_id",
+              "lifecycle_status",
+              "validation_passed",
+              "solver_success"
+            ]
+          }
+        },
+        "snapshot_planning_groups": {
+          "query": "SELECT s.institution_id,s.id AS snapshot_id,g->>'group_id' AS group_reference,(g->>'academic_year')::integer AS academic_year,(g->>'semester')::integer AS semester,g->>'stream' AS stream,(g->>'student_count')::integer AS student_count,g->>'parent_group_id' AS parent_group_reference,s.calendar_label FROM teaching.input_snapshots s CROSS JOIN LATERAL jsonb_array_elements((s.payload->>'document_json')::jsonb#>'{teaching_input,student_groups}') g WHERE s.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+          "sources": {
+            "teaching.input_snapshots": [
+              "id",
+              "institution_id",
+              "payload",
+              "calendar_label"
+            ]
+          }
+        }
+      },
+      "reader_role": "schedence_teaching_shared_draft_reader"
+    }
+  }
+}

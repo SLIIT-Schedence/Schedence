@@ -35,6 +35,8 @@ class TeachingSettings(CognitoSettings):
     # Read-only generation input readiness (owner-record validation of a prepared snapshot; never stores or solves).
     teaching_generation_readiness: Literal["DISABLED", "DEVELOPMENT"] = "DISABLED"
     teaching_generation_timezone: str = "Asia/Colombo"
+    teaching_form_sending_enabled: bool = False
+    teaching_forms_public_origin: str = "http://localhost:3000"
 
     @field_validator("identity_service_url")
     @classmethod
@@ -58,6 +60,8 @@ class TeachingRuntime:
     shutdown_hooks: tuple = ()
     generations: object | None = None
     readiness: object | None = None
+    forms: object | None = None
+    form_sending: object | None = None
 
 
 def local_preview_runtime(settings):
@@ -142,7 +146,26 @@ def build_runtime():
         runtime.readiness = readiness_runtime(settings, shared_env)
         runtime.readiness.stored_inputs = prepared_inputs
         runtime.shutdown_hooks += runtime.readiness.shutdown_hooks
+    from schedence_teaching.forms.store import SqlFormTemplateStore
+    runtime.forms = SqlFormTemplateStore(runtime.store.factory)
+    if settings.teaching_form_sending_enabled:
+        configure_form_sending(runtime, settings)
     return runtime
+
+
+def configure_form_sending(runtime, settings):
+    """New sending writes are opt-in and restricted to the isolated development result store."""
+    from schedence_teaching.forms.directory import AcademicLecturerDirectory
+    from schedence_teaching.forms.sending import FormSending
+    from schedence_teaching.forms.sending_store import SqlFormSendingStore
+    target = runtime.forms.factory.kw["bind"].url
+    if (settings.app_env != "development" or settings.teaching_generation_mode != "DURABLE_ISOLATED"
+            or target.get_backend_name() != "postgresql" or target.host not in {"127.0.0.1", "localhost", "::1"}
+            or runtime.readiness is None):
+        raise ValueError("Form sending requires isolated loopback PostgreSQL and a restricted Academic owner reader")
+    runtime.form_sending = FormSending(SqlFormSendingStore(runtime.forms),
+        AcademicLecturerDirectory(runtime.readiness.engines["academic"], runtime.readiness.target),
+        settings.teaching_forms_public_origin)
 
 
 def validate_prepared_mode(settings):

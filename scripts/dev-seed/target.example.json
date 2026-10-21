@@ -1,0 +1,6 @@
+{
+  "environment": "development",
+  "database": "schedence_dev",
+  "neon_project_id": "REPLACE_WITH_DEV_PROJECT_ID",
+  "neon_branch_id": "REPLACE_WITH_NEW_DEV_BRANCH_ID"
+}

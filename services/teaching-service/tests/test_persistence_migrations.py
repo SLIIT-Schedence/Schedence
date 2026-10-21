@@ -42,7 +42,7 @@ def test_frozen_revision_matches_all_postgres_models_and_indexes():
 def test_upgrade_renders_without_credentials_or_any_connection(monkeypatch):
     sql = offline_sql(monkeypatch)
     assert "CREATE SCHEMA IF NOT EXISTS teaching" in sql
-    assert sql.count("CREATE TABLE teaching.") == 13  # Ten history + two queue tables + Alembic history.
+    assert sql.count("CREATE TABLE teaching.") == 16  # History, queue, form drafts/distribution and Alembic history.
     assert "neon.tech" not in sql and "postgresql://" not in sql
     assert "CREATE TABLE academic." not in sql and "CREATE TABLE identity." not in sql
     for table in Base.metadata.sorted_tables:
