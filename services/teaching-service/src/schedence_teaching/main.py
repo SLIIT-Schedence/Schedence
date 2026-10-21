@@ -11,6 +11,8 @@ from .api.routes import router
 from .api.generations import router as generation_router
 from .api.reports import router as report_router
 from .api.readiness import router as readiness_router
+from .forms.routes import router as form_templates_router
+from .forms.sending_routes import router as form_sending_router
 
 
 def create_app(runtime=None):
@@ -57,6 +59,10 @@ def create_app(runtime=None):
     application.include_router(report_router, prefix="/api/teaching")
     application.include_router(readiness_router, prefix="/api/v1/teaching")
     application.include_router(readiness_router, prefix="/api/teaching")
+    application.include_router(form_templates_router, prefix="/api/v1/teaching")
+    application.include_router(form_templates_router, prefix="/api/teaching")
+    application.include_router(form_sending_router, prefix="/api/v1/teaching")
+    application.include_router(form_sending_router, prefix="/api/teaching")
     return application
 
 
