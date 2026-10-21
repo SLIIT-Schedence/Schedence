@@ -11,6 +11,7 @@ from app.scheduling.contracts import SchedulingValidationError, Violation
 from app.scheduling.optimization_policy import OptimizationPolicy, SCORING_VERSION
 from app.scheduling.types import DraftTimetable, InputSnapshot
 from app.scheduling.validation import validate_timetable
+from app.scheduling.runtime_budget import check_budget
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ def _independent_load(module, policy: OptimizationPolicy) -> int:
 
 def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
                        policy: OptimizationPolicy = OptimizationPolicy()) -> TimetableEvaluation:
+    check_budget()
     errors = validate_timetable(snapshot, draft)
     if errors:
         raise SchedulingValidationError(errors)
@@ -97,11 +99,13 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
     windows = sorted({(max(0, x), min(span, x + policy.window_days))
                       for x in (*range(span), *range(1 - policy.window_days, span - policy.window_days + 1))})
     for student, codes in by_student.items():
+        check_budget()
         own = {code: sitting[student, code] for code in codes}
         ordered = sorted(own.values(), key=lambda s: s.start)
         count = len(codes)
         raw = [0] * 5
         for a, b in combinations(ordered, 2):
+            check_budget()
             gap = int((b.start - a.end).total_seconds() // 60)
             high = min(modules[a.module_code].difficulty, modules[b.module_code].difficulty) >= policy.high_difficulty_minimum
             raw[0] += (max(0, policy.difficult_target_minutes - max(gap, policy.preparation_target_minutes))
@@ -120,6 +124,7 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
         single_excess = max(0, *deviations.values())
         load_bound = sum(max(0, value) for value in deviations.values()) - single_excess
         for low, high in windows:
+            check_budget()
             in_window = [c for c in codes if low <= (own[c].start.date() - snapshot.period.start_date).days < high]
             raw[3] = max(raw[3], sum(deviations[c] for c in in_window) - single_excess)
             raw[4] = max(raw[4], len(in_window) - policy.preferred_window_exams)
@@ -140,6 +145,7 @@ def evaluate_timetable(snapshot: InputSnapshot, draft: DraftTimetable,
     middle = len(gaps) // 2
     median = ((gaps[middle] + gaps[(len(gaps) - 1) // 2]) / 2) if gaps else None
     repeat_scores = [student_objectives[s] for s in repeats]
+    check_budget()
     return TimetableEvaluation(
         penalties, objective, objective / denominator, students, same, multi, short, difficult,
         gaps[0] if gaps else None, median, gaps[(len(gaps) - 1) // 10] if gaps else None,

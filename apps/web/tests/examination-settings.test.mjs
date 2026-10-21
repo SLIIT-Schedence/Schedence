@@ -256,6 +256,9 @@ const icons = load("src/components/icon.tsx", { "react/jsx-runtime": jsxRuntime 
 const ui = load("src/components/console/ui.tsx", { "react/jsx-runtime": jsxRuntime, "next/link": { default: (props) => createElement("a", props) }, "@/components/icon": icons });
 const presentation = load("src/lib/examination-presentation.ts", {});
 const styles = { fieldClass: "field", primaryButton: "primary", secondaryButton: "secondary" };
+const preferencesSummary = load("src/app/(examination)/exams/generate/_components/preferences-summary.tsx", {
+  "react/jsx-runtime": jsxRuntime, "@/components/console/ui": ui, "@/lib/examination-settings": lib,
+});
 
 function review(scheduling = schedulingResponse(), seating = seatingResponse()) {
   return { period: { period_code: "FINAL-CYCLE", period_name: "Semester 2 Finals" }, mapping: [], modules: [], draft_count: 0, locked: false, warnings: [],
@@ -278,6 +281,7 @@ function editor(actions, props = {}) {
   const { InstitutionSettingsEditor: SettingsReview } = load("src/app/(examination)/exams/settings/_components/institution-settings-editor.tsx", {
     "react/jsx-runtime": jsxRuntime, react, "@/components/console/ui": ui, "@/lib/examination-presentation": presentation,
     "@/lib/examination-settings": lib, "@/lib/examination-settings-actions": actions, "../../generate/_components/period-calendar": styles,
+    "../../generate/_components/preferences-summary": preferencesSummary,
   });
   const allProps = { review: review(), ...props };
   const render = () => { cursor = 0; return SettingsReview(allProps); };
@@ -299,14 +303,14 @@ function editor(actions, props = {}) {
 test("the editor shows every supported section with real values, defaults and read-only mandatory rules", () => {
   const e = editor({ previewSettingsChange: () => assert.fail("no request on render"), saveSettingsChange: () => assert.fail("no request on render") });
   const html = e.markup();
-  for (const text of ["Exam scheduling", "Permitted exam start times", "08:30", "13:30", "Minimum break between exams", "Maximum rooms per examination",
+  for (const text of ["Recommended Settings", "Exam Rules", "Permitted exam start times", "08:30", "13:30", "Minimum break between exams", "Maximum rooms per examination",
     "Maximum sessions per examination", "Venue and seating", "Current saved value: <strong class=\"text-ink\">50%</strong>", "A304: 80%",
-    "Cognitive load optimization (S1–S5)", "S3 · Same day or very short gap", "Default: 30.", "Fairness protection", "Optimization", "baseline",
-    "Fairness protection is disabled", "Solver configuration", "Advanced settings", "Random seed", "Mandatory rules H1–H11", "Cannot be disabled",
+    "Student Workload", "S3 · Same day or very short gap", "Default: 30.", "Fairness protection", "Optimized mode", "baseline",
+    "Fairness protection is disabled", "Search time", "Advanced Settings", "Random seed", "Mandatory rules H1–H11", "Cannot be disabled",
     "11 mandatory rules confirmed", "Saved for every examination cycle", "For this generation only", "Institution-wide"]) {
     assert.ok(html.includes(text), `Missing ${text}`);
   }
-  assert.match(html, /<details[^>]*><summary[^>]*>Advanced settings/);
+  assert.match(html, /<details[^>]*><summary[^>]*>Advanced Settings/);
   // No control can switch off a hard rule or enable the unsupported automatic relaxation.
   const controls = e.all().filter((node) => node.type === "input" && node.props.type === "checkbox").map((node) => e.text(node) || node.props.id);
   assert.equal(controls.length, 2);
@@ -326,6 +330,24 @@ test("edits show inline errors, reset restores the saved values, and dirty state
   e.button("Reset changes").props.onClick();
   assert.equal(e.input("setting-max_sessions_per_exam").props.value, "3");
   assert.deepEqual(dirty, [true, false]);
+});
+
+test("institution preferences start compact, preserve all values and reveal advanced validation errors", () => {
+  const e = editor({ previewSettingsChange: () => assert.fail("no request on render"), saveSettingsChange: () => assert.fail("no request on render") });
+  const disclosure = (title) => e.all().find((node) => node.type === "details" && e.text(node.props.children?.[0]).startsWith(title));
+  for (const title of ["Exam Rules", "Student Workload", "Fairness", "Advanced Settings"]) assert.equal(disclosure(title).props.open, false, title);
+  const base = lib.settingsForm(e.props.review.scheduling, e.props.review.seating);
+  for (const name of Object.keys(lib.NUMBER_FIELDS)) {
+    assert.equal(e.input(`setting-${name}`).props.value, base[name], name);
+    assert.equal(e.all().filter((node) => node.type === "input" && node.props.id === `setting-${name}`).length, 1, name);
+  }
+  assert.match(e.markup(), /Recommended Settings/);
+  e.input("setting-random_seed").props.onChange({ target: { value: "-1" } });
+  assert.equal(disclosure("Advanced Settings").props.open, true);
+  assert.equal(disclosure("Search and calculation details").props.open, true);
+  assert.equal(e.button("Review changes").props.disabled, true);
+  e.button("Reset changes").props.onClick();
+  assert.equal(e.input("setting-random_seed").props.value, base.random_seed);
 });
 
 test("review, confirm and save call the actions in order and hand the reloaded settings to the wizard", async () => {

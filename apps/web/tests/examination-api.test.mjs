@@ -426,8 +426,10 @@ function renderModules() {
     ...common, "./period-calendar": styles, "@/components/icon": icons, "@/lib/examination-module-browser": moduleBrowser,
   });
   const settingsLib = load("src/lib/examination-settings.ts", {});
+  const preferencesSummary = load("src/app/(examination)/exams/generate/_components/preferences-summary.tsx", { ...common, "@/lib/examination-settings": settingsLib });
   const settings = load("src/app/(examination)/exams/generate/_components/settings-review.tsx", {
     ...common, "./period-calendar": styles, "@/lib/examination-settings": settingsLib,
+    "./preferences-summary": preferencesSummary,
     "@/lib/examination-settings-actions": { previewSettingsChange: () => { throw new Error("No settings request on render"); }, saveSettingsChange: () => { throw new Error("No settings request on render"); } },
   });
   const browser = load("src/app/(examination)/exams/generate/_components/timetable-browser.tsx", { ...common, "./academic-groups": groups, "./period-calendar": styles });
@@ -435,7 +437,6 @@ function renderModules() {
   const resultsLib = load("src/lib/examination-results.ts", { "./examination-evaluation": evaluationLib });
   const evaluation = load("src/app/(examination)/exams/generate/_components/evaluation-dashboard.tsx", { ...common,
     "./period-calendar": styles, "@/lib/examination-evaluation": evaluationLib });
-  const preferencesSummary = load("src/app/(examination)/exams/generate/_components/preferences-summary.tsx", { ...common, "@/lib/examination-settings": settingsLib });
   const panels = load("src/app/(examination)/exams/generate/_components/result-panels.tsx", { ...common, "./period-calendar": styles,
     "@/lib/examination-evaluation": evaluationLib, "@/lib/examination-results": resultsLib, "./evaluation-dashboard": evaluation, "./preferences-summary": preferencesSummary });
   const protectedTables = load("src/app/(examination)/exams/generate/_components/protected-timetables.tsx", {
@@ -460,7 +461,7 @@ function renderModules() {
   });
   return { ...common, ...results, ...panels, ...evaluation, ...preferencesSummary, ...groups, ...settings, ...browser, icons, "@/lib/examination-settings": settingsLib, "@/lib/examination-results": resultsLib, "@/lib/examination-evaluation": evaluationLib, "next/navigation": navigation, "./save-draft": saveDraft,
     "@/lib/examination-selection": selection, "./exam-selection": examSelection, "./generation-calendar": generationCalendar,
-    "./protection-preview": { ProtectionPreview: () => null }, "./protected-timetables": protectedTables };
+    "./protection-preview": { ProtectionPreview: () => null }, "./protected-timetables": protectedTables, "./preferences-summary": preferencesSummary };
 }
 
 // One real-shaped period option (the server builds these from /exam-periods and each /modules mapping).
@@ -740,6 +741,41 @@ test("Balanced restores actual institution workload values and preserves other p
   assert.equal(h.find((node) => node.type === "details" && typeof node.props.onToggle === "function").props.open, true);
 });
 
+test("the minimal preference view keeps technical controls under optional Advanced Settings", async () => {
+  const h = await preferenceHarness();
+  const before = structuredClone(h.props.form);
+  const nodes = (node) => !node || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
+  const advancedInputs = nodes(h.panel("advanced")).filter((node) => node.type === "input").map((node) => node.props.id);
+  for (const name of ["time_limit_seconds", "random_seed", "num_search_workers", "s1_weight", "s2_weight", "s3_weight", "s4_weight", "s5_weight",
+    "difficulty_weight", "credits_weight", "duration_weight", "reference_difficulty", "reference_credits", "reference_duration_minutes",
+    "baseline_budget_percent", "max_individual_increase_points", "max_worst_increase_points"]) assert.ok(advancedInputs.includes(`setting-${name}`), name);
+  assert.equal(h.panel("advanced").props.hidden, true);
+  assert.match(h.html(), /Recommended Settings/);
+  assert.match(h.html(), /Aim for 2 days to prepare/);
+  assert.match(h.html(), /Protection off/);
+  assert.deepEqual(h.props.form, before, "rendering recommendations must never replace saved values");
+  for (const name of Object.keys(h.lib.NUMBER_FIELDS)) assert.equal(h.all().filter((node) => node.type === "input" && node.props.id === `setting-${name}`).length, 1, name);
+  const fairnessLink = h.button("Review fairness limits in Advanced Settings");
+  fairnessLink.props.onClick();
+  assert.equal(h.tab("advanced").props["aria-selected"], true);
+});
+
+test("the default summary shows applied values until Apply and Reset preserves the existing defaults", async () => {
+  const h = await wizardHarness();
+  const summary = () => h.find((node) => node.type === h.modules.PreferenceOverview);
+  assert.equal(summary().props.form.minimum_break_minutes, "60");
+  h.editor().props.onChange({ ...h.editor().props.form, minimum_break_minutes: "90" });
+  assert.equal(summary().props.form.minimum_break_minutes, "60");
+  assert.match(summary().props.status, /edits pending/);
+  h.button("Apply Preferences").props.onClick();
+  assert.equal(summary().props.form.minimum_break_minutes, "90");
+  h.button("Reset to Defaults").props.onClick();
+  assert.equal(summary().props.form.minimum_break_minutes, "60");
+  assert.equal(summary().props.form.time_limit_seconds, "120");
+  assert.equal(summary().props.form.num_search_workers, "4");
+  assert.equal(h.editor().props.showOverview, false, "avoid a second nested overview");
+});
+
 test("fairness limits hide when off without losing values or bypassing validation", async () => {
   const h = await preferenceHarness();
   h.tab("fairness").props.onClick();
@@ -759,7 +795,7 @@ test("fairness limits hide when off without losing values or bypassing validatio
   h.input("setting-max_individual_increase_points").props.onChange({ target: { value: "101" } });
   toggle(false);
   assert.match(h.html(), /A retained fairness limit is invalid/);
-  assert.equal(h.exports.preferenceErrorTabs(h.lib.settingsErrors(h.props.form)).fairness, 1);
+  assert.equal(h.exports.preferenceErrorTabs(h.lib.settingsErrors(h.props.form)).advanced, 1);
 });
 
 test("all supported number controls still update serialized preferences and hidden errors are discoverable", async () => {

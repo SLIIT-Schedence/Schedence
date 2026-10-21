@@ -47,6 +47,8 @@ def permitted_days(period: ExamPeriod) -> tuple[dt.date, ...]:
 
 
 def validate_inputs(snapshot: InputSnapshot) -> tuple[Violation, ...]:
+    from app.scheduling.runtime_budget import check_budget
+    check_budget()
     if type(snapshot) is not InputSnapshot:
         return (Violation("H11", "Scheduling input must be an InputSnapshot."),)
     shapes = data_shape_errors(snapshot.period, snapshot.modules, snapshot.students, snapshot.registrations,
@@ -84,6 +86,7 @@ def validate_inputs(snapshot: InputSnapshot) -> tuple[Violation, ...]:
         if r.registration_type not in ("normal", "repeat"):
             error(f"Unknown registration type for {r.student_id}/{r.module_code}.")
     for m in snapshot.modules:
+        check_budget()
         if not whole_number(m.duration_minutes, 1) or not whole_number(m.reading_time_minutes):
             error(f"Module {m.module_code} needs a positive duration and non-negative whole reading minutes.", "H9")
         if (type(m.has_extra_reading_time) is not bool or (whole_number(m.reading_time_minutes)
@@ -101,6 +104,7 @@ def validate_inputs(snapshot: InputSnapshot) -> tuple[Violation, ...]:
                   f"{m.duration_minutes} minutes.", "H9")
     if not snapshot.policy.errors():
         for m in snapshot.modules:
+            check_budget()
             if whole_number(m.candidate_count, 1) and m.exam_type in dict(snapshot.policy.venue_compatibility):
                 needed = required_sessions(snapshot, m)
                 if needed > snapshot.policy.max_sessions_per_exam:

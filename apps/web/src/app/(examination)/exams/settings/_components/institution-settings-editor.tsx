@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useRef, useState, useTransition } from "react";
+import { type ReactNode, type SyntheticEvent, useRef, useState, useTransition } from "react";
 import { Badge, Card } from "@/components/console/ui";
 import type { ExaminationResult } from "@/lib/examination-api";
 import { HARD_RULES } from "@/lib/examination-presentation";
@@ -11,6 +11,7 @@ import {
 import { previewSettingsChange, saveSettingsChange } from "@/lib/examination-settings-actions";
 import type { CycleReview, SchedulingReview, SeatingReview } from "@/lib/examination-workspace-types";
 import { fieldClass, primaryButton, secondaryButton } from "../../generate/_components/period-calendar";
+import { PreferenceOverview } from "../../generate/_components/preferences-summary";
 
 export function HardRuleDescriptions() {
   return <div className="space-y-2">{HARD_RULES.map(([code, title, description]) => <details key={code} id={`rule-${code}`} className="scroll-mt-24 rounded-lg border border-line p-3"><summary className="cursor-pointer text-sm font-semibold text-ink">{code} · {title}</summary><p className="mt-2 text-sm leading-6 text-muted">{description}</p></details>)}</div>;
@@ -47,6 +48,7 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
   const [transportError, setTransportError] = useState("");
   const [operation, setOperation] = useState<"preview" | "save">("preview");
   const [pending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState({ exam: false, workload: false, fairness: false, advanced: false, calculation: false });
   const revision = useRef(0);
 
   const baseKey = JSON.stringify(base);
@@ -114,15 +116,23 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
     update({ permitted_start_times: [...form.permitted_start_times, newStart].sort() }); setNewStart("");
   };
   const fairnessOff = !form.fairness_enabled;
+  const disclosure = (section: keyof typeof expanded, fields: string[]) => ({
+    open: expanded[section] || fields.some((name) => Boolean(errors[name])),
+    onToggle: (event: SyntheticEvent<HTMLDetailsElement>) => {
+      if (event.target !== event.currentTarget) return;
+      const open = event.currentTarget.open;
+      setExpanded((previous) => ({ ...previous, [section]: open }));
+    },
+  });
 
   return <div className="space-y-5">
     <Card title="Scheduling preferences" description={scheduling.source === "defaults" ? "Using the built-in defaults: nothing has been saved yet." : `Saved settings, version ${scheduling.version}. Seating ruleset ${seating.ruleset_version}.`}
       actions={<Badge tone="neutral">Institution-wide</Badge>}>
-      <div className="grid gap-3 p-5 text-sm leading-6 md:grid-cols-2">
-        <div className="rounded-xl bg-secondary-soft p-4 text-secondary-ink"><h3 className="font-semibold">Saved for every examination cycle</h3>
+      <div className="space-y-3 p-5 text-sm leading-6">
+        <div className="text-muted"><h3 className="font-semibold text-ink">Saved for every examination cycle</h3>
           <p>These are institution defaults for future timetables. Customize one timetable in the Generate wizard. Scheduling defaults do not replace a timetable&apos;s stored preferences; changes to source seating rules are still checked.</p></div>
-        <div className="rounded-xl bg-background p-4 text-muted"><h3 className="font-semibold text-ink">For this generation only</h3>
-          <p>The exam dates chosen in the wizard, the mode (Feasibility or Optimized), the recommended solver profile (4 workers, 120 seconds) and any Advanced Settings changes are used only for that timetable. They are not saved here.</p></div>
+        <details className="text-muted"><summary className="cursor-pointer font-semibold text-primary-strong">For this generation only</summary>
+          <p className="mt-2">The exam dates chosen in the wizard, the mode (Feasibility or Optimized), the recommended solver profile (4 workers, 120 seconds) and any Advanced Settings changes are used only for that timetable. They are not saved here.</p></details>
         {scheduling.status === "invalid" && <div role="alert" className="rounded-xl bg-danger-soft p-4 text-danger md:col-span-2">
           <p className="font-semibold">The saved settings are not valid, so generation is blocked.</p>
           <ul className="mt-1 list-disc pl-5">{scheduling.problems.map((item) => <li key={`${item.rule}-${item.message}`}>{item.rule}: {item.message}</li>)}</ul>
@@ -131,9 +141,12 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
       </div>
     </Card>
 
-    <fieldset disabled={locked} className="space-y-5" aria-busy={pending}>
+    <PreferenceOverview form={form} status={dirty ? "Unsaved changes" : "Institution defaults"}
+      description="Use your institution's saved values as the starting point. Review the selected settings below, then open a group only when you need to make a change." />
+    <fieldset disabled={locked} className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface" aria-busy={pending}>
       <legend className="sr-only">Editable scheduling preferences</legend>
-      <Card title="Exam scheduling" description="When exams may start, and how exams are split across rooms and sittings.">
+      <details {...disclosure("exam", ["permitted_start_times", "minimum_break_minutes", "max_rooms_per_exam", "max_sessions_per_exam", "seating_percentage"])} className="group">
+        <summary className="min-h-14 cursor-pointer px-5 py-4 text-sm font-semibold text-ink">Exam Rules <span className="ml-2 font-normal text-muted">Start times, breaks and rooms</span></summary>
         <div className="grid gap-5 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <p className="text-sm font-medium text-ink">Permitted exam start times</p>
@@ -151,9 +164,7 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
           {field("max_rooms_per_exam", "Leave empty for no limit. A low limit can force large exams into more sittings.", { placeholder: "No limit" })}
           {field("max_sessions_per_exam", "If a module's students do not fit in the rooms at one time, it may be split into up to this many sittings. 1 = never split.")}
         </div>
-      </Card>
-
-      <Card title="Venue and seating" description="How many of each venue's seats are used for exams.">
+      <h3 className="border-t border-line px-5 pt-4 text-sm font-semibold text-ink">Venue and seating</h3>
         <div className="space-y-4 p-5 text-sm text-muted">
           <div>
             <label htmlFor="setting-seating" className="block text-sm font-medium text-ink">Default exam seating (% of normal capacity)</label>
@@ -168,13 +179,13 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
             <p className="mt-1 text-xs">These are kept unchanged when you change the default.</p></div>
           <p>Venues with no exam seats: {seating.unavailable_venues.join(", ") || "None"}</p>
         </div>
-      </Card>
+      </details>
 
-      <Card title="Cognitive load optimization (S1–S5)" description="Used only in Optimized mode, after every mandatory rule is met.">
+      <details {...disclosure("workload", ["short_gap_minutes", "preparation_target_minutes", "difficult_target_minutes", "high_difficulty_minimum", "window_days", "preferred_window_exams"])}>
+        <summary className="min-h-14 cursor-pointer px-5 py-4 text-sm font-semibold text-ink">Student Workload <span className="ml-2 font-normal text-muted">Time to prepare and a balanced exam week</span></summary>
         <div className="space-y-5 p-5">
-          <p className="rounded-xl bg-background p-4 text-sm leading-6 text-muted">The solver first finds a timetable that meets all mandatory rules. In Optimized mode it then tries to lower a total &quot;workload penalty&quot; for all students. Each item below adds to that penalty. A higher weight makes the item matter more compared with the others; 0 ignores it.</p>
-          <div className="grid gap-5 sm:grid-cols-2">{S_ITEMS.map(([name, title, help]) => <div key={name}><p className="text-sm font-semibold text-ink">{title}</p>{field(name, help)}</div>)}</div>
-          <h3 className="text-sm font-semibold text-ink">Thresholds</h3>
+          <p className="text-sm leading-6 text-muted">In Optimized mode, aim for more preparation time and fewer demanding exams close together. These are preferences; all mandatory exam rules still apply.</p>
+          <h3 className="text-sm font-semibold text-ink">Preparation targets</h3>
           <div className="grid gap-5 sm:grid-cols-2">
             {field("short_gap_minutes", `A gap shorter than this counts as very short (S3).${hours(form.short_gap_minutes)}`)}
             {field("preparation_target_minutes", `The preparation time each student should get between exams (S2).${hours(form.preparation_target_minutes)}`)}
@@ -184,34 +195,41 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
             {field("preferred_window_exams", "More exams than this inside one window is penalised (S5).")}
           </div>
         </div>
-      </Card>
+      </details>
 
-      <Card title="Fairness protection" description="Optional limits so no single student is made much worse by optimization.">
+      <details {...disclosure("fairness", ["fairness_enabled"])}>
+        <summary className="min-h-14 cursor-pointer px-5 py-4 text-sm font-semibold text-ink">Fairness <span className="ml-2 font-normal text-muted">Protect individual students</span></summary>
         <div className="space-y-4 p-5 text-sm leading-6">
-          <div className="grid gap-3 md:grid-cols-2">
-            <p className="rounded-xl bg-background p-4 text-muted"><strong className="block text-ink">Optimization</strong>Lowers the total workload penalty of all students together. The total can improve while a few students get a worse timetable.</p>
-            <p className="rounded-xl bg-background p-4 text-muted"><strong className="block text-ink">Fairness protection</strong>Compares each student with the first valid timetable found (the baseline) and refuses changes that make any one student worse by more than the limits below.</p>
-          </div>
+          <p className="text-muted">Fairness protection compares each student&apos;s workload with the first valid timetable found (the baseline). It limits how much harder an individual student&apos;s schedule can become when improving the timetable overall.</p>
           <label className="flex items-start gap-2 font-medium text-ink"><input type="checkbox" checked={form.fairness_enabled} onChange={(event) => update({ fairness_enabled: event.target.checked })} className="mt-1 accent-primary" />
             <span>Turn on fairness protection (Optimized mode only) <span className="block text-xs font-normal text-muted">Default: off.</span></span></label>
           {fairnessOff && <p className="rounded-xl bg-secondary-soft p-4 text-secondary-ink">Fairness protection is disabled. Workload optimization may improve the total score while worsening some candidates&apos; scores; individual fairness limits are not enforced.</p>}
-          <div className="grid gap-5 sm:grid-cols-2">
-            {field("max_individual_increase_points", "How much any one student's workload score (0–100) may rise above the baseline.", { disabled: fairnessOff })}
-            <div>
+          <div>
               <label className="flex items-start gap-2 font-medium text-ink"><input type="checkbox" checked={form.protect_worst_student} disabled={fairnessOff} onChange={(event) => update({ protect_worst_student: event.target.checked })} className="mt-1 accent-primary" />
                 <span>Also protect the worst-off student <span className="block text-xs font-normal text-muted">The highest score among all students may not rise by more than the limit below. Default: on.</span></span></label>
-              {field("max_worst_increase_points", "0 = the worst score may not get worse at all.", { disabled: fairnessOff || !form.protect_worst_student })}
-            </div>
           </div>
+          <p className="text-xs text-muted">Score limits are kept in Advanced Settings. Your values stay saved when protection is off.</p>
           <p className="text-xs text-muted">Automatic loosening of these limits is not supported: if they cannot be met, the baseline timetable is kept.</p>
         </div>
-      </Card>
+      </details>
 
-      <Card title="Solver configuration" description="How long the timetable search may run.">
+      <details {...disclosure("advanced", [...Object.keys(NUMBER_FIELDS).filter((key) => !["minimum_break_minutes", "max_rooms_per_exam", "max_sessions_per_exam", "short_gap_minutes", "preparation_target_minutes", "difficult_target_minutes", "high_difficulty_minimum", "window_days", "preferred_window_exams"].includes(key))])}>
+        <summary className="min-h-14 cursor-pointer px-5 py-4 text-sm font-semibold text-primary-strong">Advanced Settings <span className="ml-2 font-normal text-muted">Optional · technical controls</span></summary>
         <div className="space-y-4 p-5">
+          <p className="text-sm text-muted">Most admins can keep these values. Adjust them only when a specific examination needs different search or scoring behavior.</p>
+          <h3 className="text-sm font-semibold text-ink">Search time</h3>
           {field("time_limit_seconds", `The longest one generation may search. Up to ${API_TIME_LIMIT_SECONDS} seconds from this console. When generating, Optimized mode uses a recommended 120-second profile for that timetable only, and Advanced Settings can change it.`)}
-          <details className="rounded-xl border border-line p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-ink">Advanced settings</summary>
+          <h3 className="pt-2 text-sm font-semibold text-ink">Workload priorities</h3>
+          <p className="text-xs text-muted">Higher weights give a goal more importance. A weight of 0 ignores that goal.</p>
+          <div className="grid gap-5 sm:grid-cols-2">{S_ITEMS.map(([name, title, help]) => <div key={name}><p className="text-sm font-semibold text-ink">{title}</p>{field(name, help)}</div>)}</div>
+          <h3 className="pt-2 text-sm font-semibold text-ink">Fairness score limits</h3>
+          {fairnessOff && <p className="text-xs text-muted">Turn on protection in Fairness to edit these limits. Retained values are still checked when protection is off.</p>}
+          <div className="grid gap-5 sm:grid-cols-2">
+            {field("max_individual_increase_points", "How much any one student's workload score (0–100) may rise above the baseline.", { disabled: fairnessOff })}
+            {field("max_worst_increase_points", "0 = the highest workload score may not get worse at all.", { disabled: fairnessOff || !form.protect_worst_student })}
+          </div>
+          <details {...disclosure("calculation", ["random_seed", "num_search_workers", "baseline_budget_percent", "difficulty_weight", "credits_weight", "duration_weight", "reference_difficulty", "reference_credits", "reference_duration_minutes"])} className="border-t border-line pt-4">
+            <summary className="cursor-pointer text-sm font-semibold text-ink">Search and calculation details</summary>
             <p className="mt-2 text-xs leading-5 text-muted">Technical values. Most institutions keep the defaults.</p>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
               {field("random_seed", "Fixes the search order so the same inputs give the same result.")}
@@ -231,15 +249,16 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
             </dl>
           </details>
         </div>
-      </Card>
+      </details>
     </fieldset>
 
-    <Card title="Mandatory rules H1–H11" description="Always checked for every timetable." actions={<Badge tone="danger">Cannot be disabled</Badge>}>
+    <details className="rounded-xl border border-line bg-surface">
+      <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-ink">Mandatory rules H1–H11 <span className="ml-2"><Badge tone="neutral">Cannot be disabled</Badge></span></summary>
       <div className="space-y-4 p-5">
         <p className="text-sm leading-6 text-muted">These rules have no on/off settings. Some use values from this page (H1 uses the minimum break, H7 the start times, H2 the seating capacity). Changing a value changes what the rule requires; the rule is still always checked. {scheduling.mandatory_rules.length} mandatory rules confirmed by the Examination Service.</p>
         <HardRuleDescriptions />
       </div>
-    </Card>
+    </details>
 
     <Card title="Save changes" description="Review the impact first. Saving needs a reason, which is kept in the settings history.">
       <div className="space-y-4 p-5 text-sm" aria-busy={pending}>
@@ -268,6 +287,7 @@ export function InstitutionSettingsEditor({ review, disabled = false, onDirty, o
               <button type="button" disabled={locked || !confirmed} className={primaryButton} onClick={() => request(true)}>{pending && operation === "save" ? "Saving…" : "Save changes"}</button>
             </>}
         </div>
+        <p className="text-xs leading-5 text-muted">Reset changes restores the loaded institution values. Review changes checks the impact first; Save changes applies the confirmed updates to all examination cycles.</p>
       </div>
     </Card>
   </div>;

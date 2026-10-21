@@ -25,6 +25,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 
 from app.scheduling.contracts import Violation
+from app.scheduling.runtime_budget import check_budget
 
 PROTECTED_STATUSES = ("APPROVED", "PUBLISHED")
 CROSS_RULES = ("X1", "X2")
@@ -154,12 +155,14 @@ def cross_timetable_violations(protected: ProtectedSchedule | None, sessions, *,
     new timetable or ends less than ``minimum_break_minutes`` before it starts (or starts less than that
     after it ends). Students are only counted, never named.
     """
+    check_budget()
     if protected is None or not protected.timetables:
         return ()
     gap = dt.timedelta(minutes=minimum_break_minutes)
     by_venue: dict[str, list] = defaultdict(list)
     by_student: dict[str, list] = defaultdict(list)
     for t, p in protected.sessions:
+        check_budget()
         for venue in p.venue_ids:
             by_venue[venue].append((t, p))
         for student in p.student_ids:
@@ -167,12 +170,14 @@ def cross_timetable_violations(protected: ProtectedSchedule | None, sessions, *,
     rooms: dict[tuple, set[str]] = defaultdict(set)
     students: dict[tuple, set[str]] = defaultdict(set)
     for s in sessions:
+        check_budget()
         for room in s.rooms:
             for t, p in by_venue.get(room.venue_id, ()):
                 if s.start < p.end and p.start < s.end:
                     rooms[s.session_id, s.start, s.end, t.timetable_id, t.period_code, t.status, p.module_code,
                           room.venue_id, p.start, p.end].add(room.venue_id)
             for seat in room.seats:
+                check_budget()
                 for t, p in by_student.get(seat.student_id, ()):
                     if s.start < p.end + gap and p.start < s.end + gap:
                         students[s.session_id, s.module_code, t.timetable_id, t.period_code, t.status,

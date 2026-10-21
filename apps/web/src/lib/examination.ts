@@ -23,10 +23,27 @@ export type ExamModule = {
   module_code: string; module_name: string; academic_year: number; semester: number;
   specializations: string[]; candidate_count: number; delivery_mode: "regular" | "block";
 };
+/** Additional fields returned by ModuleOut. Missing metadata stays unavailable in the UI. */
+export type ExamModuleDetails = ExamModule & {
+  credits?: number | null; difficulty?: number | null; exam_type?: string | null;
+  duration_minutes?: number | null; reading_time_minutes?: number | null;
+  has_extra_reading_time?: boolean | null; has_final_exam?: boolean | null; has_mid_exam?: boolean | null;
+  mid_duration_minutes?: number | null; block_category?: string | null;
+};
 export type ExamVenue = {
   venue_id: string;
   exam_capacity: number;
   available_for_exams: boolean;
+};
+/** VenueOut metadata; unavailable fields are never replaced with capacity estimates. */
+export type ExamVenueDetails = ExamVenue & {
+  venue_name?: string | null; building?: string | null; floor?: number | null; venue_type?: string | null;
+  normal_capacity?: number | null; exam_seating_percentage?: number | null;
+  exam_seating_rule?: "default" | "venue" | null;
+};
+export type ExamVenueBlock = {
+  venue_id: string; block_date: string; start_time: string; end_time: string;
+  source: string; reason: string; source_ref: string | null;
 };
 export type ExamRegistration = { student_id: string; module_code: string; registration_type: string };
 export type TimetableStatus = "DRAFT" | "APPROVED" | "PUBLISHED" | "ARCHIVED";
@@ -97,8 +114,19 @@ export type TimetableListFilter = { period_code?: string; status?: TimetableStat
 
 // React cache deduplicates these reads within a render, never between users or requests.
 export const listExamPeriods = cache(() => examinationRequest<ExamPeriod[]>("/api/v1/exam-periods"));
-export const listExamModules = cache(() => examinationRequest<ExamModule[]>("/api/v1/modules"));
-export const listExamVenues = cache(() => examinationRequest<ExamVenue[]>("/api/v1/venues"));
+export const listExamModules = cache(() => examinationRequest<ExamModuleDetails[]>("/api/v1/modules"));
+export const getExamModule = cache((code: string) => examinationRequest<ExamModuleDetails>(
+  `/api/v1/modules/${encodeURIComponent(code)}`,
+  { sessionExpiredPath: `/login?error=SessionExpired&callbackUrl=${encodeURIComponent(`/exams/modules/${code}`)}` },
+));
+export const listExamVenues = cache(() => examinationRequest<ExamVenueDetails[]>("/api/v1/venues"));
+export const listExamVenueBlocks = cache((venueId: string) => examinationRequest<ExamVenueBlock[]>(
+  "/api/v1/venue-blocks", { query: { venue_id: venueId } },
+));
+/** Assignment inspection includes MID/FINAL and all statuses; versions are never combined. */
+export const listVenueTimetables = cache(() => examinationRequest<Page<SavedTimetable>>(
+  "/api/v1/timetables", { query: { limit: 100, offset: 0 } },
+));
 // Only the total is displayed; do not send registration records to a client component.
 export const getExamRegistrationTotal = cache(async () => {
   const result = await examinationRequest<Page<ExamRegistration>>("/api/v1/registrations", { query: { limit: 1, offset: 0 } });

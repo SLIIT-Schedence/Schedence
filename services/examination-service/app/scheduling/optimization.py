@@ -16,6 +16,7 @@ from app.scheduling.types import DraftTimetable, InputSnapshot, SolveStatus
 from app.scheduling.validation import validate_timetable
 from app.scheduling.fairness_policy import FairnessPolicy
 from app.scheduling.fairness import FairnessComparison, compare_fairness
+from app.scheduling.local_repair import LocalRepairLimits, MAX_REPAIR_SECONDS, repair_timetable
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,9 @@ class OptimizationResult:
     fairness_policy: FairnessPolicy = FairnessPolicy()
     fairness_comparison: FairnessComparison | None = None
     fairness_configuration_fingerprint: str = ""
+    local_repair_moves: int = 0
+    local_repair_candidates: int = 0
+    local_repair_seconds: float = 0.0
 
 
 def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = SolverSettings(),
@@ -102,6 +106,10 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
     improved = False
     bound = relative_gap = None
     violations = ()
+    # Reserve a small part of the SAME request deadline for Semester 1 repair.
+    # CP-SAT, its hard model and S1-S5 formulas are unchanged.
+    repair_budget = (min(MAX_REPAIR_SECONDS, settings.time_limit_seconds * 0.1, remaining_time())
+                     if snapshot.period.semester == 1 and baseline is not None else 0.0)
     if remaining_time() > 0:
         try:
             # Preserve the optional dependency boundary used by Phase 1 and the API.
@@ -131,7 +139,7 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
             violations = exc.violations
         else:
             # Building the objective model takes real time; skip the search if nothing is left.
-            remaining = remaining_time()
+            remaining = max(0.0, remaining_time() - repair_budget)
             if remaining > 0:
                 solver = cp_model.CpSolver()
                 solver.parameters.max_time_in_seconds = remaining
@@ -161,6 +169,17 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
                 elif attempt_status == SolveStatus.INFEASIBLE and baseline is not None:
                     violations = (Violation("OPTIMIZATION", "Optimizer rejected a known valid baseline; model consistency failure."),)
                     attempt_status = SolveStatus.MODEL_INVALID
+    repair = None
+    if (repair_budget > 0 and remaining_time() > 0 and selected is not None
+            and attempt_status != SolveStatus.OPTIMAL and not violations):
+        repair = repair_timetable(snapshot, selected, baseline, policy, fairness=fairness,
+            limits=LocalRepairLimits(time_limit_seconds=min(repair_budget, remaining_time())), deadline=deadline)
+        if repair.accepted_moves:
+            selected, selected_evaluation = repair.timetable, repair.evaluation
+            improved = selected_evaluation.objective_units < baseline_evaluation.objective_units
+        diagnostics.append(f"Local repair accepted {repair.accepted_moves} validated move(s) from "
+                           f"{repair.candidates_considered} candidate(s); original-baseline fairness retained."
+                           + (" Repair deadline reached." if repair.budget_exhausted else ""))
     if selected_evaluation and bound is not None:
         relative_gap = max(0.0, selected_evaluation.objective_units - bound) / max(1, abs(selected_evaluation.objective_units))
     if selected is baseline and baseline is not None:
@@ -182,4 +201,7 @@ def optimize_timetable(snapshot: InputSnapshot, settings: SolverSettings = Solve
         improved=improved, optimization_status=attempt_status, violations=violations,
         diagnostics=tuple(diagnostics), solver_time_seconds=solver_time,
         total_time_seconds=time.perf_counter() - began, objective_bound_units=bound,
-        relative_gap=relative_gap, solver_version=version("ortools"), fairness_comparison=comparison, **common)
+        relative_gap=relative_gap, solver_version=version("ortools"), fairness_comparison=comparison,
+        local_repair_moves=repair.accepted_moves if repair else 0,
+        local_repair_candidates=repair.candidates_considered if repair else 0,
+        local_repair_seconds=repair.elapsed_seconds if repair else 0.0, **common)

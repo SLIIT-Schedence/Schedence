@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from app.scheduling.types import InputSnapshot
 from app.sources.types import Module
+from app.scheduling.runtime_budget import check_budget
 
 
 def origin(snapshot: InputSnapshot) -> dt.datetime:
@@ -19,12 +20,15 @@ def minute_offset(snapshot: InputSnapshot, instant: dt.datetime) -> int:
 
 def allowed_starts(snapshot: InputSnapshot, module: Module) -> list[int]:
     duration = dt.timedelta(minutes=module.duration_minutes + module.reading_time_minutes)
-    return sorted(minute_offset(snapshot, start)
-                  for day in snapshot.period.exam_days
-                  for clock in snapshot.policy.permitted_start_times
-                  for start in (dt.datetime.combine(day, clock),)
-                  if clock >= snapshot.period.day_start_time
-                  and duration <= dt.datetime.combine(day, snapshot.period.day_end_time) - start)
+    starts = []
+    for day in snapshot.period.exam_days:
+        for clock in snapshot.policy.permitted_start_times:
+            check_budget()
+            start = dt.datetime.combine(day, clock)
+            if (clock >= snapshot.period.day_start_time
+                    and duration <= dt.datetime.combine(day, snapshot.period.day_end_time) - start):
+                starts.append(minute_offset(snapshot, start))
+    return sorted(starts)
 
 
 def _union(spans) -> list[tuple[int, int]]:

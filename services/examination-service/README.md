@@ -1358,3 +1358,30 @@ not cohort-filtered. Unsupported/missing cohorts are unavailable, not inferred f
 Soft targets are preferences, not guarantees or validated measurements of stress.
 
 Focused local checks (no database): `python -m pytest -q tests/test_preparation_analysis.py`.
+
+### Bounded Semester 1 local repair
+
+Optimized Semester 1 generation reserves up to 10% of its existing time limit,
+capped at five seconds, for a local repair after CP-SAT. The total request budget
+is not extended. A validated baseline is required; a proven optimal result or an
+invalid solver candidate is not repaired. Feasibility mode and Semester 2 retain
+their existing behavior. CP-SAT models, S1-S5 formulas and scoring configuration
+fingerprints are unchanged.
+
+The pass tries at most 48 candidates and accepts at most three strictly improving
+single-sitting moves. It rotates between exams to avoid spending a short budget
+on one module. Existing rooms, seats, registration assignments, duration and
+reading time remain fixed; split modules stay with CP-SAT. Every acceptance runs
+the full independent H1-H11 and cross-cycle X1/X2 checks, the unchanged S1-S5
+evaluator, and the configured fairness limits relative to the **original**
+baseline, never a moving fairness reference. Fairness may permit limited student
+worsening when its configured allowance is nonzero.
+
+A context-local monotonic deadline is checked within validation, candidate and
+scoring loops. Expiry discards unfinished work and returns the last fully checked
+incumbent; no background search continues and no optimality is claimed. The
+result's diagnostics and `local_repair_moves`, `local_repair_candidates` and
+`local_repair_seconds` fields distinguish repair work from CP-SAT search time.
+The neighborhood is deliberately small: close groups can remain.
+
+Focused synthetic checks: `python -m pytest -q tests/test_local_repair.py`.

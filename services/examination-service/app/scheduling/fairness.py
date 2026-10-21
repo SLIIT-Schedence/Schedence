@@ -7,6 +7,7 @@ from app.scheduling.contracts import SchedulingValidationError, Violation
 from app.scheduling.evaluation import StudentPenalty, TimetableEvaluation
 from app.scheduling.fairness_policy import FairnessPolicy
 from app.scheduling.optimization_policy import OptimizationPolicy
+from app.scheduling.runtime_budget import check_budget
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ def compare_fairness(baseline: TimetableEvaluation, selected: TimetableEvaluatio
     Normalized workload score = 100 * per-student objective / (score_scale * sum(weights)).
     A zero-weight objective has zero fairness scores, never a division by zero.
     """
+    check_budget()
     if type(scoring) is not OptimizationPolicy or type(fairness) is not FairnessPolicy:
         raise SchedulingValidationError((Violation("FAIRNESS", "Expected OptimizationPolicy and FairnessPolicy settings."),))
     if type(baseline) is not TimetableEvaluation or type(selected) is not TimetableEvaluation:
@@ -61,7 +63,10 @@ def compare_fairness(baseline: TimetableEvaluation, selected: TimetableEvaluatio
     individual_allowance = Fraction(str(fairness.max_individual_increase_points))
     worst_allowance = Fraction(str(fairness.max_worst_increase_points))
     violations = []
-    increases = [Fraction(100 * (after[student] - value), denominator) for student, value in before.items()]
+    increases = []
+    for student, value in before.items():
+        check_budget()
+        increases.append(Fraction(100 * (after[student] - value), denominator))
     exceedances = sum(value > individual_allowance for value in increases)
     worst_increase = Fraction(100 * (max(after.values()) - max(before.values())), denominator)
     worst_exceeded = fairness.protect_worst_student and worst_increase > worst_allowance
@@ -70,6 +75,7 @@ def compare_fairness(baseline: TimetableEvaluation, selected: TimetableEvaluatio
             violations.append(Violation("FAIRNESS", f"{exceedances} student(s) exceed the baseline-relative increase limit."))
         if worst_exceeded:
             violations.append(Violation("FAIRNESS", "Worst-student penalty exceeds its baseline-relative limit."))
+    check_budget()
     return FairnessComparison(
         fairness.enabled, not violations if fairness.enabled else None, len(before),
         sum(after[s] < value for s, value in before.items()),

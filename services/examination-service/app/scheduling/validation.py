@@ -8,12 +8,14 @@ from itertools import combinations
 
 from app.scheduling.inputs import validate_inputs
 from app.scheduling.policy import whole_number
+from app.scheduling.runtime_budget import check_budget
 from app.scheduling.protected import cross_timetable_violations
 from app.scheduling.contracts import SchedulingValidationError, frozen_sequence, record_errors, text_errors
 from app.scheduling.types import DraftTimetable, ExamSession, InputSnapshot, RoomAllocation, SeatAllocation, Violation
 
 
 def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tuple[Violation, ...]:
+    check_budget()
     errors = list(validate_inputs(snapshot))
     if errors:
         return tuple(errors)
@@ -26,6 +28,7 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
         errors.extend(text_errors(timetable.input_fingerprint, "draft.input_fingerprint"))
         normalized = []
         for session in sessions:
+            check_budget()
             errors.extend(record_errors((session,), ExamSession, "session", text=("session_id", "module_code", "period_code")))
             rooms = frozen_sequence(session.rooms, "session.rooms", RoomAllocation)
             normalized_rooms = []
@@ -58,6 +61,7 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
     for s in sessions:
         by_module[s.module_code].append(s)
     for code, m in modules.items():
+        check_budget()
         own = by_module.get(code, [])
         expected = _sessions_needed(snapshot, m)
         if len(own) != expected:
@@ -81,6 +85,7 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
     student_times: dict[str, list] = defaultdict(list)
     module_seated: dict[str, Counter[str]] = defaultdict(Counter)  # over all sessions of the module
     for s, rooms in normalized:
+        check_budget()
         m = modules.get(s.module_code)
         if m is None:
             error("H11", f"Session {s.session_id} refers to an unselected module.")
@@ -148,10 +153,12 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
         if module_seated[code] != Counter({student: 1 for student in candidates[code]}):
             error("H10", f"Every candidate for {code} must receive exactly one seat in exactly one session.")
     for venue, sessions in room_times.items():
+        check_budget()
         for a, b in combinations(sessions, 2):
             if a.start < b.end and b.start < a.end:
                 error("H5", f"Sessions {a.session_id} and {b.session_id} overlap in venue {venue}.")
     for student, sessions in student_times.items():
+        check_budget()
         for a, b in combinations(sorted(sessions, key=lambda s: s.start), 2):
             if b.start - a.end < dt.timedelta(minutes=policy.minimum_break_minutes):
                 error("H1", f"Student {student} has overlapping exams or insufficient break.")
@@ -159,6 +166,7 @@ def validate_timetable(snapshot: InputSnapshot, timetable: DraftTimetable) -> tu
     errors.extend(cross_timetable_violations(
         snapshot.protected, [s for s, _ in normalized if isinstance(s.start, dt.datetime) and isinstance(s.end, dt.datetime)],
         minimum_break_minutes=policy.minimum_break_minutes))
+    check_budget()
     return tuple(errors)
 
 
@@ -178,6 +186,7 @@ def _sessions_needed(snapshot: InputSnapshot, module) -> int:
     excluded = {e.excluded_date for e in p.exclusions}
     slots = []  # (start, seats), in time order
     for offset in range((p.end_date - p.start_date).days + 1):
+        check_budget()
         day = p.start_date + dt.timedelta(days=offset)
         if day in excluded or (day.weekday() == 5 and not p.include_saturdays) or (
                 day.weekday() == 6 and not p.include_sundays):
@@ -199,6 +208,7 @@ def _sessions_needed(snapshot: InputSnapshot, module) -> int:
     # most[k]: most seats from at most k non-overlapping sittings among the slots seen so far.
     history = [[0] * (len(slots) + 1)]
     for index, (begin, seats) in enumerate(slots):
+        check_budget()
         before = max((j + 1 for j in range(index) if slots[j][0] + length <= begin), default=0)
         row = [0] + [max(history[-1][k], history[before][k - 1] + seats) for k in range(1, len(slots) + 1)]
         history.append(row)

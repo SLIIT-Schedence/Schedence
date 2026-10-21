@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Set
 from dataclasses import dataclass
 
+from app.scheduling.runtime_budget import check_budget
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -45,6 +47,7 @@ def record_errors(rows, record_type: type, label: str, *, text=(), optional_text
     """Check types before any identifier hashing, sorting, or time comparisons."""
     errors = []
     for index, row in enumerate(rows):
+        check_budget()
         name = f"{label}[{index}]"
         if type(row) is not record_type:
             errors.append(Violation("H11", f"{name} must be a {record_type.__name__}."))

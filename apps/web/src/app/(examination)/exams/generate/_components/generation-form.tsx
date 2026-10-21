@@ -18,8 +18,9 @@ import { ExamSelection } from "./exam-selection";
 import { GenerationCalendar } from "./generation-calendar";
 import { SaveDraftCard } from "./save-draft";
 import { PREFERENCE_TABS, preferenceErrorTabs, SettingsReview, type PreferenceTab } from "./settings-review";
+import { PreferenceOverview } from "./preferences-summary";
 import {
-  effectiveForm, RECOMMENDED_PROFILE, schedulingPreferences, settingsErrors, settingsForm, solverSource, withRecommendedProfile, type SettingsForm,
+  effectiveForm, schedulingPreferences, settingsErrors, settingsForm, solverSource, withRecommendedProfile, type SettingsForm,
 } from "@/lib/examination-settings";
 
 const STEPS = ["Select Exam", "Choose Dates", "Review Modules", "Generate", "Results"];
@@ -197,12 +198,11 @@ export function GenerationForm({ cycles }: { cycles: ExamOption[] }) {
               ["Dates", `${formatDate(calendar.start_date)} – ${formatDate(calendar.end_date)} · ${calendarExamDays(calendar).length} exam days · ${calendar.day_start_time}–${calendar.day_end_time}`],
               ["Modules", `${review.mapping.length} mapped modules · ${review.seating.venue_count} venues`],
               ["Mode", mode === "optimized" ? "Optimized" : "Feasibility"],
-              ["Solver", `${workersLabel(used.num_search_workers)} · ${used.time_limit_seconds}-second limit (${SOLVER_SOURCE[source]})`],
               ["Seating and breaks", `${used.seating_percentage}% default seating · ${used.minimum_break_minutes}-minute break`],
             ] as const).map(([label, value]) => <div key={label}><dt className="text-xs">{label}</dt><dd className="mt-1 font-medium text-ink">{value}</dd></div>)}
           </dl>
           <p className="mt-3 text-xs">{calendar.include_saturdays || calendar.include_sundays ? `Weekends: ${[calendar.include_saturdays && "Saturdays", calendar.include_sundays && "Sundays"].filter(Boolean).join(", ")}` : "Weekends excluded"} · {calendar.exclusions.length} excluded date(s). Venue-specific seating rules still apply.</p>
-          <details className="mt-3 text-xs"><summary className="cursor-pointer font-semibold text-primary-strong">Review all settings in use</summary><p className="mt-2 leading-5">Start times: {used.permitted_start_times.join(", ")} · Minimum break: {used.minimum_break_minutes} minutes · Rooms per exam: {used.max_rooms_per_exam || "No fixed limit"} · Maximum sessions per exam: {used.max_sessions_per_exam}.</p><p className="mt-1 leading-5">Workload weights (S1–S5): {[used.s1_weight, used.s2_weight, used.s3_weight, used.s4_weight, used.s5_weight].join(" / ")} · Fairness protection: {used.fairness_enabled ? "On (Optimized mode)" : "Off"}. Mandatory rules H1–H11 always apply.</p></details>
+          <details className="mt-3 text-xs"><summary className="cursor-pointer font-semibold text-primary-strong">Review all settings in use</summary><p className="mt-2 leading-5">{workersLabel(used.num_search_workers)} · {used.time_limit_seconds}-second limit ({SOLVER_SOURCE[source]}). Start times: {used.permitted_start_times.join(", ")} · Minimum break: {used.minimum_break_minutes} minutes · Rooms per exam: {used.max_rooms_per_exam || "No fixed limit"} · Maximum sessions per exam: {used.max_sessions_per_exam}.</p><p className="mt-1 leading-5">Workload weights (S1–S5): {[used.s1_weight, used.s2_weight, used.s3_weight, used.s4_weight, used.s5_weight].join(" / ")} · Fairness protection: {used.fairness_enabled ? "On (Optimized mode)" : "Off"}. Mandatory rules H1–H11 always apply.</p></details>
         </section>
         <fieldset disabled={pending} className="space-y-5">
           <legend className="sr-only">Generation mode</legend>
@@ -215,12 +215,14 @@ export function GenerationForm({ cycles }: { cycles: ExamOption[] }) {
           </label>)}</div>
           {fields && <ul className="text-sm text-danger">{Object.entries(fields).map(([key, message]) => <li key={key}>{message}</li>)}</ul>}
         </fieldset>
+        <PreferenceOverview form={used} status={settingsDirty ? "Applied settings · edits pending" : source === "recommended" ? "Recommended profile" : "Settings in use"}
+          description="Your next timetable will use these settings. Keep the recommended starting point or open the optional controls below to make changes." />
         <details id="advanced-settings" open={advancedOpen || preferenceErrorCount > 0 || timeLimitError}
           onToggle={(event) => { if (event.target === event.currentTarget) setAdvancedOpen(event.currentTarget.open); }} className="rounded-xl border border-line">
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-primary-strong">Advanced Settings (Optional)</summary>
           <div className="space-y-4 border-t border-line p-4">
-            <p className="text-sm leading-6 text-muted">You can skip this. Optimized mode already uses the recommended profile: {RECOMMENDED_PROFILE.num_search_workers} search workers and a {RECOMMENDED_PROFILE.time_limit_seconds}-second solver limit. Changes here apply to this timetable only. Institution settings, S1–S5 weights and mandatory rules H1–H11 are not changed.</p>
-            {preferenceForm && <SettingsReview key={preferenceSession} review={review} form={preferenceForm} disabled={pending}
+            <p className="text-sm leading-6 text-muted">Optional adjustments for this timetable. Apply your edits before generating, or reset to restore your institution&apos;s values and the recommended search settings. Institution defaults stay unchanged.</p>
+            {preferenceForm && <SettingsReview key={preferenceSession} review={review} form={preferenceForm} disabled={pending} showOverview={false}
               onChange={setPreferenceForm} activeTab={preferenceTab} onTabChange={setPreferenceTab} />}
             <fieldset disabled={pending}>
               <legend className="sr-only">Shorten this run</legend>
@@ -232,7 +234,7 @@ export function GenerationForm({ cycles }: { cycles: ExamOption[] }) {
               <p id="limit-help" className="mt-1 text-xs text-muted">Leave blank to use the solver limit in use ({used.time_limit_seconds} seconds). A shorter time finishes sooner but may give a less balanced timetable. It cannot be longer than that limit.</p>
               <p id="limit-error" role={timeLimitError ? "alert" : undefined} className="mt-1 text-xs text-danger">{timeLimitError ? `Enter a time above 0 and no more than ${limitMax} seconds.` : ""}</p>
             </fieldset>
-            <div role="region" aria-label="Scheduling preference actions" className="space-y-2 rounded-xl border border-line bg-surface p-3">
+            <div role="region" aria-label="Scheduling preference actions" className="sticky bottom-3 z-10 space-y-3 rounded-xl border border-line bg-surface p-4 shadow-lg shadow-ink/5">
               <p role="status" aria-live="polite" className={`text-sm font-medium ${preferenceErrorCount ? "text-danger" : settingsDirty ? "text-secondary-ink" : "text-accent-ink"}`}>
                 {preferenceErrorCount ? `Check ${preferenceErrorCount} preference field${preferenceErrorCount === 1 ? "" : "s"} before applying.` : settingsDirty ? "Unapplied changes. Apply Preferences before generating." : "Preferences applied to this timetable."}
               </p>
@@ -241,7 +243,7 @@ export function GenerationForm({ cycles }: { cycles: ExamOption[] }) {
                 <button type="button" disabled={disabled} className={secondaryButton} onClick={resetPreferences}>Reset to Defaults</button>
                 <button type="button" disabled={disabled || !settingsDirty || preferenceErrorCount > 0} className={primaryButton} onClick={applyPreferences}>Apply Preferences</button>
               </div>
-              <p className="text-xs text-muted">Defaults are the institution settings plus the recommended solver profile.</p>
+              <p className="text-xs text-muted">Apply Preferences uses your edits for this timetable. Reset to Defaults discards them and restores institution settings plus the recommended solver profile.</p>
             </div>
           </div>
         </details>

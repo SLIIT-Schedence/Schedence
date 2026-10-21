@@ -133,6 +133,7 @@ export function BothSemestersForm({ cycles }: { cycles: ExamOption[] }) {
         <p role="status" className="text-sm text-muted">{Object.keys(errors).length ? `Correct ${Object.keys(errors).length} preference field(s).` : dirty ? "Unapplied changes. Apply before generating." : "Shared preferences applied to both timetables."}</p>
         <div className="flex flex-wrap gap-2"><button type="button" className={secondaryButton} disabled={pending} onClick={() => { const f = withRecommendedProfile(settingsForm(reviews[0].scheduling, reviews[0].seating)); setForm(f); setApplied(f); setLimit(""); clear(); }}>Reset to Defaults</button>
           <button type="button" className={primaryButton} disabled={pending || !dirty || Object.keys(errors).length > 0} onClick={() => { setApplied(form); setLimit(""); clear(); }}>Apply Preferences</button></div>
+        <p className="text-xs leading-5 text-muted">Apply Preferences uses your edits for both timetables. Reset to Defaults discards edits and restores institution settings plus the recommended search settings.</p>
       </div>
     </>}
     {step === 3 && reviews && used && <Card title="Generate both timetables"><div className="space-y-4 p-5">

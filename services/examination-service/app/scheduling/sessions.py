@@ -16,6 +16,7 @@ from __future__ import annotations
 from app.scheduling.availability import allowed_starts, merged_blocks
 from app.scheduling.types import InputSnapshot
 from app.sources.types import Module
+from app.scheduling.runtime_budget import check_budget
 
 
 def slot_capacities(snapshot: InputSnapshot, module: Module) -> list[tuple[int, int]]:
@@ -26,6 +27,7 @@ def slot_capacities(snapshot: InputSnapshot, module: Module) -> list[tuple[int, 
     duration = module.duration_minutes + module.reading_time_minutes
     result = []
     for start in allowed_starts(snapshot, module):
+        check_budget()
         end = start + duration
         free = sorted((v.exam_capacity for v in venues
                        if not any(b_start < end and start < b_end for b_start, b_end in blocks.get(v.venue_id, ()))),
@@ -51,6 +53,7 @@ def fewest_sittings(slots: list[tuple[int, int]], duration: int, candidates: int
     size = len(slots)
     best = [[0] * (size + 1) for _ in range(size + 1)]
     for i, (start, seats) in enumerate(slots, 1):
+        check_budget()
         previous = sum(1 for s in starts[:i - 1] if s + duration <= start)  # earlier slots that end in time
         for k in range(1, size + 1):
             best[i][k] = max(best[i - 1][k], best[previous][k - 1] + seats)
