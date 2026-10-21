@@ -142,10 +142,12 @@ def assess(document, owner_rows, institution_id, scope, rules=None, *, snapshot_
     blocked = [dict(academic_year=row.academic_year, stream=row.stream.value, specialization=row.specialization,
                     student_count=row.student_count, scope_status=row.scope_status) for row in scoped.scopes if row.scope_status != "SUPPORTED"]
     expected = len(prepared.sessions)
+    blocked_labels = ', '.join(
+        f"Year {row['academic_year']} {row['specialization']} {row['stream'].lower()}" for row in blocked)
     checks.append(_check("scope", "Selected scope", "MISSING" if not expected else "WARNING" if blocked else "READY",
         "No schedulable sessions in this scope." if not expected else
         f"{expected} sessions for {len(teaching.student_groups)} student groups"
-        + (f"; not scheduled (missing academic mapping): {', '.join(f'Year {b['academic_year']} {b['specialization']} {b['stream'].lower()}' for b in blocked)}." if blocked else ".")))
+        + (f"; not scheduled (missing academic mapping): {blocked_labels}." if blocked else ".")))
     pending = sorted({row.issue_code for row in scoped.issues})
     if pending:
         checks.append(_check("issues", "Unresolved academic requirements", "WARNING",

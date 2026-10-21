@@ -46,6 +46,7 @@ async def authenticate(request: Request, credentials: Annotated[HTTPAuthorizatio
     except JwksUnavailableError:
         raise ApiError(503, "AUTH_UNAVAILABLE", "Signing keys are temporarily unavailable.") from None
     principal = await runtime.permissions.principal_for(token, claims)
+    request.state.teaching_bearer_token = token
     return runtime, principal
 
 
