@@ -12,6 +12,7 @@ const NAV: ConsoleNavItem[] = [
   { href: "/academic/staff", label: "Staff", icon: "badge", detailLabel: "Staff member" },
   { href: "/academic/positions", label: "Positions", icon: "work", detailLabel: "Position" },
   { href: "/academic/timetables", label: "Teaching timetables", icon: "calendar_month" },
+  { href: "/academic/forms", label: "Forms", icon: "edit_note", detailLabel: "Form builder" },
   { href: "/academic/assigned-sessions", label: "Assigned sessions", icon: "menu_book" },
   { href: "/academic/workload", label: "Staff workload", icon: "schedule" },
   { href: "/academic/fairness", label: "Workload fairness", icon: "group" },
