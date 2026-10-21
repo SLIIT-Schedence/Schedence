@@ -1,7 +1,8 @@
 import { cache, type ReactNode } from "react";
-import { Badge, Card } from "@/components/console/ui";
+import { Badge, Card, EmptyState } from "@/components/console/ui";
 import { Icon } from "@/components/icon";
 import type { ApiError } from "@/lib/service-api";
+import type { StaffTeachingVersion } from "@/lib/staff-detail";
 import { allSessions, getWorkloadReport, listTimetables, SESSION_TYPES, type WorkloadStaff } from "@/lib/teaching";
 import { HISTORICAL_PREVIEW_LABEL, modulesTaught, previewStaff, type StaffModule } from "@/lib/teaching-preview";
 
@@ -11,16 +12,15 @@ import { HISTORICAL_PREVIEW_LABEL, modulesTaught, previewStaff, type StaffModule
 
 const NOT_AVAILABLE = "Not available";
 
-type LiveVersion = { versionId: string; label: string; workload: WorkloadStaff | null; modules: StaffModule[] };
-type Live = { status: "ok"; versions: LiveVersion[] } | { status: "empty" } | { status: "error"; error: ApiError };
+export type Live = { status: "ok"; versions: StaffTeachingVersion[] } | { status: "empty" } | { status: "error"; error: ApiError };
 
 /** One read of the institution's validated timetables per request, shared by the modules and workload cards. */
-const liveTeaching = cache(async (institutionId: string, staffNumber: string): Promise<Live> => {
+export const getStaffTeaching = cache(async (institutionId: string, staffNumber: string): Promise<Live> => {
   const listing = await listTimetables(institutionId);
   if (!listing.ok) return { status: "error", error: listing.error };
   const versions = listing.data.items.filter((item) => item.validation_status === "PASSED" && item.scopes.length > 0);
   if (versions.length === 0) return { status: "empty" };
-  const rows: LiveVersion[] = [];
+  const rows: StaffTeachingVersion[] = [];
   for (const version of versions) {
     const [report, sessions] = await Promise.all([
       getWorkloadReport(institutionId, version.version_id),
@@ -29,9 +29,13 @@ const liveTeaching = cache(async (institutionId: string, staffNumber: string): P
     if (!report.ok) return { status: "error", error: report.error };
     if (!sessions.ok) return { status: "error", error: sessions.error };
     const semesters = [...new Set(version.scopes.map((scope) => scope.semester))].sort().join(", ");
+    const streams = [...new Set(version.scopes.map((scope) => scope.stream))].filter(Boolean).map((stream) => stream === "WEEKDAY" ? "Weekday" : "Weekend");
+    const years = [...new Set(version.scopes.map((scope) => scope.academic_year))].filter(Number.isInteger).sort((a, b) => a - b);
     rows.push({
       versionId: version.version_id,
-      label: `Semester ${semesters} · version ${version.version_number} · ${version.lifecycle_status.toLowerCase().replaceAll("_", " ")}`,
+      summary: version,
+      sessions: sessions.data,
+      label: [`Semester ${semesters}`, years.length ? `Year ${years.join(", ")}` : "", ...streams, `version ${version.version_number}`, version.lifecycle_status.toLowerCase().replaceAll("_", " ")].filter(Boolean).join(" · "),
       workload: report.data.staff.find((row) => row.staff_id === staffNumber) ?? null,
       modules: modulesTaught(sessions.data, staffNumber),
     });
@@ -42,7 +46,7 @@ const liveTeaching = cache(async (institutionId: string, staffNumber: string): P
 const hoursText = (value: number | null | undefined) =>
   value === null || value === undefined ? NOT_AVAILABLE : `${Number.isInteger(value) ? value : value.toFixed(1)} h`;
 
-function liveReason(live: Exclude<Live, { status: "ok" }>, institution: string) {
+export function liveReason(live: Exclude<Live, { status: "ok" }>, institution: string) {
   return live.status === "empty"
     ? `${institution} has no validated teaching timetable yet.`
     : `The teaching timetable service didn't return this (${live.error.message})`;
@@ -113,40 +117,8 @@ function ModuleTable({ modules }: { modules: StaffModule[] }) {
   );
 }
 
-export async function AssignedModulesCard({ institutionId, institution, staffNumber, fullName }: {
-  institutionId: string;
-  institution: string;
-  staffNumber: string;
-  fullName: string;
-}) {
-  const [live, preview] = await Promise.all([liveTeaching(institutionId, staffNumber), previewStaff(staffNumber, fullName)]);
-  return (
-    <Card title="Assigned modules" description="Modules this person teaches, with the session types they are responsible for">
-      <div className="divide-y divide-line">
-        <Section title={`Live · ${institution}`}>
-          {live.status === "ok" ? (
-            live.versions.map((version) => (
-              <div key={version.versionId} className="space-y-1">
-                <p className="text-[13px] font-semibold text-muted">{version.label}</p>
-                <ModuleTable modules={version.modules} />
-              </div>
-            ))
-          ) : (
-            <Missing>{liveReason(live, institution)}</Missing>
-          )}
-          <Missing>
-            Module teaching-team assignments are stored by the Academic Data Service, but no API returns them yet.
-          </Missing>
-        </Section>
-        {preview.map((version) => (
-          <Section key={version.versionId} title={`${version.source.run}`} badge={<PreviewBadge />}>
-            <ModuleTable modules={version.modules} />
-            <PreviewNote code={version.source.institution_code} />
-          </Section>
-        ))}
-      </div>
-    </Card>
-  );
+export function AssignedModulesCard({ version }: { version: StaffTeachingVersion }) {
+  return <Card title="Assigned modules" description="Teaching responsibilities in the selected timetable version."><div className="px-5 py-4"><ModuleTable modules={version.modules} /></div></Card>;
 }
 
 export function AvailabilityCard() {
@@ -156,7 +128,7 @@ export function AvailabilityCard() {
     ["Lecturer preferences", "Preferred and Not Preferred day parts are recorded with lecturer preferences."],
   ];
   return (
-    <Card title="Availability" description="When this person can teach, and their stated preferences">
+    <Card title="Availability & preferences" description="Recorded availability and teaching preferences.">
       <dl className="grid gap-4 px-5 py-5 sm:grid-cols-3">
         {rows.map(([label, detail]) => (
           <div key={label} className="min-w-0">
@@ -167,8 +139,7 @@ export function AvailabilityCard() {
         ))}
       </dl>
       <p className="border-t border-line px-5 py-3 text-[13px] leading-5 text-muted">
-        The Academic Data Service stores the imported lecturer preference rows for this institution, but no API returns them
-        yet, so nothing is shown rather than guessed.
+        Availability and preference details are not available in this view yet.
       </p>
     </Card>
   );
@@ -206,35 +177,16 @@ function WorkloadFacts({ row }: { row: WorkloadStaff }) {
   );
 }
 
-export async function TeachingWorkloadCard({ institutionId, institution, staffNumber, fullName }: {
-  institutionId: string;
-  institution: string;
-  staffNumber: string;
-  fullName: string;
-}) {
-  const [live, preview] = await Promise.all([liveTeaching(institutionId, staffNumber), previewStaff(staffNumber, fullName)]);
-  return (
-    <Card title="Teaching workload" description="Assigned teaching hours a week against this person's own target">
-      <div className="divide-y divide-line">
-        <Section title={`Live · ${institution}`}>
-          {live.status === "ok" ? (
-            live.versions.map((version) => (
-              <div key={version.versionId} className="space-y-1">
-                <p className="text-[13px] font-semibold text-muted">{version.label}</p>
-                {version.workload ? <WorkloadFacts row={version.workload} /> : <Missing>This person is not in this version&apos;s workload report.</Missing>}
-              </div>
-            ))
-          ) : (
-            <Missing>{liveReason(live, institution)}</Missing>
-          )}
-        </Section>
-        {preview.map((version) => (
-          <Section key={version.versionId} title={`${version.source.run}`} badge={<PreviewBadge />}>
-            <WorkloadFacts row={version.workload} />
-            <PreviewNote code={version.source.institution_code} />
-          </Section>
-        ))}
-      </div>
-    </Card>
-  );
+export function TeachingWorkloadCard({ version }: { version: StaffTeachingVersion }) {
+  return <Card title="Teaching workload" description="Weekly totals from the selected version’s workload report."><div className="p-5">{version.workload ? <WorkloadFacts row={version.workload} /> : <Missing>This person is not in this version&apos;s workload report.</Missing>}</div></Card>;
+}
+
+export async function HistoricalTeaching({ staffNumber, fullName }: { staffNumber: string; fullName: string }) {
+  const preview = await previewStaff(staffNumber, fullName);
+  return <Card title="Historical experimental previews" description="Saved test runs, separate from this institution’s current teaching records.">
+    {!preview.length ? <EmptyState icon="history" title="No matching historical previews">No enabled historical preview matches this staff number and full name.</EmptyState> : <div className="divide-y divide-line">{preview.map((version) => <details key={version.versionId}>
+      <summary className="cursor-pointer space-y-2 px-5 py-4 text-sm font-semibold text-ink"><span className="mr-3">{version.source.run} · Semester {version.semesters.join(", ")}</span><PreviewBadge /></summary>
+      <div className="divide-y divide-line"><Section title="Assigned modules"><ModuleTable modules={version.modules} /></Section><Section title="Teaching workload"><WorkloadFacts row={version.workload} /></Section><div className="px-5 py-4"><PreviewNote code={version.source.institution_code} /></div></div>
+    </details>)}</div>}
+  </Card>;
 }
