@@ -227,13 +227,13 @@ def test_share_origin_cannot_be_injected(origin):
     with pytest.raises(ValueError): public_origin(origin)
 
 
-def test_sending_configuration_fails_closed_outside_isolated_development():
-    from schedence_teaching.api.runtime import configure_form_sending
-    from sqlalchemy.engine import make_url
-    for env,host,mode in [("production","127.0.0.1","DURABLE_ISOLATED"),
-                          ("development","example.neon.tech","DURABLE_ISOLATED"),
-                          ("development","127.0.0.1","DISABLED")]:
-        runtime = SimpleNamespace(forms=SimpleNamespace(factory=SimpleNamespace(kw={"bind":SimpleNamespace(
-            url=make_url(f"postgresql+psycopg://runtime@{host}/isolated"))})),readiness=None)
-        settings=SimpleNamespace(app_env=env,teaching_generation_mode=mode)
-        with pytest.raises(ValueError): configure_form_sending(runtime,settings)
+def test_sending_configuration_supports_shared_storage_without_readiness():
+    import httpx
+    from schedence_teaching.api.runtime import TeachingSettings, configure_form_sending
+    runtime = SimpleNamespace(forms=SimpleNamespace(factory=object()), readiness=None)
+    settings = TeachingSettings.model_construct(app_env="production", resource_service_url="INVALID-UNUSED-RESOURCE-URL")
+    http = httpx.AsyncClient()
+    configure_form_sending(runtime, settings, http=http)
+    assert runtime.form_sending.directory.requires_bearer_token
+    assert runtime.form_sending.store.templates is runtime.forms
+    asyncio.run(http.aclose())

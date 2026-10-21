@@ -1,5 +1,58 @@
 # Teaching Timetable Service
 
+## Portable API startup and readiness
+
+Use the shared repository `.env` and `python scripts\run_services.py --only teaching`.
+It needs Cognito/Identity settings and Teaching's **restricted**
+`TEACHING_DATABASE_URL` / `TEACHING_DIRECT_DATABASE_URL` in that same file; see
+the root `.env.example`. An owner/BYPASSRLS login fails the existing runtime
+security checks and must not be substituted for the restricted Teaching login.
+No `local-data/` files are required for normal API startup.
+
+`TEACHING_GENERATION_READINESS=ENABLED` is the default in all environments.
+`DEVELOPMENT` remains a compatible alias; `DISABLED` disables only readiness.
+`TEACHING_FORM_SENDING_ENABLED=true` enables permission-checked sending using
+Teaching's own shared database. Neither setting starts CP-SAT or a worker.
+Generation remains explicitly opt-in and disabled by default.
+
+The normal readiness path calls Academic and Resource over GET-only HTTP,
+forwarding the current verified caller's bearer token and authorized institution
+on every request. It has no owner database credentials, database-target pins,
+private workbook paths, or shared token cache. HTTP redirects are rejected;
+owner 401/403 responses remain authorization failures. Teaching's own snapshots
+are read in tenant-bound read-only transactions, with integrity validation and
+an explicit institution predicate in addition to existing RLS. Existing pre-solve
+validation and Scheduling Rules are reused; no solver runs.
+
+Optional readiness/sending/worker configuration failures log a safe warning and
+leave the core runtime available. Missing readiness dependencies produce
+`503 READINESS_UNAVAILABLE`; missing sending dependencies produce
+`503 FORM_SENDING_UNAVAILABLE`. Timetable reads and draft Forms remain usable.
+An authenticated authorized timetable list can return `200` with an empty list
+when no eligible canonical timetable exists.
+
+**Current owner integration blockers:** this checkout's Academic API exposes
+`GET /api/v1/academic/staff`, but not the teaching-input or recipient-directory
+exports below. StaffOut lacks teaching-profile/department allocation data.
+Resource has models/migrations and no HTTP runtime. Therefore a fresh clone can
+start Teaching and use timetables/drafts, but live readiness/sending cannot pass
+until those owners provide the missing APIs. Teaching does not implement or
+pretend to implement routes in another service. See the exact contracts in
+[owner-api-integration.md](docs/owner-api-integration.md).
+
+Readiness prepares from an existing integrity-checked Teaching input snapshot
+in the shared database and verifies it against fresh HTTP owner exports. It
+never loads `pilot-previews/`, creates a synthetic campus timetable, or silently
+changes a historical snapshot. If no snapshot exists, it reports `ready=false`
+with a `prepared-input` MISSING check. The canonical Neon tenant currently has
+no approved input snapshot: the earlier experimental PP1 snapshots were
+deliberately excluded from migration. Importing an approved input/calendar is
+a separate prerequisite, not something readiness guesses or writes.
+
+Legacy explicitly enabled development worker modes still use their existing
+isolated configuration. Those settings are not prerequisites of readiness or
+Forms sending and are not enabled by the shared-env defaults.
+
 The FastAPI service currently exposes `GET /health`. Its Pydantic v2 schemas
 are input contracts for records supplied by the Academic Data Service, which
 owns authoritative staff, module, offering, and group data. These contracts

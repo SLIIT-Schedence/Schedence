@@ -8,7 +8,7 @@ import logging
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, JsonValue
 
 from schedence_teaching.generation.readiness import ReadinessScope
@@ -103,39 +103,46 @@ ReadinessOut.model_rebuild()
 @router.get("", response_model=ReadinessOut, responses={
     403: {"description": "Missing explicit institution-scoped teaching:generate permission"},
     503: {"description": "Readiness is not enabled in this deployment, or an owner service is unavailable"}})
-async def readiness(auth: Annotated[tuple, Depends(authenticate)],
+async def readiness(request: Request, auth: Annotated[tuple, Depends(authenticate)],
                     semester: Annotated[int, Query(ge=1, le=2)],
                     institution_id: Annotated[UUID | None, Query()] = None,
                     academic_year: Annotated[list[Annotated[int, Field(ge=1, le=4)]] | None, Query(max_length=4)] = None,
                     stream: Annotated[list[Literal["WEEKDAY", "WEEKEND"]] | None, Query(max_length=2)] = None):
     """Prepare the institution's inputs for one scope and run the generation pre-solve validation, read-only."""
-    return await assess_readiness(auth, semester, institution_id, academic_year, stream)
+    return await assess_readiness(auth, semester, institution_id, academic_year, stream,
+        bearer_token=request.state.teaching_bearer_token)
 
 
 @router.post("", response_model=ReadinessOut, responses={
     403: {"description": "Missing explicit institution-scoped teaching:generate permission"},
     503: {"description": "Readiness is disabled or an owner service is unavailable"}})
-async def validate_scheduling_rules(body: SchedulingRules, auth: Annotated[tuple, Depends(authenticate)],
+async def validate_scheduling_rules(request: Request, body: SchedulingRules, auth: Annotated[tuple, Depends(authenticate)],
                     semester: Annotated[int, Query(ge=1, le=2)],
                     institution_id: Annotated[UUID | None, Query()] = None,
                     academic_year: Annotated[list[Annotated[int, Field(ge=1, le=4)]] | None, Query(max_length=4)] = None,
                     stream: Annotated[list[Literal["WEEKDAY", "WEEKEND"]] | None, Query(max_length=2)] = None):
     """Validate experimental rules against owner-verified inputs. Never stores a snapshot or starts a solve."""
-    return await assess_readiness(auth, semester, institution_id, academic_year, stream, body)
+    return await assess_readiness(auth, semester, institution_id, academic_year, stream, body,
+        bearer_token=request.state.teaching_bearer_token)
 
 
-async def assess_readiness(auth, semester, institution_id, academic_year, stream, rules=None):
+async def assess_readiness(auth, semester, institution_id, academic_year, stream, rules=None, *, bearer_token=None):
     runtime, principal = auth
     institution = generation_institution(principal, institution_id)
     if getattr(runtime, "readiness", None) is None:
-        raise ApiError(503, "READINESS_DISABLED", "Generation input readiness is not enabled in this deployment.")
+        raise ApiError(503, "READINESS_UNAVAILABLE", "Generation input readiness is not available in this deployment.")
     scope = ReadinessScope(semester=semester, academic_years=frozenset(academic_year or (1, 2, 3, 4)),
                            streams=frozenset(stream or ("WEEKDAY", "WEEKEND")))
     try:
-        result = (await runtime.readiness.assess(institution, scope) if rules is None else
+        if getattr(runtime.readiness, "requires_bearer_token", False):
+            result = await runtime.readiness.assess(institution, scope, rules, bearer_token=bearer_token)
+        else:
+            result = (await runtime.readiness.assess(institution, scope) if rules is None else
                   await runtime.readiness.assess(institution, scope, rules))
+    except ApiError:
+        raise
     except Exception:
-        logger.exception("Generation readiness failed")
+        logger.warning("Generation readiness input validation or owner access failed")
         raise ApiError(503, "READINESS_UNAVAILABLE", "The institution's input records could not be read. Try again shortly.") from None
     return ReadinessOut(institution_id=institution, semester=semester, academic_years=sorted(scope.academic_years),
         streams=sorted(scope.streams), ready=result["ready"], checks=result["checks"], inputs=result["inputs"],

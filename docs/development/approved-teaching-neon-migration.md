@@ -1,5 +1,11 @@
 # Approved additive Teaching / Forms deployment
 
+> Follow-up: the Teaching migration chain has now been reconciled through
+> `20261021_0004`; the two queue tables were added and the existing Forms
+> tables adopted after full definition checks. See
+> [the reconciliation and portable-runtime report](teaching-runtime-portability.md).
+> The selective-deployment account below is the original audit record.
+
 Applied on 2026-10-21 to the existing `neondb`, project
 `super-leaf-21551515`, branch `br-dry-darkness-b549ci92`. No database or
 Neon branch was created. Canonical tenant:

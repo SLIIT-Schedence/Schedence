@@ -41,7 +41,12 @@ class FormSending:
             raise ApiError(404, "NOT_FOUND", "Form distribution not found.")
         return row
 
-    async def send(self, template_id, body, actor, key):
+    async def lecturers(self, institution, bearer_token=None, *, for_user=None):
+        if getattr(self.directory, "requires_bearer_token", False):
+            return await self.directory.eligible(institution, bearer_token=bearer_token, for_user=for_user)
+        return await self.directory.eligible(institution)
+
+    async def send(self, template_id, body, actor, key, *, bearer_token=None):
         data = body.model_dump(mode="json")
         data["audience"]["staff_ids"].sort()
         data["deadline"] = body.deadline.astimezone(timezone.utc).isoformat()
@@ -51,7 +56,7 @@ class FormSending:
             return self.present(previous)
         if body.deadline <= self.clock():
             raise ApiError(422, "INVALID_DEADLINE", "The deadline must be in the future and include a timezone.")
-        lecturers = await self.directory.eligible(body.institution_id)
+        lecturers = await self.lecturers(body.institution_id, bearer_token)
         audience = body.audience
         if audience.kind == "SELECTED":
             selected = set(audience.staff_ids)
@@ -87,9 +92,9 @@ class FormSending:
         if grant is None or "LECTURER" not in grant.roles:
             raise ApiError(403, "LECTURER_REQUIRED", "Lecturer access is required in this institution.")
 
-    async def inbox(self, institution, principal, offset, limit):
+    async def inbox(self, institution, principal, offset, limit, *, bearer_token=None):
         self.lecturer_grant(principal, institution)
-        current = [r for r in await self.directory.eligible(institution)
+        current = [r for r in await self.lecturers(institution, bearer_token, for_user=principal.user_id)
                    if r.identity_user_id == principal.user_id and r.link_status == "READY"]
         if len(current) != 1:
             return (), 0
@@ -97,13 +102,13 @@ class FormSending:
         return tuple(LecturerAssignment(distribution_id=row.id, title=row.frozen_template.title, deadline=row.deadline,
             status="OPEN" if self.clock() < row.deadline else "CLOSED", first_opened_at=opened) for row, opened in rows), total
 
-    async def lecturer_access(self, institution, identifier, principal, *, opened=False):
+    async def lecturer_access(self, institution, identifier, principal, *, opened=False, bearer_token=None):
         self.lecturer_grant(principal, institution)
         # A link is a locator only. Require the frozen identity AND its current unique Academic link.
         recipient = await self.store.recipient_for(institution, identifier, principal.user_id)
         if recipient is None or recipient.link_status != "READY":
             raise ApiError(404, "NOT_FOUND", "Form distribution not found.")
-        current = [r for r in await self.directory.eligible(institution)
+        current = [r for r in await self.lecturers(institution, bearer_token, for_user=principal.user_id)
                    if r.identity_user_id == principal.user_id and r.link_status == "READY"]
         if len(current) != 1 or current[0].staff_id != recipient.staff_id:
             raise ApiError(403, "RECIPIENT_LINK_CHANGED", "Your current staff account link does not authorize this form.")

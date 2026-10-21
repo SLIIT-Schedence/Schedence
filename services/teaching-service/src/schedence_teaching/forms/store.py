@@ -43,6 +43,16 @@ class SqlFormTemplateStore:
                     await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
                 await session.execute(text("SELECT set_config('schedence.institution_id', :tenant, true)"),
                     {"tenant": str(institution)})
+                restricted = await session.scalar(text("""SELECT NOT r.rolsuper AND NOT r.rolbypassrls
+                    AND NOT r.rolcreaterole AND NOT r.rolcreatedb
+                    AND NOT EXISTS(SELECT 1 FROM pg_roles elevated WHERE (elevated.rolsuper OR elevated.rolbypassrls)
+                        AND pg_has_role(current_user,elevated.oid,'MEMBER'))
+                    AND EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=to_regclass('teaching.form_template_drafts')
+                        AND c.relrowsecurity AND c.relforcerowsecurity
+                        AND NOT pg_has_role(current_user,c.relowner,'MEMBER'))
+                    FROM pg_roles r WHERE r.rolname=current_user"""))
+                if restricted is not True:
+                    raise ApiError(503, "FORM_STORE_UNAVAILABLE", "Forms require restricted, tenant-isolated Teaching persistence.")
             yield session
             if not read:
                 await session.commit()

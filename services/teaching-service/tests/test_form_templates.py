@@ -395,6 +395,9 @@ def test_postgres_sessions_set_local_tenant_and_read_only_before_queries():
         bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
         def __init__(self): self.events = []
         async def execute(self, statement, parameters=None): self.events.append((str(statement), parameters))
+        async def scalar(self, statement):
+            self.events.append((str(statement), None))
+            return True  # Restricted PostgreSQL role with forced Forms RLS.
         async def commit(self): self.events.append("commit")
         async def rollback(self): self.events.append("rollback")
         async def close(self): self.events.append("close")

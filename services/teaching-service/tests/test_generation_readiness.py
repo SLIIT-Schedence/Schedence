@@ -38,10 +38,10 @@ def rows(evidence):
                 resource={name: list(values) for name, values in evidence.resource.items()})
 
 
-def test_disabled_by_default_without_false_readiness(api):
+def test_unconfigured_readiness_does_not_claim_ready(api):
     response = api.client.get(BASE, params=dict(semester=1), headers=api.headers)
-    assert response.status_code == 503 and response.json()['error']['code'] == 'READINESS_DISABLED'
-    assert TeachingSettings.model_fields['teaching_generation_readiness'].default == 'DISABLED'
+    assert response.status_code == 503 and response.json()['error']['code'] == 'READINESS_UNAVAILABLE'
+    assert TeachingSettings.model_fields['teaching_generation_readiness'].default == 'ENABLED'
 
 
 @pytest.mark.parametrize('role,permissions', [('ACADEMIC_ADMIN', ['teaching:timetables:read']), ('ACADEMIC_ADMIN', ['teaching:approve']),
@@ -85,9 +85,14 @@ def test_owner_failure_is_unavailable_without_leaking_details(api):
     assert 'secret' not in response.text and 'db.internal' not in response.text
 
 
-def test_production_cannot_enable_readiness():
-    with pytest.raises(ValueError):
-        readiness_runtime(SimpleNamespace(app_env='production'), None)
+def test_production_readiness_uses_http_and_shared_teaching_factory():
+    import httpx
+    settings = TeachingSettings.model_construct(app_env='production')
+    http = httpx.AsyncClient()
+    ready = readiness_runtime(settings, factory=object(), http=http)
+    assert ready.requires_bearer_token and not hasattr(ready, 'engines')
+    import asyncio
+    asyncio.run(http.aclose())
 
 
 def test_prepared_inputs_validate_against_owner_records(database_fixture):
