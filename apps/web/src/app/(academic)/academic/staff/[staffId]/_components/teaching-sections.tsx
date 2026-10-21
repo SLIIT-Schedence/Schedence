@@ -1,8 +1,10 @@
 import { cache, type ReactNode } from "react";
+
 import { Badge, Card, EmptyState } from "@/components/console/ui";
 import { Icon } from "@/components/icon";
 import type { ApiError } from "@/lib/service-api";
 import type { StaffTeachingVersion } from "@/lib/staff-detail";
+
 import { allSessions, getWorkloadReport, listTimetables, SESSION_TYPES, type WorkloadStaff } from "@/lib/teaching";
 import { HISTORICAL_PREVIEW_LABEL, modulesTaught, previewStaff, type StaffModule } from "@/lib/teaching-preview";
 
