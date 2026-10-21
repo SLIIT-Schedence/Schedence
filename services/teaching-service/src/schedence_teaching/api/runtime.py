@@ -21,7 +21,9 @@ class TeachingSettings(CognitoSettings):
     identity_service_url: str = "http://localhost:8001"
     identity_timeout_seconds: float = Field(default=5, gt=0, le=30)
     teaching_database_env_file: Path | None = None
-    teaching_generation_mode: Literal["DISABLED", "DEVELOPMENT", "DURABLE_ISOLATED"] = "DISABLED"
+    # OWNER_API: single-process development worker over the owners' HTTP exports and Teaching's stored snapshots,
+    # saving validated drafts through the restricted runtime role (no owner database logins).
+    teaching_generation_mode: Literal["DISABLED", "DEVELOPMENT", "DURABLE_ISOLATED", "OWNER_API"] = "DISABLED"
     teaching_generation_job_database_config: Path | None = None
     teaching_generation_prepared_manifest: Path | None = None
     teaching_generation_institutions: tuple[UUID, ...] = ()
@@ -47,6 +49,16 @@ class TeachingSettings(CognitoSettings):
     teaching_form_recipients_path: str = "/api/v1/academic/form-recipients"
     teaching_form_self_path: str = "/api/v1/academic/form-recipients/me"
     teaching_forms_public_origin: str = "http://localhost:3000"
+    # Restricted role (migration 20261021_0005) every connection switches to; empty when the login already is it.
+    teaching_database_role: str = "schedence_teaching_runtime"
+
+    @field_validator("teaching_database_role")
+    @classmethod
+    def plain_role_name(cls, value):
+        import re
+        if value and not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", value):
+            raise ValueError("TEACHING_DATABASE_ROLE must be a plain lower-case role name")
+        return value
 
     @field_validator("identity_service_url")
     @classmethod
@@ -89,6 +101,27 @@ def local_preview_runtime(settings):
         store, shutdown_hooks=(http.aclose,))
 
 
+def use_database_role(engine, role):
+    """Run every new connection as the restricted runtime role, so RLS and the security checks see that role.
+
+    SET ROLE is session-level and committed at once: a later transaction rollback or pool reset cannot undo it.
+    """
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_role(dbapi_connection, _record):
+        autocommit = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SELECT current_user")
+            if cursor.fetchone()[0] != role:
+                cursor.execute(f'SET ROLE "{role}"')
+        finally:
+            cursor.close()
+            dbapi_connection.autocommit = autocommit
+
+
 def build_runtime():
     from schedence_db import create_db_engine, create_session_factory, find_env_file, load_settings
     from .store import DatabaseTimetableStore
@@ -107,13 +140,15 @@ def build_runtime():
     # short-lived scripts). Sized by TEACHING_DB_POOL_SIZE / TEACHING_DB_MAX_OVERFLOW.
     from sqlalchemy.pool import AsyncAdaptedQueuePool
     engine = create_db_engine(db, direct=True, hide_parameters=True, poolclass=AsyncAdaptedQueuePool)
+    if settings.teaching_database_role:
+        use_database_role(engine, settings.teaching_database_role)
     http = httpx.AsyncClient(follow_redirects=False)
     runtime = TeachingRuntime(build_verifier(settings),
         IdentityPermissionsClient(settings.identity_service_url, http, timeout=settings.identity_timeout_seconds),
         DatabaseTimetableStore(create_session_factory(engine)), shutdown_hooks=(http.aclose, engine.dispose))
     if settings.teaching_generation_mode != "DISABLED":
         try:
-            configure_generation(runtime, settings, engine, shared_env)
+            configure_generation(runtime, settings, engine, shared_env, http=http)
         except Exception as error:
             runtime.generations = None
             logger.warning("Generation configuration unavailable (%s); other Teaching APIs remain enabled", type(error).__name__)
@@ -132,11 +167,14 @@ def build_runtime():
     return runtime
 
 
-def configure_generation(runtime, settings, engine, shared_env):
+def configure_generation(runtime, settings, engine, shared_env, *, http=None):
     """Legacy opt-in worker setup; isolated from unrelated read/form APIs."""
     from schedence_db import create_db_engine, load_settings
     from .store import DatabaseTimetableStore
     validate_prepared_mode(settings)
+    if settings.teaching_generation_mode == "OWNER_API":
+        configure_owner_api_generation(runtime, settings, http)
+        return
     prepared_inputs = None
     if settings.teaching_generation_mode in {"DEVELOPMENT", "DURABLE_ISOLATED"}:
         from schedence_teaching.generation.inputs import DatabaseGenerationInputs
@@ -184,6 +222,29 @@ def configure_generation(runtime, settings, engine, shared_env):
             runtime.store = DatabaseTimetableStore(repository.factory)
 
 
+def configure_owner_api_generation(runtime, settings, http):
+    """Development worker that reads inputs exactly as readiness does and saves drafts as the restricted role."""
+    from schedence_teaching.generation.http_readiness import DatabasePreparedDocuments, OwnerApiGenerationInputs
+    from schedence_teaching.generation.jobs import DevelopmentGenerationJobs
+    from schedence_teaching.generation.persistence import TeachingDatabasePersistence
+    from schedence_teaching.generation.worker import ProcessGenerationExecutor
+    from schedence_teaching.pilot.__main__ import LOCAL_DATA
+    if settings.app_env == "production":
+        raise ValueError("the single-process OWNER_API worker is a development capability")
+    if http is None:
+        http = httpx.AsyncClient(follow_redirects=False)
+        runtime.shutdown_hooks += (http.aclose,)
+    factory = runtime.store.factory
+    inputs = OwnerApiGenerationInputs(owner_client(settings, http), DatabasePreparedDocuments(factory),
+        academic_path=settings.teaching_academic_inputs_path, resource_path=settings.teaching_resource_inputs_path)
+    executor = ProcessGenerationExecutor(settings.teaching_generation_artifact_directory or LOCAL_DATA / "generation-artifacts")
+    runtime.generations = DevelopmentGenerationJobs(inputs, executor, enabled=True,
+        persistence=TeachingDatabasePersistence(factory),
+        max_timeout_seconds=settings.teaching_generation_max_timeout_seconds,
+        preflight_timeout_seconds=settings.teaching_generation_preflight_timeout_seconds,
+        per_institution_limit=settings.teaching_generation_per_institution_limit)
+
+
 def owner_client(settings, http, *, include_resource=True):
     from .owner_http import OwnerApiClient
     return OwnerApiClient(http, settings.academic_service_url, settings.resource_service_url if include_resource else None,
@@ -201,21 +262,6 @@ def configure_form_sending(runtime, settings, *, http=None):
     directory = ApiLecturerDirectory(owner_client(settings, http, include_resource=False), settings.teaching_form_recipients_path,
         settings.teaching_form_self_path)
     runtime.form_sending = FormSending(SqlFormSendingStore(runtime.forms), directory, settings.teaching_forms_public_origin)
-
-
-def configure_form_sending(runtime, settings):
-    """New sending writes are opt-in and restricted to the isolated development result store."""
-    from schedence_teaching.forms.directory import AcademicLecturerDirectory
-    from schedence_teaching.forms.sending import FormSending
-    from schedence_teaching.forms.sending_store import SqlFormSendingStore
-    target = runtime.forms.factory.kw["bind"].url
-    if (settings.app_env != "development" or settings.teaching_generation_mode != "DURABLE_ISOLATED"
-            or target.get_backend_name() != "postgresql" or target.host not in {"127.0.0.1", "localhost", "::1"}
-            or runtime.readiness is None):
-        raise ValueError("Form sending requires isolated loopback PostgreSQL and a restricted Academic owner reader")
-    runtime.form_sending = FormSending(SqlFormSendingStore(runtime.forms),
-        AcademicLecturerDirectory(runtime.readiness.engines["academic"], runtime.readiness.target),
-        settings.teaching_forms_public_origin)
 
 
 def validate_prepared_mode(settings):

@@ -104,7 +104,7 @@ class GenerationJobOut(InputContract):
     scheduled_occurrences: int = 0
     timetable_version_id: UUID | None = None
     result_snapshot_id: UUID | None = None
-    persistence: Literal["DISABLED", "ISOLATED_POSTGRESQL"]
+    persistence: Literal["DISABLED", "ISOLATED_POSTGRESQL", "TEACHING_DATABASE"]
     scope_completion: Literal["NOT_COMPLETE", "ALL_SELECTED_KNOWN_OCCURRENCES_VALIDATED"] = "NOT_COMPLETE"
     academic_complete: Literal[False] = False
     calendar_label: str
