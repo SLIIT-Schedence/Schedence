@@ -1,10 +1,10 @@
-"""SQLAlchemy implementation of the roster repository (schema ``examinations``, proposed tables).
+"""SQLAlchemy implementation of the roster repository (schema ``examinations``).
 
 The caller owns the session and its transaction; only :meth:`commit` / :meth:`rollback` end it.
 Every statement is built from the model classes (schema-qualified, bound parameters), touches
 only the six duty-roster tables, and uses the database rules as the final guard:
 optimistic ``row_version`` in the ``UPDATE ... WHERE``, partial unique indexes, ``FOR UPDATE``.
-Needs the proposed migration 0012; without it every call answers ``PERSISTENCE_NOT_MIGRATED``.
+Needs migration 0013; missing tables produce ``PERSISTENCE_NOT_MIGRATED``.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ class SqlDutyRosterRepository:
             code, message = _CONSTRAINT_CODES.get(name, ("PERSISTENCE_CONFLICT", "The change conflicts with saved data."))
             raise PersistenceConflict(code, message) from None
         except ProgrammingError as exc:
-            if _sqlstate(exc) == "42P01":  # undefined_table: migration 0012 is not applied
+            if _sqlstate(exc) == "42P01":  # undefined_table: migration 0013 is not applied
                 raise PersistenceConflict(NOT_MIGRATED, "Saved rosters are not set up in this database yet.") from None
             raise
 

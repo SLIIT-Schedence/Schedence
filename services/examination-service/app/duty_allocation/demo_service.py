@@ -4,7 +4,7 @@
   NEON_READ_ONLY to local data. Every result says which source produced it.
 * The snapshot (``M3DemoRecords``) is read-only and cached for ``snapshot_ttl_seconds``.
 * Allocation, swap, replacement and seating results are PREVIEWS held in a small in-memory
-  store (lost on restart, per process). Nothing is saved, approved or published.
+  store (lost on restart, per process). Separate roster endpoints save only when persistence is enabled.
 * The synthetic ``m3_demo`` institution is never merged with the real examination
   institution: if both ids were equal the service refuses to run.
 """
@@ -43,10 +43,10 @@ from app.scheduling.policy import SolverSettings
 DEMO_REFERENCE_PREFIX = "DEMO-UNPUBLISHED:m3_demo/"
 MAX_STORED_RUNS = 25
 SAFEGUARDS = (
-    "Preview only: nothing is saved, approved, published or applied.",
+    "Generation returns previews. Saving a draft requires a separate request and enabled persistence.",
     "Read-only data access (SELECT only, REPEATABLE READ, always rolled back).",
     "Synthetic m3_demo institution; never merged with the real examination institution.",
-    "NEON_READ_ONLY never falls back to local data.",
+    "Neon sources never fall back to local data.",
 )
 
 
@@ -127,9 +127,14 @@ RowSourceFactory = Callable[[Member3DemoSettings], AbstractAsyncContextManager[R
 
 @asynccontextmanager
 async def default_row_source(settings: Member3DemoSettings) -> AsyncIterator[RowSource]:
-    """LOCAL_DEMO -> seed-pack files; NEON_READ_ONLY -> the guarded production read-only reader."""
+    """Explicit CSV, shared Neon or dedicated read-only Neon source; no fallback."""
     if settings.source is DemoSource.LOCAL_DEMO:
         yield CsvRowSource(settings.seed_dir)
+        return
+    if settings.source is DemoSource.NEON_SHARED:
+        from app.duty_allocation.neon_shared import shared_row_source
+        async with shared_row_source(settings) as source:
+            yield source
         return
     async with production_read_only_m3_demo(
             settings.neon_env_file, url_variable=settings.neon_url_variable, expected_host=settings.neon_host,
@@ -140,7 +145,7 @@ async def default_row_source(settings: Member3DemoSettings) -> AsyncIterator[Row
 
 
 class Member3DemoService:
-    def __init__(self, settings: Member3DemoSettings, *, app_env: str, real_institution_id: uuid.UUID,
+    def __init__(self, settings: Member3DemoSettings, *, app_env: str, real_institution_id: uuid.UUID | None = None,
                  row_source: RowSourceFactory = default_row_source, clock: Callable[[], float] = time.monotonic) -> None:
         self.settings, self.app_env, self.real_institution_id = settings, app_env, real_institution_id
         self._row_source, self._clock = row_source, clock
@@ -165,7 +170,7 @@ class Member3DemoService:
         s = self.settings
         if s.source is DemoSource.DISABLED:
             return 503, "M3_DEMO_DISABLED", "The Fairness-Aware Staff Allocation for Examination Duties demo source is disabled. Set M3_DEMO_SOURCE to enable it."
-        if s.institution_id == self.real_institution_id:
+        if self.real_institution_id is not None and s.institution_id == self.real_institution_id:
             return (409, "M3_DEMO_INSTITUTION_CONFLICT",
                     "The synthetic demo institution must differ from the real examination institution.")
         if s.source is DemoSource.LOCAL_DEMO and self.app_env == "production":
@@ -175,6 +180,13 @@ class Member3DemoService:
             return (503, "M3_DEMO_NOT_CONFIGURED",
                     "The selected data source is not configured. Missing: " + ", ".join(missing) + ".")
         return None
+
+    def check_caller_institution(self, institution_id: uuid.UUID | None) -> None:
+        """The service has no single configured institution: each request acts in the institution its permission
+        check resolved. That institution must never be the synthetic m3_demo one, so the two never mix."""
+        if institution_id is not None and institution_id == self.settings.institution_id:
+            raise DemoServiceError(409, "M3_DEMO_INSTITUTION_CONFLICT",
+                                   "The synthetic demo institution must differ from the caller's examination institution.")
 
     def _require_enabled(self) -> None:
         problem = self._gate_problem()
@@ -211,6 +223,8 @@ class Member3DemoService:
     def _describe(self) -> str:
         if self.settings.source is DemoSource.LOCAL_DEMO:
             return "Local synthetic seed pack (no database)"
+        if self.settings.source is DemoSource.NEON_SHARED:
+            return "Existing Neon database, schema m3_demo (synthetic data, read-only inputs)"
         return "Neon production branch, schema m3_demo, dedicated read-only role (synthetic data)"
 
     async def refresh(self) -> Snapshot:

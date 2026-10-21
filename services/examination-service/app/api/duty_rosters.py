@@ -28,9 +28,9 @@ from fastapi import APIRouter, Depends, Path, Query, Request, status
 
 from app.api import duty_roster_schemas as s
 from app.api.deps import DEFAULT_PAGE_SIZE, PERIOD_CODE, Limit, Offset
-from app.auth.context import AuthContext
-from app.auth.dependencies import APPROVE, GENERATE, MANAGE, get_auth, require_any_permission, require_exam_data_access
-from app.auth.principal import Principal
+from app.auth.dependencies import (
+    APPROVE, GENERATE, MANAGE, ExamAccess, current_institution, require_any_permission, require_exam_data_access,
+)
 from app.duty_allocation.demo_service import DemoServiceError, Member3DemoService
 from app.duty_allocation.demo_settings import PersistenceMode
 from app.duty_allocation.persistence.context import DemoRosterContextResolver, violations_json
@@ -44,11 +44,11 @@ from app.duty_allocation.persistence.sql_repository import SqlDutyRosterReposito
 from app.duty_allocation.types import DutyAssignment
 from schedence_db import session_scope
 
-AsRead = Annotated[Principal, Depends(require_exam_data_access)]
-AsGenerate = Annotated[Principal, Depends(require_any_permission(GENERATE))]
-AsApprove = Annotated[Principal, Depends(require_any_permission(APPROVE))]
-AsManage = Annotated[Principal, Depends(require_any_permission(MANAGE))]
-AsRejecter = Annotated[Principal, Depends(require_any_permission(APPROVE, MANAGE))]
+AsRead = Annotated[ExamAccess, Depends(require_exam_data_access)]
+AsGenerate = Annotated[ExamAccess, Depends(require_any_permission(GENERATE))]
+AsApprove = Annotated[ExamAccess, Depends(require_any_permission(APPROVE))]
+AsManage = Annotated[ExamAccess, Depends(require_any_permission(MANAGE))]
+AsRejecter = Annotated[ExamAccess, Depends(require_any_permission(APPROVE, MANAGE))]
 
 TAG = "Fairness-Aware Staff Allocation for Examination Duties (saved drafts and approval)"
 router = APIRouter(prefix="/duty-allocation", tags=[TAG])
@@ -75,9 +75,12 @@ class RosterEnv:
                     "MEMORY mode: working drafts are kept in this process only and are lost on restart."))
 
 
-async def get_env(request: Request, auth: Annotated[AuthContext, Depends(get_auth)]) -> AsyncIterator[RosterEnv]:
+async def get_env(request: Request) -> AsyncIterator[RosterEnv]:
     demo: Member3DemoService = request.app.state.m3_demo_service
     settings = demo.settings
+    # Rosters belong to the institution the route's permission check resolved (it always runs first).
+    institution_id = current_institution(request)
+    demo.check_caller_institution(institution_id)
     problem = settings.persistence_problem()
     if problem is not None:
         code = "M3_PERSISTENCE_DISABLED" if settings.persistence is PersistenceMode.DISABLED else "M3_PERSISTENCE_NOT_CONFIGURED"
@@ -86,12 +89,12 @@ async def get_env(request: Request, auth: Annotated[AuthContext, Depends(get_aut
     resolver = DemoRosterContextResolver(demo)
     if settings.persistence is PersistenceMode.MEMORY:
         repo = MemoryDutyRosterRepository(request.app.state.m3_memory_state)
-        yield RosterEnv(DutyRosterService(repo, resolver, auth.settings.institution_id, published=provider),
-                        settings.persistence, demo, auth.settings.institution_id)
+        yield RosterEnv(DutyRosterService(repo, resolver, institution_id, published=provider),
+                        settings.persistence, demo, institution_id)
         return
     async with session_scope(request.app.state.write_session_factory, commit=False) as session:
-        yield RosterEnv(DutyRosterService(SqlDutyRosterRepository(session), resolver, auth.settings.institution_id,
-                                          published=provider), settings.persistence, demo, auth.settings.institution_id)
+        yield RosterEnv(DutyRosterService(SqlDutyRosterRepository(session), resolver, institution_id,
+                                          published=provider), settings.persistence, demo, institution_id)
 
 
 Env = Annotated[RosterEnv, Depends(get_env)]
@@ -159,7 +162,7 @@ def _replacement_spec(body: s.ReplacementChangeRequest) -> ChangeSpec:
     return ChangeSpec(ChangeKind.REPLACEMENT, _ref(body.duty), None, body.reason, window, preferred)
 
 
-async def _preview(env: RosterEnv, actor: Principal, roster_id: UUID, spec: ChangeSpec) -> s.ChangePreviewOut:
+async def _preview(env: RosterEnv, actor: ExamAccess, roster_id: UUID, spec: ChangeSpec) -> s.ChangePreviewOut:
     roster, proposal, rechecked, context = await env.service.preview_change(actor.user_id, roster_id, spec)
     names = context.staff
     return s.ChangePreviewOut(
@@ -323,10 +326,9 @@ async def reject_change(actor: AsApprove, env: Env, request_id: RequestId, body:
 
 
 @router.post("/change-requests/{request_id}/cancel", **_DECISION)
-async def cancel_change(actor: AsGenerate, auth: Annotated[AuthContext, Depends(get_auth)], env: Env,
-                        request_id: RequestId, body: s.DecisionRequest = s.DecisionRequest()):
+async def cancel_change(actor: AsGenerate, env: Env, request_id: RequestId, body: s.DecisionRequest = s.DecisionRequest()):
     """Cancel an open request: the requester, or a user with examinations:manage."""
-    manager = actor.has_permission(MANAGE, auth.settings.institution_id)
+    manager = actor.principal.has_permission(MANAGE, actor.institution_id)
     return request_out(env, await env.service.cancel_change(actor.user_id, request_id, body.reason, may_cancel_any=manager))
 
 

@@ -46,8 +46,11 @@ async def demo_service_error_handler(request: Request, exc: DemoServiceError) ->
 
 
 def get_demo_service(request: Request) -> Member3DemoService:
-    """The service created with the app (it holds the snapshot cache and the preview store)."""
-    return request.app.state.m3_demo_service
+    """The service created with the app (it holds the snapshot cache and the preview store). Every route's
+    permission check runs first and resolves the caller's institution, which must not be the synthetic one."""
+    service: Member3DemoService = request.app.state.m3_demo_service
+    service.check_caller_institution(getattr(request.state, "exam_institution", None))
+    return service
 
 
 ServiceDep = Annotated[Member3DemoService, Depends(get_demo_service)]

@@ -25,7 +25,7 @@ from the **process environment only** (never from `.env`). The feature is **disa
 
 | Variable | Meaning |
 |---|---|
-| `M3_DEMO_SOURCE` | `DISABLED` (default), `LOCAL_DEMO` or `NEON_READ_ONLY` |
+| `M3_DEMO_SOURCE` | `DISABLED` (default), `LOCAL_DEMO`, `NEON_READ_ONLY` or `NEON_SHARED` |
 | `M3_DEMO_PERIOD_CODE` | default period (`PP1-2026-S2-FINAL`) |
 | `M3_DEMO_INSTITUTION_ID` | synthetic institution (default `11111111-1111-4111-8111-111111111111`); the service refuses to run if it equals the real institution |
 | `M3_DEMO_SNAPSHOT_TTL_SECONDS` | how long the read-only snapshot is reused (default 300) |
@@ -191,22 +191,36 @@ Rules the backend enforces:
   `app.state.m3_published_timetable_provider` once Member 2 provides the contract.
 * Seats are never `VERIFIED` without a verified hall layout; demo seats stay `SYNTHETIC`.
 
-### Tables and migration (not applied)
+### Tables and migration
 
 [persistence/models.py](persistence/models.py) defines six tables in the `examinations` schema: `duty_rosters`,
 `duty_roster_assignments`, `duty_roster_events`, `duty_change_requests`, `seating_drafts`, `seating_draft_seats`. The Alembic
-migration is a **proposal** at
-[proposed_migrations/20261022_0012_duty_roster_persistence.py](../../proposed_migrations/20261022_0012_duty_roster_persistence.py);
-it is outside `alembic/versions` so the shared migration chain and its tests are unchanged, and nothing was run against any
-database. To activate it after review: copy it to `alembic/versions`, register the models on `app.db.base.Base`
-(`app/db/__init__`/`alembic/env.py` imports), run `alembic upgrade head` yourself on a database you chose, then set
+component migration is **0013** in
+[persistence/migrations/20261024_0013_duty_roster_persistence.py](persistence/migrations/20261024_0013_duty_roster_persistence.py).
+Its metadata and revision chain are separate from teammates' tables. Its history is stored in
+`examinations.duty_allocation_alembic_version`; the shared `examinations.alembic_version` is only read.
+The shared Examination Service chain remains at **0012**. Offline tests cover the six component tables and
+its additional migration marker table and assert no shared tables are modified.
+Having the migration in source control does not apply it to a database. Review its SQL, select the intended
+Neon target, apply component migration 0013 with the helper in [NEON_SETUP.md](NEON_SETUP.md), then set
 `M3_DEMO_PERSISTENCE=DATABASE` and the acknowledgement. Without the tables, `DATABASE` mode answers `503 PERSISTENCE_NOT_MIGRATED`.
 
 ## 10. Not implemented yet / external blockers
 
-* Applying the migration (needs your review and approval) and the first real database save.
+* Verifying the first user-saved draft through browser sign-in and the Save draft action.
 * Publishing real rosters: needs Member 2's published-timetable contract and non-synthetic input data.
 * Real timetables: the demo uses a `DEMO-UNPUBLISHED:` reference; full Member 2 H1-H11 validation needs their original input.
 * Verified physical seat layouts (all demo seats stay `SYNTHETIC`).
-* Live Neon read: needs the rotated password, the dedicated read-only role and your confirmations.
+* The optional dedicated-reader mode needs its own role and confirmations. NEON_SHARED uses the existing service configuration.
 * Run / seating previews (sections 5-8) are per process; `MEMORY` drafts are lost on restart.
+
+## 11. Existing Neon database (selected setup)
+
+Follow the first section of [NEON_SETUP.md](NEON_SETUP.md). From the repository root, run
+`.\.venv\Scripts\python.exe scripts/run_duty_allocation.py check`, then the same launcher without
+`check` to start the API. `NEON_SHARED` uses the existing root database configuration, reads `m3_demo`
+in a read-only snapshot, and saves drafts in the six component-owned `examinations` tables.
+No new branch or local database is required. Component migration history is separate from the team's
+shared history, and the migration's SQL guard rejects writes to any teammate-owned table.
+
+This is a database-backed synthetic demonstration, not yet a live academic-data / published-timetable integration.

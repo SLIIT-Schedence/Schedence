@@ -95,8 +95,8 @@ def create_app(auth: AuthContext | None = None, m3_demo: Member3DemoSettings | N
     # each route checks examinations:read (GET) or examinations:generate (POST).
     demo = m3_demo if m3_demo is not None else Member3DemoSettings()
     if demo.source is not DemoSource.DISABLED:
-        app.state.m3_demo_service = Member3DemoService(
-            demo, app_env=auth.settings.app_env, real_institution_id=auth.settings.institution_id)
+        # No institution is configured any more: each request checks its own (see get_demo_service / get_env).
+        app.state.m3_demo_service = Member3DemoService(demo, app_env=auth.settings.app_env)
         app.state.m3_memory_state = MemoryState()  # backs M3_DEMO_PERSISTENCE=MEMORY only
         api.include_router(duty_allocation.router)
         api.include_router(duty_rosters.router)  # saved drafts and approval workflow; 503 until persistence is enabled

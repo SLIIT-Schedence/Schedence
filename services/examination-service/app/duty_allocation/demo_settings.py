@@ -9,6 +9,8 @@ LOCAL_DEMO       reads the synthetic seed-pack CSV files; no database.
 NEON_READ_ONLY   reads ``m3_demo`` through ``demo_production`` (dedicated read-only role,
                  explicit confirmations). The database URL is NOT a setting: it is read from
                  the env file named by ``M3_DEMO_NEON_ENV_FILE`` by ``demo_production`` only.
+NEON_SHARED      uses the existing Neon configuration; inputs are read-only and saved
+                 drafts use only component-owned tables and migration history.
 """
 
 from __future__ import annotations
@@ -30,12 +32,13 @@ class DemoSource(str, Enum):
     DISABLED = "DISABLED"
     LOCAL_DEMO = "LOCAL_DEMO"
     NEON_READ_ONLY = "NEON_READ_ONLY"
+    NEON_SHARED = "NEON_SHARED"
 
 
 class PersistenceMode(str, Enum):
     DISABLED = "DISABLED"  # roster / seating endpoints answer 503 (default)
     MEMORY = "MEMORY"  # working drafts in this process only; lost on restart; for development and demos
-    DATABASE = "DATABASE"  # examinations.duty_* tables (needs the approved migration 0012 and the acknowledgement)
+    DATABASE = "DATABASE"  # examinations.duty_* tables (needs migration 0013 and the acknowledgement)
 
 
 PERSISTENCE_DATABASE_ACKNOWLEDGEMENT = "I APPROVE SAVING SYNTHETIC DRAFTS TO THE EXAMINATIONS SCHEMA"
@@ -44,7 +47,7 @@ PERSISTENCE_DATABASE_ACKNOWLEDGEMENT = "I APPROVE SAVING SYNTHETIC DRAFTS TO THE
 class Member3DemoSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="M3_DEMO_", env_file=None, extra="ignore", case_sensitive=False)
 
-    source: DemoSource = Field(default=DemoSource.DISABLED, description="DISABLED, LOCAL_DEMO or NEON_READ_ONLY.")
+    source: DemoSource = Field(default=DemoSource.DISABLED, description="DISABLED, LOCAL_DEMO, NEON_READ_ONLY or NEON_SHARED.")
     institution_id: uuid.UUID = Field(default=DEMO_INSTITUTION_ID, description="Synthetic institution of m3_demo.")
     period_code: str = Field(default=DEMO_PERIOD_CODE, pattern=r"^[A-Z0-9-]{1,32}$")
     snapshot_ttl_seconds: int = Field(default=300, ge=0, le=86_400)
@@ -69,6 +72,10 @@ class Member3DemoSettings(BaseSettings):
         """Names (never values) of the variables still needed for the chosen source."""
         if self.source is DemoSource.LOCAL_DEMO:
             return () if self.seed_dir is not None else ("M3_DEMO_SEED_DIR",)
+        if self.source is DemoSource.NEON_SHARED:
+            return tuple(name for name, value in {
+                "M3_DEMO_NEON_HOST": self.neon_host, "M3_DEMO_NEON_DATABASE": self.neon_database,
+            }.items() if not value)
         if self.source is not DemoSource.NEON_READ_ONLY:
             return ()
         needed = {"M3_DEMO_NEON_ENV_FILE": self.neon_env_file, "M3_DEMO_NEON_URL_VARIABLE": self.neon_url_variable,
@@ -86,6 +93,6 @@ class Member3DemoSettings(BaseSettings):
         if self.persistence is PersistenceMode.DISABLED:
             return "Saving is disabled. Set M3_DEMO_PERSISTENCE to MEMORY (development) or DATABASE to enable it."
         if self.persistence is PersistenceMode.DATABASE and self.persistence_acknowledgement != PERSISTENCE_DATABASE_ACKNOWLEDGEMENT:
-            return ("DATABASE saving needs M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT and the approved migration 0012; "
+            return ("DATABASE saving needs M3_DEMO_PERSISTENCE_ACKNOWLEDGEMENT and migration 0013; "
                     "it is not configured.")
         return None

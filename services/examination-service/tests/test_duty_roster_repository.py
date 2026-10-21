@@ -1,7 +1,7 @@
-"""Roster repositories: in-memory rules, SQL generation (mock session), models and the proposed migration.
+"""Roster repositories: in-memory rules, SQL generation, models and component-owned migrations.
 
 Nothing here connects to a database. The SQL repository is exercised through a recording fake
-session; the migration is rendered offline (SQL text only) on top of a copy of the active chain.
+session; the component migration is rendered offline (SQL text only).
 """
 
 from __future__ import annotations
@@ -11,14 +11,11 @@ import asyncio
 import datetime as dt
 import io
 import re
-import shutil
 import uuid
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
@@ -387,48 +384,50 @@ def test_overlap_query_filters_status_period_and_interval():
     assert run(SqlDutyRosterRepository(FakeSession()).overlapping_assignments(INST, [], T0, T0, "PP1")) == []
 
 
-# --- Models and the proposed migration -----------------------------------------------------------------------
+# --- Models and the component migration ---------------------------------------------------------------------
 
-def test_models_are_isolated_from_the_shared_metadata():
-    assert set(m.DutyBase.metadata.tables) == {f"examinations.{n}" for n in (
+def duty_tables():
+    return [m.DutyRoster.__table__, m.DutyRosterAssignment.__table__, m.DutyRosterEvent.__table__,
+            m.DutyChangeRequest.__table__, m.SeatingDraft.__table__, m.SeatingDraftSeat.__table__]
+
+
+def test_models_are_isolated_from_teammates_metadata():
+    assert {t.name for t in duty_tables()} == {n for n in (
         "duty_rosters", "duty_roster_assignments", "duty_roster_events", "duty_change_requests", "seating_drafts",
         "seating_draft_seats")}
-    assert not set(m.DutyBase.metadata.tables) & set(Base.metadata.tables)  # importing them cannot upset the shared tests
     assert m.DutyBase.metadata is not Base.metadata and m.DutyBase.metadata.schema == "examinations"
+    assert not set(m.DutyBase.metadata.tables) & set(Base.metadata.tables)
     assert all(len(c.name) <= 63 for t in m.DutyBase.metadata.sorted_tables for c in t.constraints if c.name)
 
 
 def render(revision: str, *, downgrade=False, x=()) -> str:
-    """Offline SQL of the proposed migration on top of a COPY of the active chain."""
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmp:
-        copy = Path(tmp) / "alembic"
-        shutil.copytree(SERVICE_DIR / "alembic", copy, ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copy(SERVICE_DIR / "proposed_migrations" / "20261022_0012_duty_roster_persistence.py", copy / "versions")
-        buffer = io.StringIO()
-        config = Config(str(SERVICE_DIR / "alembic.ini"), stdout=buffer, cmd_opts=argparse.Namespace(x=list(x)))
-        config.set_main_option("script_location", str(copy))
-        config.output_buffer = buffer
-        (command.downgrade if downgrade else command.upgrade)(config, revision, sql=True)
-        return buffer.getvalue()
+    """Offline SQL of the independent component chain; never connects to a database."""
+    from app.duty_allocation.neon_shared import NeonConfig, migration_config
+    from app.duty_allocation.demo_settings import Member3DemoSettings
+    from schedence_db import load_settings
+    buffer = io.StringIO()
+    config = migration_config(NeonConfig(Member3DemoSettings(), load_settings()), output_buffer=buffer)
+    config.cmd_opts = argparse.Namespace(x=list(x))
+    (command.downgrade if downgrade else command.upgrade)(config, revision, sql=True)
+    return buffer.getvalue()
 
 
 @pytest.fixture
 def migration_sql(monkeypatch) -> str:
     monkeypatch.setenv("DATABASE_URL", "postgresql://fake_user:fake_password@ep-example-123456.eu-central-1.aws.neon.tech/neondb")
-    return render("0011:0012")
+    return render("0013")
 
 
-def test_proposed_migration_is_not_in_the_active_chain():
+def test_duty_migration_is_separate_from_the_team_chain():
     active = {p.name for p in (SERVICE_DIR / "alembic" / "versions").glob("*.py")}
-    assert not any("0012" in name for name in active)  # activating it is a reviewed, separate step
-    assert (SERVICE_DIR / "proposed_migrations" / "20261022_0012_duty_roster_persistence.py").is_file()
+    assert "20261024_0013_duty_roster_persistence.py" not in active
+    assert (SERVICE_DIR / "app/duty_allocation/persistence/migrations/20261024_0013_duty_roster_persistence.py").is_file()
 
 
 def test_migration_creates_exactly_the_model_tables(migration_sql):
     created = set(re.findall(r"CREATE TABLE examinations\.(\w+)", migration_sql))
-    assert created == {t.name for t in m.DutyBase.metadata.sorted_tables}
-    for table in m.DutyBase.metadata.sorted_tables:
+    assert created == {t.name for t in duty_tables()} | {"duty_allocation_alembic_version"}
+    for table in duty_tables():
         block = re.search(rf"CREATE TABLE examinations\.{table.name} \((.*?)\n\);", migration_sql, re.S).group(1)
         for column in table.columns:
             assert re.search(rf"^\s+{column.name} ", block, re.M), f"{table.name}.{column.name}"
@@ -437,21 +436,21 @@ def test_migration_creates_exactly_the_model_tables(migration_sql):
 
 
 def test_migration_constraint_and_index_names_match_the_models(migration_sql):
-    expected = {c.name for t in m.DutyBase.metadata.sorted_tables for c in t.constraints if c.name}
+    expected = {c.name for t in duty_tables() for c in t.constraints if c.name}
     in_sql = set(re.findall(r"CONSTRAINT (\w+)", migration_sql))
-    assert in_sql == expected
-    indexes = {i.name for t in m.DutyBase.metadata.sorted_tables for i in t.indexes}
+    assert in_sql - {"duty_allocation_alembic_version_pkc"} == expected
+    indexes = {i.name for t in duty_tables() for i in t.indexes}
     assert set(re.findall(r"CREATE (?:UNIQUE )?INDEX (\w+)", migration_sql)) == indexes
     assert "WHERE status IN ('DRAFT', 'VALIDATED', 'APPROVED')" in migration_sql and "WHERE status = 'PUBLISHED'" in migration_sql
     assert "WHERE status = 'DRAFT'" in migration_sql
 
 
 def test_migration_is_additive_and_confined_to_examinations(migration_sql):
-    body = migration_sql.split("Running upgrade 0011 -> 0012")[1].upper()
+    body = migration_sql.split("Running upgrade  -> 0013")[1].upper()
     body = "\n".join(line for line in body.splitlines() if "ALEMBIC_VERSION" not in line)  # Alembic's own bookkeeping
     for forbidden in ("DROP ", "DELETE FROM", "TRUNCATE", "UPDATE ", "INSERT INTO", "ALTER TABLE", "CREATE SCHEMA", "M3_DEMO"):
         assert forbidden not in body
-    names = re.findall(r"(?:CREATE TABLE|REFERENCES|CREATE (?:UNIQUE )?INDEX \w+ ON) (\S+)", migration_sql.split("0011 -> 0012")[1])
+    names = re.findall(r"(?:CREATE TABLE|REFERENCES|CREATE (?:UNIQUE )?INDEX \w+ ON) (\S+)", migration_sql)
     assert names and all(n.startswith("examinations.") for n in names)
     assert migration_sql.count("BEGIN;") == 1 and "fake_password" not in migration_sql
 
@@ -465,7 +464,7 @@ def test_migration_publish_and_seating_rules_are_in_the_database(migration_sql):
 
 def test_migration_downgrade_refuses_to_lose_saved_rosters(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://fake_user:fake_password@ep-example-123456.eu-central-1.aws.neon.tech/neondb")
-    guarded = render("0012:0011", downgrade=True)
+    guarded = render("0013:base", downgrade=True)
     assert guarded.index("RAISE EXCEPTION") < guarded.index("DROP TABLE examinations.duty_rosters")
-    assert set(re.findall(r"DROP TABLE ([\w.]+)", guarded)) == {f"examinations.{t.name}" for t in m.DutyBase.metadata.sorted_tables}
-    assert "RAISE EXCEPTION" not in render("0012:0011", downgrade=True, x=["drop_duty_rosters=true"])
+    assert set(re.findall(r"DROP TABLE ([\w.]+)", guarded)) == {f"examinations.{t.name}" for t in duty_tables()}
+    assert "RAISE EXCEPTION" not in render("0013:base", downgrade=True, x=["drop_duty_rosters=true"])

@@ -1,10 +1,7 @@
 """Tables of the saved duty rosters, change requests and seating drafts (schema ``examinations``).
 
-PROPOSED, NOT ACTIVE. These models use their OWN ``MetaData`` (same schema and naming
-convention as ``app.db.base.Base``) so that importing them never changes the shared metadata
-that the teammate-owned migration tests compare with the applied Alembic chain. To activate:
-approve the migration ``proposed_migrations/20261022_0012_duty_roster_persistence.py``, move it
-to ``alembic/versions`` and register these models on ``app.db.base.Base`` (see the README).
+Uses component-owned metadata and migration history. The component's migration 0013
+creates these tables without changing the team's Examination Service migration history.
 
 Rules enforced by the database as well as by the service:
 
@@ -29,16 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
-SCHEMA = "examinations"
-NAMING_CONVENTION = {
-    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
-    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s",
-}
-
+from app.db.base import NAMING_CONVENTION, SCHEMA
 
 class DutyBase(DeclarativeBase):
     metadata = MetaData(schema=SCHEMA, naming_convention=NAMING_CONVENTION)

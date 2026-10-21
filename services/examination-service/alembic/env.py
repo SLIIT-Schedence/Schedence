@@ -21,11 +21,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = config.attributes.get("target_metadata", Base.metadata)
 # Default: DIRECT_DATABASE_URL (else DATABASE_URL). `alembic -x pooled=true ...`
 # uses the pooled DATABASE_URL instead, e.g. while no direct URL is configured.
 use_pooled = context.get_x_argument(as_dictionary=True).get("pooled", "").lower() == "true"
-url = load_settings().get_url(direct=not use_pooled)
+url = config.attributes.get("database_url")
+if url is None:
+    url = load_settings().get_url(direct=not use_pooled)
 
 
 def include_name(name, type_, parent_names):
@@ -36,6 +38,7 @@ def include_name(name, type_, parent_names):
 migration_options = dict(
     target_metadata=target_metadata,
     version_table_schema=SCHEMA,
+    version_table=config.attributes.get("version_table", "alembic_version"),
     include_schemas=True,
     include_name=include_name,
 )
@@ -48,6 +51,12 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    existing_connection = config.attributes.get("connection")
+    if existing_connection is not None:
+        context.configure(connection=existing_connection, **migration_options)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     # Synchronous psycopg engine: migrations are short scripts, and sync mode
     # needs no event-loop changes on Windows.
     engine = create_engine(url, poolclass=pool.NullPool)

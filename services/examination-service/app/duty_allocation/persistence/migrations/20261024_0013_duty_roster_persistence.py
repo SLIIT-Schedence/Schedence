@@ -1,24 +1,21 @@
-"""duty roster persistence (PROPOSED - not part of the active Alembic chain)
+"""Duty roster persistence (0013).
 
 Fairness-Aware Staff Allocation for Examination Duties: saved duty rosters with a
 DRAFT -> VALIDATED -> APPROVED -> PUBLISHED lifecycle, an audit trail, swap / emergency
 replacement requests, and saved seating drafts.
 
-STATUS: this file is a proposal. It sits OUTSIDE ``alembic/versions`` on purpose, so the
-shared migration chain, its head and the teammate-owned migration tests are unchanged and
-nothing can be applied by accident. After the migration has been reviewed and approved:
-copy it to ``alembic/versions`` (keeping the revision ids), register
-``app.duty_allocation.persistence.models`` on ``app.db.base.Base`` and run it yourself
-(never against Neon without explicit approval).
+Independent component migration chain. Uses examinations.duty_allocation_alembic_version;
+never updates examinations.alembic_version or modifies teammate-owned tables.
+Review the generated SQL and select the development branch before upgrading.
 
 Touches only the examinations schema. Adds 6 tables; changes and deletes no existing row
 or table; inserts nothing; references no other service's data and no ``m3_demo`` table.
 
 Downgrade drops the tables. It refuses to run when rosters were saved (their history would
-be lost) unless ``alembic -x drop_duty_rosters=true downgrade 0011`` is used after export.
+be lost) unless the component migration runner uses ``drop_duty_rosters=true`` after export.
 
-Revision ID: 0012
-Revises: 0011
+Revision ID: 0013
+Revises: None (component-owned chain)
 Create Date: 2026-10-22
 """
 
@@ -28,8 +25,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from alembic import context, op
 
-revision: str = "0012"
-down_revision: str | None = "0011"
+revision: str = "0013"
+down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -226,7 +223,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     allow_loss = context.get_x_argument(as_dictionary=True).get("drop_duty_rosters", "").lower() == "true"
     if not allow_loss:
-        # Stop (and change nothing) if rosters or seating drafts were saved since 0012.
+        # Stop (and change nothing) if rosters or seating drafts were saved since 0013.
         op.execute(
             "DO $$ BEGIN"
             f" IF EXISTS (SELECT 1 FROM {SCHEMA}.duty_rosters) OR EXISTS (SELECT 1 FROM {SCHEMA}.seating_drafts) THEN"

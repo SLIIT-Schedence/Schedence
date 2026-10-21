@@ -116,9 +116,27 @@ def test_post_requires_generate_permission(env, path):
     assert env.post(path, headers=env.headers("examinations:read")).status_code == 403
 
 
-def test_permission_in_another_institution_is_not_enough(env):
+def test_each_request_acts_in_the_callers_own_institution(env):
+    # The service has no configured institution: the permission check resolves the caller's one.
     sub = env.identity.register({uuid.uuid4(): (["EXAMINATION_ADMIN"], list(ROLE_PERMISSIONS["EXAMINATION_ADMIN"]))})
-    assert env.get("/status", headers={"Authorization": f"Bearer {env.tokens.access_token(sub)}"}).status_code == 403
+    assert env.get("/status", headers={"Authorization": f"Bearer {env.tokens.access_token(sub)}"}).status_code == 200
+
+
+def test_permission_in_several_institutions_needs_the_institution_header(env):
+    first, second = uuid.uuid4(), uuid.uuid4()
+    perms = list(ROLE_PERMISSIONS["EXAMINATION_ADMIN"])
+    token = env.tokens.access_token(env.identity.register({first: (["EXAMINATION_ADMIN"], perms),
+                                                           second: (["EXAMINATION_ADMIN"], perms)}))
+    auth = {"Authorization": f"Bearer {token}"}
+    assert env.get("/status", headers=auth).status_code == 400  # never a silent choice
+    assert env.get("/status", headers={**auth, "X-Institution-Id": str(first)}).status_code == 200
+    assert env.get("/status", headers={**auth, "X-Institution-Id": str(uuid.uuid4())}).status_code == 403
+
+
+def test_a_caller_acting_in_the_synthetic_institution_is_refused(env):
+    sub = env.identity.register({DEMO_INSTITUTION_ID: (["EXAMINATION_ADMIN"], list(ROLE_PERMISSIONS["EXAMINATION_ADMIN"]))})
+    reply = env.get("/exam-periods", headers={"Authorization": f"Bearer {env.tokens.access_token(sub)}"})
+    assert reply.status_code == 409 and reply.json()["code"] == "M3_DEMO_INSTITUTION_CONFLICT"
 
 
 def test_only_get_and_post_exist_and_cors_allows_post(env):

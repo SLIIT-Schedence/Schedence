@@ -29,6 +29,10 @@ APPLICATION_NAME = "examination-service-api"
 
 async def open_database(app: FastAPI) -> None:
     settings = load_settings(db_application_name=APPLICATION_NAME)
+    demo_service = getattr(app.state, "m3_demo_service", None)
+    if demo_service is not None:
+        from app.duty_allocation.neon_shared import verify_shared_database
+        verify_shared_database(demo_service.settings, settings)
     app.state.engine = create_db_engine(settings)
     # Same pool; connections are returned to the pool with read-only switched off again.
     read_only = app.state.engine.execution_options(postgresql_readonly=True)

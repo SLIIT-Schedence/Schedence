@@ -27,7 +27,10 @@ class ExaminationAuthSettings(CognitoSettings):
     identity_permissions_cache_seconds: int = Field(
         default=15, ge=0, le=300, description="How long read requests may reuse a caller's permissions."
     )
-    identity_timeout_seconds: float = Field(default=5, gt=0, le=30)
+    identity_timeout_seconds: float = Field(
+        default=20, gt=0, le=30,
+        description="Permission lookup timeout; allows the Neon-backed Identity Service to establish a cold connection.",
+    )
     # No institution is configured: each request's institution comes from the caller's
     # permissions (see app.auth.dependencies). Any number of institutions can exist.
     frontend_url: str = "http://localhost:3000"

@@ -10,7 +10,7 @@ from schedence_db.config import ENV_FILE_VARIABLE
 
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 _SETTINGS_VARIABLES = ("APP_ENV", "DATABASE_URL", "DIRECT_DATABASE_URL", "FRONTEND_URL", ENV_FILE_VARIABLE)
-_SETTINGS_PREFIXES = ("DB_", "AWS_", "COGNITO_", "IDENTITY_", "SLIIT_", "EXAMINATION_")
+_SETTINGS_PREFIXES = ("DB_", "AWS_", "COGNITO_", "IDENTITY_", "SLIIT_", "EXAMINATION_", "M3_DEMO_")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
