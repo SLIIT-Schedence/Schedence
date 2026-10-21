@@ -1,0 +1,874 @@
+{
+  "status": "APPLIED_VERIFIED_ADDITIVE",
+  "inserted_forms": 4,
+  "inserted_ledger": 1,
+  "tables_created": 3,
+  "shared_views": 17,
+  "reused_teaching_modules": 91,
+  "separately_verified_statistics": 1,
+  "skipped_experimental": 331,
+  "skipped_unreviewed": 1,
+  "artifact_sha256": "5496e2988afc1d47eb5b62b870ab4f53288e487aa830dfdc860fd35435cf7ed8",
+  "existing_tables_unchanged": 102,
+  "existing_rows_unchanged": 21692,
+  "target": {
+    "database": "neondb",
+    "neon_project_id": "super-leaf-21551515",
+    "neon_branch_id": "br-dry-darkness-b549ci92"
+  },
+  "completed_utc": "2026-10-21T06:26:10.048824+00:00",
+  "canonical_institution": "84651d6d-0c8a-470a-a798-5220666fd367",
+  "new_tables": [
+    "teaching.form_template_drafts",
+    "teaching.form_distributions",
+    "teaching.form_distribution_recipients"
+  ],
+  "new_ledger": "teaching_shared.integration_migrations",
+  "views": {
+    "academic_staff": {
+      "query": "SELECT t.id, t.institution_id, t.staff_number, t.full_name, t.academic_rank, t.employment_status FROM academic.staff t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.employment_status='ACTIVE'",
+      "sources": {
+        "academic.staff": [
+          "id",
+          "institution_id",
+          "staff_number",
+          "full_name",
+          "academic_rank",
+          "employment_status"
+        ]
+      }
+    },
+    "departments": {
+      "query": "SELECT t.id, t.institution_id, t.name, t.source_id FROM academic.departments t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+      "sources": {
+        "academic.departments": [
+          "id",
+          "institution_id",
+          "name",
+          "source_id"
+        ]
+      }
+    },
+    "academic_positions": {
+      "query": "SELECT t.id, t.institution_id, t.code, t.name, t.unit_type, t.is_active FROM academic.administrative_position_types t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.is_active",
+      "sources": {
+        "academic.administrative_position_types": [
+          "id",
+          "institution_id",
+          "code",
+          "name",
+          "unit_type",
+          "is_active"
+        ]
+      }
+    },
+    "modules": {
+      "query": "SELECT t.id, t.institution_id, t.module_code, t.module_name, t.academic_year, t.semester, t.degree_type, t.lecture_minutes, t.tutorial_minutes, t.workshop_minutes, t.lab_minutes, t.source_id FROM academic.modules t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.id IN ('6030246f-e841-4b52-a480-fabe0bbab709'::uuid,'5e850cdf-08d6-4fc4-95b7-f6f511a7cf1b'::uuid,'36ae6979-ae93-42db-9ff3-46d1013af267'::uuid,'d9429cd7-8e93-4020-b34e-c70540eb14f3'::uuid,'be693a27-f82b-4896-8574-290e626f496f'::uuid,'d2f257e5-c7be-462f-a8cd-836f26169dc6'::uuid,'44e758f3-fb6f-4791-bc90-76d1e6787041'::uuid,'5255ca94-e5b3-41d4-9d0c-1de972639035'::uuid,'f032eebc-30e6-4c8b-b1dd-8ed80d260a95'::uuid,'4726ea3a-953a-4e4c-b9d4-c903815d296c'::uuid,'f0c81c5d-c2bc-4ac1-aaa6-ebe0b00bbb3b'::uuid,'a0e22083-5a3b-4a2f-affa-21b67f530371'::uuid,'df518a23-5033-4553-9eba-0ae28a4e0d01'::uuid,'738cc493-3926-4694-bc7f-7a69c7cf52d3'::uuid,'45b2e714-aa78-473a-85bd-24c39a95a376'::uuid,'9ca397d4-c7db-456b-b6b4-50d8a26c7dea'::uuid,'7ef75d5d-5d74-4c7e-bc3b-ef6e7f211bd1'::uuid,'2df4cb88-f4a6-4fb3-9ed2-89dd3643bd5c'::uuid,'04c2cfaa-9f75-42b1-b130-95e826a6bee3'::uuid,'358eb637-c63d-40fb-83a6-958565563c46'::uuid,'2d8e603f-155b-4aa3-9bd4-ed875aef9d6b'::uuid,'ef10424f-a841-4494-8ea8-1bc16e68f323'::uuid,'d88e16f8-028c-4405-bda4-de79b9a6ad82'::uuid,'cf936457-3ae5-4119-84ed-6ccc0e132407'::uuid,'a968ba02-91bf-425e-adbc-673d6eedce0e'::uuid,'f6b14ef7-07ec-4082-b697-0a3ac732aba5'::uuid,'fcf1904f-a768-40a4-8ef2-1bbbf5224acb'::uuid,'738fb48e-a00f-4a7c-b790-be4390249100'::uuid,'fb5cddb6-0f4a-4d52-ae9c-bafe80c2c178'::uuid,'6ae60200-2a59-44d4-b062-c6a905acce75'::uuid,'e41553c8-3a5d-49f1-b925-21d0f90f8812'::uuid,'a088b6e2-079b-441c-89b1-8ac485c07a4e'::uuid,'66553ab4-af2a-40d5-884a-a3e9357280f0'::uuid,'9bff5f40-a60c-4875-9dc1-d27d89815197'::uuid,'32512a54-9b35-4eab-9970-8470949f00a5'::uuid,'d29c3f94-5c12-44a0-8409-743040b5d2d1'::uuid,'f9681f79-db81-4b50-889d-ecb6fc5698a9'::uuid,'eb3d6103-7947-4203-bc66-a77124606b99'::uuid,'304e58cf-c4c3-4d85-9f1b-cea44771d927'::uuid,'1c7b3bb6-5b81-4622-9e4c-f4c0e9c1d403'::uuid,'6b5a7bcd-126e-4776-8dd7-d9b2b0d33bfc'::uuid,'0698b57e-a451-426e-9d5d-c91be83bb034'::uuid,'1e090f26-c8bd-4388-a869-1bb9efbc4d28'::uuid,'af83b1fe-c057-43bf-9fd8-9877fc7430bf'::uuid,'17045f1f-5932-4ad3-a436-0a3b55d2dbd5'::uuid,'595f179f-7c7f-4be2-a6dd-f951233bce7c'::uuid,'4715ad57-c13b-4645-ac9f-bec1b8b9f7ea'::uuid,'6fcdbf21-414a-4528-8431-1486e5f51b58'::uuid,'1a2e5e7e-fde9-41bb-94b9-3ea4bf31bc66'::uuid,'956bed92-6cc5-4b16-9e22-58c1a92b66ac'::uuid,'1f423ebc-341f-474a-8f23-d30158d1b50c'::uuid,'3adc4e6a-40d2-455f-a102-8e812d092498'::uuid,'e8a692df-c88e-4875-8103-9fb1944bf8ca'::uuid,'34183477-5f6f-4a28-b33a-743dac489ee9'::uuid,'8d435bf0-a4e8-4e9b-9927-576282af74df'::uuid,'9d1bf5bd-dd24-4e16-95f4-91988437f8f7'::uuid,'ba735af7-648e-4951-94ac-fa68ed69008d'::uuid,'e6fe3b8b-108b-45e3-ab4c-3591a3575afb'::uuid,'4419bda7-36fc-42f5-b1bc-3fac73f5c882'::uuid,'9ce46090-4be6-4d51-b9e8-c12113b9e52b'::uuid,'51554d2c-5881-43e5-a842-c028f46ed337'::uuid,'b5f0ce8d-11b2-4973-9845-01b19ac35189'::uuid,'92e3fc08-22fb-4fb1-9a0d-52d0b7f4dbad'::uuid,'ebeb1bf3-b821-41ee-a5f7-95d389137acb'::uuid,'0f7b534e-398c-4199-b63c-81acfad4acaa'::uuid,'7d9cfef4-6ee2-45e8-a97b-6dd95cc0cf5c'::uuid,'a1830f6e-f089-4591-bfd4-e158b43277eb'::uuid,'4c8b5665-650b-4788-8ec1-74be7d6d9862'::uuid,'390ceed2-9413-4ae0-bfea-47ec9feca29a'::uuid,'60f3e9ef-281e-42bc-b843-b3034344499a'::uuid,'d7ea1870-e2ca-4a44-b490-b45e37b2b998'::uuid,'f4f9128d-6455-41e2-8150-d453a959594a'::uuid,'cc4ed7aa-12a4-41c2-b8ae-d63279c3eb56'::uuid,'3550aafa-e67a-495b-99a4-47cb8b5308a5'::uuid,'08ea16bc-d451-4132-b0ea-e7402660997b'::uuid,'8bc228d8-d87a-402b-afe2-fd8c143823be'::uuid,'de225035-af55-4e85-a67e-a99bef4007ca'::uuid,'95268ca9-2d5a-49f0-b849-9219e6b3e90b'::uuid,'e7c9471a-468b-46db-908c-d4785c84ff32'::uuid,'55f5f5a0-3998-410f-b0ea-ce5f9af0e0bb'::uuid,'c0451738-8e59-4201-9dcb-98969e928838'::uuid,'653bd2a4-b524-455d-a725-5952c2b67887'::uuid,'f3c87f4a-db38-475a-bcdd-404664b8dfe3'::uuid,'d7697b56-c7a5-47a0-884b-96c2e12a284e'::uuid,'11e17941-df72-426b-beb3-a0ca71f74702'::uuid,'dfed62b2-1cdc-4a74-95ce-91be1dd98711'::uuid,'b79a15dd-74cf-4e49-bb8c-c0072d71114e'::uuid,'f915f087-8852-4a03-9b6a-90c989bbc6bf'::uuid,'80a16722-0188-4241-b2b6-32eea7d0e9f9'::uuid,'6bea4408-01ba-4b04-b275-61c1a165b821'::uuid,'c7c0a22b-27f4-4b5a-84b1-f71685c7491a'::uuid,'98029c43-0c05-4f47-ae4b-2d815952e887'::uuid)",
+      "sources": {
+        "academic.modules": [
+          "id",
+          "institution_id",
+          "module_code",
+          "module_name",
+          "academic_year",
+          "semester",
+          "degree_type",
+          "lecture_minutes",
+          "tutorial_minutes",
+          "workshop_minutes",
+          "lab_minutes",
+          "source_id"
+        ]
+      }
+    },
+    "specializations": {
+      "query": "SELECT t.id, t.institution_id, t.code, t.name, t.source_id FROM academic.specializations t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+      "sources": {
+        "academic.specializations": [
+          "id",
+          "institution_id",
+          "code",
+          "name",
+          "source_id"
+        ]
+      }
+    },
+    "module_specializations": {
+      "query": "SELECT t.id, t.institution_id, t.module_id, t.specialization_id FROM academic.module_specializations t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.module_id IN ('6030246f-e841-4b52-a480-fabe0bbab709'::uuid,'5e850cdf-08d6-4fc4-95b7-f6f511a7cf1b'::uuid,'36ae6979-ae93-42db-9ff3-46d1013af267'::uuid,'d9429cd7-8e93-4020-b34e-c70540eb14f3'::uuid,'be693a27-f82b-4896-8574-290e626f496f'::uuid,'d2f257e5-c7be-462f-a8cd-836f26169dc6'::uuid,'44e758f3-fb6f-4791-bc90-76d1e6787041'::uuid,'5255ca94-e5b3-41d4-9d0c-1de972639035'::uuid,'f032eebc-30e6-4c8b-b1dd-8ed80d260a95'::uuid,'4726ea3a-953a-4e4c-b9d4-c903815d296c'::uuid,'f0c81c5d-c2bc-4ac1-aaa6-ebe0b00bbb3b'::uuid,'a0e22083-5a3b-4a2f-affa-21b67f530371'::uuid,'df518a23-5033-4553-9eba-0ae28a4e0d01'::uuid,'738cc493-3926-4694-bc7f-7a69c7cf52d3'::uuid,'45b2e714-aa78-473a-85bd-24c39a95a376'::uuid,'9ca397d4-c7db-456b-b6b4-50d8a26c7dea'::uuid,'7ef75d5d-5d74-4c7e-bc3b-ef6e7f211bd1'::uuid,'2df4cb88-f4a6-4fb3-9ed2-89dd3643bd5c'::uuid,'04c2cfaa-9f75-42b1-b130-95e826a6bee3'::uuid,'358eb637-c63d-40fb-83a6-958565563c46'::uuid,'2d8e603f-155b-4aa3-9bd4-ed875aef9d6b'::uuid,'ef10424f-a841-4494-8ea8-1bc16e68f323'::uuid,'d88e16f8-028c-4405-bda4-de79b9a6ad82'::uuid,'cf936457-3ae5-4119-84ed-6ccc0e132407'::uuid,'a968ba02-91bf-425e-adbc-673d6eedce0e'::uuid,'f6b14ef7-07ec-4082-b697-0a3ac732aba5'::uuid,'fcf1904f-a768-40a4-8ef2-1bbbf5224acb'::uuid,'738fb48e-a00f-4a7c-b790-be4390249100'::uuid,'fb5cddb6-0f4a-4d52-ae9c-bafe80c2c178'::uuid,'6ae60200-2a59-44d4-b062-c6a905acce75'::uuid,'e41553c8-3a5d-49f1-b925-21d0f90f8812'::uuid,'a088b6e2-079b-441c-89b1-8ac485c07a4e'::uuid,'66553ab4-af2a-40d5-884a-a3e9357280f0'::uuid,'9bff5f40-a60c-4875-9dc1-d27d89815197'::uuid,'32512a54-9b35-4eab-9970-8470949f00a5'::uuid,'d29c3f94-5c12-44a0-8409-743040b5d2d1'::uuid,'f9681f79-db81-4b50-889d-ecb6fc5698a9'::uuid,'eb3d6103-7947-4203-bc66-a77124606b99'::uuid,'304e58cf-c4c3-4d85-9f1b-cea44771d927'::uuid,'1c7b3bb6-5b81-4622-9e4c-f4c0e9c1d403'::uuid,'6b5a7bcd-126e-4776-8dd7-d9b2b0d33bfc'::uuid,'0698b57e-a451-426e-9d5d-c91be83bb034'::uuid,'1e090f26-c8bd-4388-a869-1bb9efbc4d28'::uuid,'af83b1fe-c057-43bf-9fd8-9877fc7430bf'::uuid,'17045f1f-5932-4ad3-a436-0a3b55d2dbd5'::uuid,'595f179f-7c7f-4be2-a6dd-f951233bce7c'::uuid,'4715ad57-c13b-4645-ac9f-bec1b8b9f7ea'::uuid,'6fcdbf21-414a-4528-8431-1486e5f51b58'::uuid,'1a2e5e7e-fde9-41bb-94b9-3ea4bf31bc66'::uuid,'956bed92-6cc5-4b16-9e22-58c1a92b66ac'::uuid,'1f423ebc-341f-474a-8f23-d30158d1b50c'::uuid,'3adc4e6a-40d2-455f-a102-8e812d092498'::uuid,'e8a692df-c88e-4875-8103-9fb1944bf8ca'::uuid,'34183477-5f6f-4a28-b33a-743dac489ee9'::uuid,'8d435bf0-a4e8-4e9b-9927-576282af74df'::uuid,'9d1bf5bd-dd24-4e16-95f4-91988437f8f7'::uuid,'ba735af7-648e-4951-94ac-fa68ed69008d'::uuid,'e6fe3b8b-108b-45e3-ab4c-3591a3575afb'::uuid,'4419bda7-36fc-42f5-b1bc-3fac73f5c882'::uuid,'9ce46090-4be6-4d51-b9e8-c12113b9e52b'::uuid,'51554d2c-5881-43e5-a842-c028f46ed337'::uuid,'b5f0ce8d-11b2-4973-9845-01b19ac35189'::uuid,'92e3fc08-22fb-4fb1-9a0d-52d0b7f4dbad'::uuid,'ebeb1bf3-b821-41ee-a5f7-95d389137acb'::uuid,'0f7b534e-398c-4199-b63c-81acfad4acaa'::uuid,'7d9cfef4-6ee2-45e8-a97b-6dd95cc0cf5c'::uuid,'a1830f6e-f089-4591-bfd4-e158b43277eb'::uuid,'4c8b5665-650b-4788-8ec1-74be7d6d9862'::uuid,'390ceed2-9413-4ae0-bfea-47ec9feca29a'::uuid,'60f3e9ef-281e-42bc-b843-b3034344499a'::uuid,'d7ea1870-e2ca-4a44-b490-b45e37b2b998'::uuid,'f4f9128d-6455-41e2-8150-d453a959594a'::uuid,'cc4ed7aa-12a4-41c2-b8ae-d63279c3eb56'::uuid,'3550aafa-e67a-495b-99a4-47cb8b5308a5'::uuid,'08ea16bc-d451-4132-b0ea-e7402660997b'::uuid,'8bc228d8-d87a-402b-afe2-fd8c143823be'::uuid,'de225035-af55-4e85-a67e-a99bef4007ca'::uuid,'95268ca9-2d5a-49f0-b849-9219e6b3e90b'::uuid,'e7c9471a-468b-46db-908c-d4785c84ff32'::uuid,'55f5f5a0-3998-410f-b0ea-ce5f9af0e0bb'::uuid,'c0451738-8e59-4201-9dcb-98969e928838'::uuid,'653bd2a4-b524-455d-a725-5952c2b67887'::uuid,'f3c87f4a-db38-475a-bcdd-404664b8dfe3'::uuid,'d7697b56-c7a5-47a0-884b-96c2e12a284e'::uuid,'11e17941-df72-426b-beb3-a0ca71f74702'::uuid,'dfed62b2-1cdc-4a74-95ce-91be1dd98711'::uuid,'b79a15dd-74cf-4e49-bb8c-c0072d71114e'::uuid,'f915f087-8852-4a03-9b6a-90c989bbc6bf'::uuid,'80a16722-0188-4241-b2b6-32eea7d0e9f9'::uuid,'6bea4408-01ba-4b04-b275-61c1a165b821'::uuid,'c7c0a22b-27f4-4b5a-84b1-f71685c7491a'::uuid,'98029c43-0c05-4f47-ae4b-2d815952e887'::uuid)",
+      "sources": {
+        "academic.module_specializations": [
+          "id",
+          "institution_id",
+          "module_id",
+          "specialization_id"
+        ]
+      }
+    },
+    "venues": {
+      "query": "SELECT t.id, t.institution_id, t.venue_code, t.venue_name, t.venue_type, t.capacity, t.building, t.floor, t.lab_specialization, t.source_id FROM resource.venues t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+      "sources": {
+        "resource.venues": [
+          "id",
+          "institution_id",
+          "venue_code",
+          "venue_name",
+          "venue_type",
+          "capacity",
+          "building",
+          "floor",
+          "lab_specialization",
+          "source_id"
+        ]
+      }
+    },
+    "staff_teaching_profiles": {
+      "query": "SELECT p.id,p.institution_id,s.id AS staff_id,p.staff_number,p.staff_type,p.department_id FROM academic.staff_teaching_profiles p JOIN academic.staff s ON s.institution_id=p.institution_id AND s.staff_number=p.staff_number WHERE p.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.employment_status='ACTIVE'",
+      "sources": {
+        "academic.staff_teaching_profiles": [
+          "id",
+          "institution_id",
+          "staff_number",
+          "staff_type",
+          "department_id"
+        ],
+        "academic.staff": [
+          "id",
+          "institution_id",
+          "staff_number",
+          "employment_status"
+        ]
+      }
+    },
+    "teaching_assignments": {
+      "query": "SELECT a.id,a.institution_id,a.module_id,s.id AS staff_id,a.staff_number,a.role,a.source_slot FROM academic.module_teaching_teams a JOIN academic.staff s ON s.institution_id=a.institution_id AND s.staff_number=a.staff_number WHERE a.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.employment_status='ACTIVE' AND a.module_id IN ('6030246f-e841-4b52-a480-fabe0bbab709'::uuid,'5e850cdf-08d6-4fc4-95b7-f6f511a7cf1b'::uuid,'36ae6979-ae93-42db-9ff3-46d1013af267'::uuid,'d9429cd7-8e93-4020-b34e-c70540eb14f3'::uuid,'be693a27-f82b-4896-8574-290e626f496f'::uuid,'d2f257e5-c7be-462f-a8cd-836f26169dc6'::uuid,'44e758f3-fb6f-4791-bc90-76d1e6787041'::uuid,'5255ca94-e5b3-41d4-9d0c-1de972639035'::uuid,'f032eebc-30e6-4c8b-b1dd-8ed80d260a95'::uuid,'4726ea3a-953a-4e4c-b9d4-c903815d296c'::uuid,'f0c81c5d-c2bc-4ac1-aaa6-ebe0b00bbb3b'::uuid,'a0e22083-5a3b-4a2f-affa-21b67f530371'::uuid,'df518a23-5033-4553-9eba-0ae28a4e0d01'::uuid,'738cc493-3926-4694-bc7f-7a69c7cf52d3'::uuid,'45b2e714-aa78-473a-85bd-24c39a95a376'::uuid,'9ca397d4-c7db-456b-b6b4-50d8a26c7dea'::uuid,'7ef75d5d-5d74-4c7e-bc3b-ef6e7f211bd1'::uuid,'2df4cb88-f4a6-4fb3-9ed2-89dd3643bd5c'::uuid,'04c2cfaa-9f75-42b1-b130-95e826a6bee3'::uuid,'358eb637-c63d-40fb-83a6-958565563c46'::uuid,'2d8e603f-155b-4aa3-9bd4-ed875aef9d6b'::uuid,'ef10424f-a841-4494-8ea8-1bc16e68f323'::uuid,'d88e16f8-028c-4405-bda4-de79b9a6ad82'::uuid,'cf936457-3ae5-4119-84ed-6ccc0e132407'::uuid,'a968ba02-91bf-425e-adbc-673d6eedce0e'::uuid,'f6b14ef7-07ec-4082-b697-0a3ac732aba5'::uuid,'fcf1904f-a768-40a4-8ef2-1bbbf5224acb'::uuid,'738fb48e-a00f-4a7c-b790-be4390249100'::uuid,'fb5cddb6-0f4a-4d52-ae9c-bafe80c2c178'::uuid,'6ae60200-2a59-44d4-b062-c6a905acce75'::uuid,'e41553c8-3a5d-49f1-b925-21d0f90f8812'::uuid,'a088b6e2-079b-441c-89b1-8ac485c07a4e'::uuid,'66553ab4-af2a-40d5-884a-a3e9357280f0'::uuid,'9bff5f40-a60c-4875-9dc1-d27d89815197'::uuid,'32512a54-9b35-4eab-9970-8470949f00a5'::uuid,'d29c3f94-5c12-44a0-8409-743040b5d2d1'::uuid,'f9681f79-db81-4b50-889d-ecb6fc5698a9'::uuid,'eb3d6103-7947-4203-bc66-a77124606b99'::uuid,'304e58cf-c4c3-4d85-9f1b-cea44771d927'::uuid,'1c7b3bb6-5b81-4622-9e4c-f4c0e9c1d403'::uuid,'6b5a7bcd-126e-4776-8dd7-d9b2b0d33bfc'::uuid,'0698b57e-a451-426e-9d5d-c91be83bb034'::uuid,'1e090f26-c8bd-4388-a869-1bb9efbc4d28'::uuid,'af83b1fe-c057-43bf-9fd8-9877fc7430bf'::uuid,'17045f1f-5932-4ad3-a436-0a3b55d2dbd5'::uuid,'595f179f-7c7f-4be2-a6dd-f951233bce7c'::uuid,'4715ad57-c13b-4645-ac9f-bec1b8b9f7ea'::uuid,'6fcdbf21-414a-4528-8431-1486e5f51b58'::uuid,'1a2e5e7e-fde9-41bb-94b9-3ea4bf31bc66'::uuid,'956bed92-6cc5-4b16-9e22-58c1a92b66ac'::uuid,'1f423ebc-341f-474a-8f23-d30158d1b50c'::uuid,'3adc4e6a-40d2-455f-a102-8e812d092498'::uuid,'e8a692df-c88e-4875-8103-9fb1944bf8ca'::uuid,'34183477-5f6f-4a28-b33a-743dac489ee9'::uuid,'8d435bf0-a4e8-4e9b-9927-576282af74df'::uuid,'9d1bf5bd-dd24-4e16-95f4-91988437f8f7'::uuid,'ba735af7-648e-4951-94ac-fa68ed69008d'::uuid,'e6fe3b8b-108b-45e3-ab4c-3591a3575afb'::uuid,'4419bda7-36fc-42f5-b1bc-3fac73f5c882'::uuid,'9ce46090-4be6-4d51-b9e8-c12113b9e52b'::uuid,'51554d2c-5881-43e5-a842-c028f46ed337'::uuid,'b5f0ce8d-11b2-4973-9845-01b19ac35189'::uuid,'92e3fc08-22fb-4fb1-9a0d-52d0b7f4dbad'::uuid,'ebeb1bf3-b821-41ee-a5f7-95d389137acb'::uuid,'0f7b534e-398c-4199-b63c-81acfad4acaa'::uuid,'7d9cfef4-6ee2-45e8-a97b-6dd95cc0cf5c'::uuid,'a1830f6e-f089-4591-bfd4-e158b43277eb'::uuid,'4c8b5665-650b-4788-8ec1-74be7d6d9862'::uuid,'390ceed2-9413-4ae0-bfea-47ec9feca29a'::uuid,'60f3e9ef-281e-42bc-b843-b3034344499a'::uuid,'d7ea1870-e2ca-4a44-b490-b45e37b2b998'::uuid,'f4f9128d-6455-41e2-8150-d453a959594a'::uuid,'cc4ed7aa-12a4-41c2-b8ae-d63279c3eb56'::uuid,'3550aafa-e67a-495b-99a4-47cb8b5308a5'::uuid,'08ea16bc-d451-4132-b0ea-e7402660997b'::uuid,'8bc228d8-d87a-402b-afe2-fd8c143823be'::uuid,'de225035-af55-4e85-a67e-a99bef4007ca'::uuid,'95268ca9-2d5a-49f0-b849-9219e6b3e90b'::uuid,'e7c9471a-468b-46db-908c-d4785c84ff32'::uuid,'55f5f5a0-3998-410f-b0ea-ce5f9af0e0bb'::uuid,'c0451738-8e59-4201-9dcb-98969e928838'::uuid,'653bd2a4-b524-455d-a725-5952c2b67887'::uuid,'f3c87f4a-db38-475a-bcdd-404664b8dfe3'::uuid,'d7697b56-c7a5-47a0-884b-96c2e12a284e'::uuid,'11e17941-df72-426b-beb3-a0ca71f74702'::uuid,'dfed62b2-1cdc-4a74-95ce-91be1dd98711'::uuid,'b79a15dd-74cf-4e49-bb8c-c0072d71114e'::uuid,'f915f087-8852-4a03-9b6a-90c989bbc6bf'::uuid,'80a16722-0188-4241-b2b6-32eea7d0e9f9'::uuid,'6bea4408-01ba-4b04-b275-61c1a165b821'::uuid,'c7c0a22b-27f4-4b5a-84b1-f71685c7491a'::uuid,'98029c43-0c05-4f47-ae4b-2d815952e887'::uuid)",
+      "sources": {
+        "academic.module_teaching_teams": [
+          "id",
+          "institution_id",
+          "module_id",
+          "staff_number",
+          "role",
+          "source_slot"
+        ],
+        "academic.staff": [
+          "id",
+          "institution_id",
+          "staff_number",
+          "employment_status"
+        ]
+      }
+    },
+    "cohort_totals": {
+      "query": "SELECT c.id,c.institution_id,c.cohort_reference,c.academic_year,c.semester,c.stream,c.student_count,c.source_id,s.provenance_kind FROM academic.cohort_totals c JOIN academic.source_datasets s ON s.institution_id=c.institution_id AND s.id=c.source_id WHERE c.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND s.provenance_kind='UNIVERSITY_SOURCED'",
+      "sources": {
+        "academic.cohort_totals": [
+          "id",
+          "institution_id",
+          "cohort_reference",
+          "academic_year",
+          "semester",
+          "stream",
+          "student_count",
+          "source_id"
+        ],
+        "academic.source_datasets": [
+          "id",
+          "institution_id",
+          "provenance_kind"
+        ]
+      }
+    },
+    "administrative_appointments": {
+      "query": "SELECT t.id, t.institution_id, t.staff_id, t.position_type_id, t.unit_type, t.unit_code, t.effective_from, t.effective_until, t.admin_hours_override FROM academic.staff_administrative_appointments t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.ended_at IS NULL AND t.effective_from<=CURRENT_DATE AND (t.effective_until IS NULL OR t.effective_until>=CURRENT_DATE)",
+      "sources": {
+        "academic.staff_administrative_appointments": [
+          "id",
+          "institution_id",
+          "staff_id",
+          "position_type_id",
+          "unit_type",
+          "unit_code",
+          "effective_from",
+          "effective_until",
+          "admin_hours_override",
+          "ended_at"
+        ]
+      }
+    },
+    "administrative_workload_policies": {
+      "query": "SELECT w.id,p.institution_id,w.position_type_id,w.version,w.admin_hours_per_week,w.combination_rule,w.cap_hours_per_week,w.effective_from,w.effective_until FROM academic.administrative_workload_policies w JOIN academic.administrative_position_types p ON p.id=w.position_type_id WHERE p.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND p.is_active AND w.effective_from<=CURRENT_DATE AND (w.effective_until IS NULL OR w.effective_until>=CURRENT_DATE)",
+      "sources": {
+        "academic.administrative_workload_policies": [
+          "id",
+          "position_type_id",
+          "version",
+          "admin_hours_per_week",
+          "combination_rule",
+          "cap_hours_per_week",
+          "effective_from",
+          "effective_until"
+        ],
+        "academic.administrative_position_types": [
+          "id",
+          "institution_id",
+          "is_active"
+        ]
+      }
+    },
+    "examination_periods": {
+      "query": "SELECT o.institution_id,p.period_code,p.period_name,p.academic_year_label,p.semester,p.start_date,p.end_date,p.day_start_time,p.day_end_time,p.include_saturdays,p.include_sundays,p.exam_kind FROM examinations.seed_exam_periods p CROSS JOIN examinations.exam_dataset_owner o WHERE o.singleton AND o.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+      "sources": {
+        "examinations.seed_exam_periods": [
+          "period_code",
+          "period_name",
+          "academic_year_label",
+          "semester",
+          "start_date",
+          "end_date",
+          "day_start_time",
+          "day_end_time",
+          "include_saturdays",
+          "include_sundays",
+          "exam_kind"
+        ],
+        "examinations.exam_dataset_owner": [
+          "singleton",
+          "institution_id"
+        ]
+      }
+    },
+    "published_exam_sessions": {
+      "query": "SELECT t.institution_id,t.timetable_id,t.revision,t.period_code,s.session_id,s.module_code,s.module_name,s.academic_year,s.semester,s.starts_at,s.ends_at,s.duration_minutes,s.candidates FROM examinations.exam_timetables t JOIN examinations.exam_timetable_sessions s ON s.timetable_id=t.timetable_id WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.status='PUBLISHED' AND t.validation_passed",
+      "sources": {
+        "examinations.exam_timetables": [
+          "institution_id",
+          "timetable_id",
+          "revision",
+          "period_code",
+          "status",
+          "validation_passed"
+        ],
+        "examinations.exam_timetable_sessions": [
+          "timetable_id",
+          "session_id",
+          "module_code",
+          "module_name",
+          "academic_year",
+          "semester",
+          "starts_at",
+          "ends_at",
+          "duration_minutes",
+          "candidates"
+        ]
+      }
+    },
+    "published_exam_rooms": {
+      "query": "SELECT t.institution_id,t.timetable_id,t.revision,r.session_id,r.venue_id,r.venue_name,r.venue_type,r.seats,r.exam_capacity FROM examinations.exam_timetables t JOIN examinations.exam_timetable_rooms r ON r.timetable_id=t.timetable_id WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND t.status='PUBLISHED' AND t.validation_passed",
+      "sources": {
+        "examinations.exam_timetables": [
+          "institution_id",
+          "timetable_id",
+          "revision",
+          "status",
+          "validation_passed"
+        ],
+        "examinations.exam_timetable_rooms": [
+          "timetable_id",
+          "session_id",
+          "venue_id",
+          "venue_name",
+          "venue_type",
+          "seats",
+          "exam_capacity"
+        ]
+      }
+    },
+    "module_code_conflicts": {
+      "query": "SELECT t.institution_id,t.module_code,count(*) AS source_record_count,array_agg(t.id ORDER BY t.id) AS source_record_ids FROM academic.modules t WHERE t.institution_id = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid = '84651d6d-0c8a-470a-a798-5220666fd367'::uuid GROUP BY t.institution_id,t.module_code HAVING count(*)>1",
+      "sources": {
+        "academic.modules": [
+          "id",
+          "institution_id",
+          "module_code"
+        ]
+      }
+    },
+    "reviewed_module_crosswalk": {
+      "query": "SELECT t.institution_id,t.id AS academic_module_id,t.module_code,v.exam_code,v.decision FROM academic.modules t JOIN (VALUES ('6030246f-e841-4b52-a480-fabe0bbab709','IE1004','IE1004','EXACT_EXISTING_IDENTITY'),('5e850cdf-08d6-4fc4-95b7-f6f511a7cf1b','IE1014','IE1014','EXACT_EXISTING_IDENTITY'),('36ae6979-ae93-42db-9ff3-46d1013af267','IE1024','IE1024','EXACT_EXISTING_IDENTITY'),('d9429cd7-8e93-4020-b34e-c70540eb14f3','IE1044','IE1044','EXACT_EXISTING_IDENTITY'),('be693a27-f82b-4896-8574-290e626f496f','IE2010','IE2010','EXACT_EXISTING_IDENTITY'),('d2f257e5-c7be-462f-a8cd-836f26169dc6','IE2020','IE2020','EXACT_EXISTING_IDENTITY'),('44e758f3-fb6f-4791-bc90-76d1e6787041','IE2022','IE2022','EXACT_EXISTING_IDENTITY'),('5255ca94-e5b3-41d4-9d0c-1de972639035','IE2030','IE2030','EXACT_EXISTING_IDENTITY'),('f032eebc-30e6-4c8b-b1dd-8ed80d260a95','IE2032','IE2032','EXACT_EXISTING_IDENTITY'),('4726ea3a-953a-4e4c-b9d4-c903815d296c','IE2041','IE2041','EXACT_EXISTING_IDENTITY'),('f0c81c5d-c2bc-4ac1-aaa6-ebe0b00bbb3b','IE2050','IE2050','EXACT_EXISTING_IDENTITY'),('a0e22083-5a3b-4a2f-affa-21b67f530371','IE2060','IE2060','EXACT_EXISTING_IDENTITY'),('df518a23-5033-4553-9eba-0ae28a4e0d01','IE2062','IE2062','EXACT_EXISTING_IDENTITY'),('738cc493-3926-4694-bc7f-7a69c7cf52d3','IE2071','IE2071','EXACT_EXISTING_IDENTITY'),('45b2e714-aa78-473a-85bd-24c39a95a376','IE2080','IE2080','EXACT_EXISTING_IDENTITY'),('9ca397d4-c7db-456b-b6b4-50d8a26c7dea','IE2082','IE2082','EXACT_EXISTING_IDENTITY'),('7ef75d5d-5d74-4c7e-bc3b-ef6e7f211bd1','IE3010','IE3010','EXACT_EXISTING_IDENTITY'),('2df4cb88-f4a6-4fb3-9ed2-89dd3643bd5c','IE3014','IE3014','EXACT_EXISTING_IDENTITY'),('04c2cfaa-9f75-42b1-b130-95e826a6bee3','IE3021','IE3021','EXACT_EXISTING_IDENTITY'),('358eb637-c63d-40fb-83a6-958565563c46','IE3030','IE3030','VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE'),('2d8e603f-155b-4aa3-9bd4-ed875aef9d6b','IE3032','IE3032','EXACT_EXISTING_IDENTITY'),('ef10424f-a841-4494-8ea8-1bc16e68f323','IE3041','IE3041','EXACT_EXISTING_IDENTITY'),('d88e16f8-028c-4405-bda4-de79b9a6ad82','IE3050','IE3050','EXACT_EXISTING_IDENTITY'),('cf936457-3ae5-4119-84ed-6ccc0e132407','IE3052','IE3052','EXACT_EXISTING_IDENTITY'),('a968ba02-91bf-425e-adbc-673d6eedce0e','IE3061','IE3061','EXACT_EXISTING_IDENTITY'),('f6b14ef7-07ec-4082-b697-0a3ac732aba5','IE3071','IE3071','EXACT_EXISTING_IDENTITY'),('fcf1904f-a768-40a4-8ef2-1bbbf5224acb','IE3080','IE3080','EXACT_EXISTING_IDENTITY'),('738fb48e-a00f-4a7c-b790-be4390249100','IE3082','IE3082','EXACT_EXISTING_IDENTITY'),('fb5cddb6-0f4a-4d52-ae9c-bafe80c2c178','IE3102','IE3102','EXACT_EXISTING_IDENTITY'),('6ae60200-2a59-44d4-b062-c6a905acce75','IE4010','IE4010','EXACT_EXISTING_IDENTITY'),('e41553c8-3a5d-49f1-b925-21d0f90f8812','IE4012','IE4012','EXACT_EXISTING_IDENTITY'),('a088b6e2-079b-441c-89b1-8ac485c07a4e','IE4022','IE4022','EXACT_EXISTING_IDENTITY'),('66553ab4-af2a-40d5-884a-a3e9357280f0','IE4032','IE4032','EXACT_EXISTING_IDENTITY'),('9bff5f40-a60c-4875-9dc1-d27d89815197','IE4042','IE4042','EXACT_EXISTING_IDENTITY'),('32512a54-9b35-4eab-9970-8470949f00a5','IE4052','IE4052','EXACT_EXISTING_IDENTITY'),('d29c3f94-5c12-44a0-8409-743040b5d2d1','IE4060','IE4060','EXACT_EXISTING_IDENTITY'),('f9681f79-db81-4b50-889d-ecb6fc5698a9','IE4070','IE4070','EXACT_EXISTING_IDENTITY'),('eb3d6103-7947-4203-bc66-a77124606b99','IE4072','IE4072','EXACT_EXISTING_IDENTITY'),('304e58cf-c4c3-4d85-9f1b-cea44771d927','IE4081','IE4081','EXACT_EXISTING_IDENTITY'),('1c7b3bb6-5b81-4622-9e4c-f4c0e9c1d403','IE4094','IE4094','EXACT_EXISTING_IDENTITY'),('6b5a7bcd-126e-4776-8dd7-d9b2b0d33bfc','IE4151','IE4151','EXACT_EXISTING_IDENTITY'),('0698b57e-a451-426e-9d5d-c91be83bb034','IT1020','IT1020','EXACT_EXISTING_IDENTITY'),('1e090f26-c8bd-4388-a869-1bb9efbc4d28','IT1040','IT1040','EXACT_EXISTING_IDENTITY'),('af83b1fe-c057-43bf-9fd8-9877fc7430bf','IT1060','IT1060','EXACT_EXISTING_IDENTITY'),('17045f1f-5932-4ad3-a436-0a3b55d2dbd5','IT1090','IT1090','EXACT_EXISTING_IDENTITY'),('595f179f-7c7f-4be2-a6dd-f951233bce7c','IT2020','IT2020','EXACT_EXISTING_IDENTITY'),('4715ad57-c13b-4645-ac9f-bec1b8b9f7ea','IT2040','IT2040','EXACT_EXISTING_IDENTITY'),('6fcdbf21-414a-4528-8431-1486e5f51b58','IT2060','IT2060','EXACT_EXISTING_IDENTITY'),('1a2e5e7e-fde9-41bb-94b9-3ea4bf31bc66','IT2090','IT2090','EXACT_EXISTING_IDENTITY'),('956bed92-6cc5-4b16-9e22-58c1a92b66ac','IT2100','IT2100','VERIFIED_EXACT_IDENTITY_DESPITE_CODE_COLLISION'),('1f423ebc-341f-474a-8f23-d30158d1b50c','IT2110','IT2110','EXACT_EXISTING_IDENTITY'),('3adc4e6a-40d2-455f-a102-8e812d092498','IT3010','IT3010','EXACT_EXISTING_IDENTITY'),('e8a692df-c88e-4875-8103-9fb1944bf8ca','IT3020','IT3020','EXACT_EXISTING_IDENTITY'),('34183477-5f6f-4a28-b33a-743dac489ee9','IT3030','IT3030','EXACT_EXISTING_IDENTITY'),('8d435bf0-a4e8-4e9b-9927-576282af74df','IT3040','IT3040','EXACT_EXISTING_IDENTITY'),('9d1bf5bd-dd24-4e16-95f4-91988437f8f7','IT3060',NULL::text,'VERIFIED_ACADEMIC_ONLY'),('ba735af7-648e-4951-94ac-fa68ed69008d','IT3061','IT3061','VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE'),('e6fe3b8b-108b-45e3-ab4c-3591a3575afb','IT3071','IT3071','EXACT_EXISTING_IDENTITY'),('4419bda7-36fc-42f5-b1bc-3fac73f5c882','IT3090','IT3090','EXACT_EXISTING_IDENTITY'),('9ce46090-4be6-4d51-b9e8-c12113b9e52b','IT4020','IT4020','EXACT_EXISTING_IDENTITY'),('51554d2c-5881-43e5-a842-c028f46ed337','IT4030','IT4030','EXACT_EXISTING_IDENTITY'),('b5f0ce8d-11b2-4973-9845-01b19ac35189','IT4040','IT4040','EXACT_EXISTING_IDENTITY'),('92e3fc08-22fb-4fb1-9a0d-52d0b7f4dbad','IT4050','IT4050','EXACT_EXISTING_IDENTITY'),('ebeb1bf3-b821-41ee-a5f7-95d389137acb','IT4090','IT4090','EXACT_EXISTING_IDENTITY'),('0f7b534e-398c-4199-b63c-81acfad4acaa','IT4110','IT4110','EXACT_EXISTING_IDENTITY'),('7d9cfef4-6ee2-45e8-a97b-6dd95cc0cf5c','IT4130','IT4130','EXACT_EXISTING_IDENTITY'),('a1830f6e-f089-4591-bfd4-e158b43277eb','SE1022','SE1022','EXACT_EXISTING_IDENTITY'),('4c8b5665-650b-4788-8ec1-74be7d6d9862','SE1042','SE1042','EXACT_EXISTING_IDENTITY'),('390ceed2-9413-4ae0-bfea-47ec9feca29a','SE2022','SE2022','EXACT_EXISTING_IDENTITY'),('60f3e9ef-281e-42bc-b843-b3034344499a','SE2042','SE2042','EXACT_EXISTING_IDENTITY'),('d7ea1870-e2ca-4a44-b490-b45e37b2b998','SE2062','SE2062','EXACT_EXISTING_IDENTITY'),('f4f9128d-6455-41e2-8150-d453a959594a','SE2082','SE2082','EXACT_EXISTING_IDENTITY'),('cc4ed7aa-12a4-41c2-b8ae-d63279c3eb56','SE3010','SE3010','EXACT_EXISTING_IDENTITY'),('3550aafa-e67a-495b-99a4-47cb8b5308a5','SE3012','SE3012','EXACT_EXISTING_IDENTITY'),('08ea16bc-d451-4132-b0ea-e7402660997b','SE3021','SE3021','EXACT_EXISTING_IDENTITY'),('8bc228d8-d87a-402b-afe2-fd8c143823be','SE3031','SE3031','EXACT_EXISTING_IDENTITY'),('de225035-af55-4e85-a67e-a99bef4007ca','SE3040','SE3040','EXACT_EXISTING_IDENTITY'),('95268ca9-2d5a-49f0-b849-9219e6b3e90b','SE3050','SE3050','EXACT_EXISTING_IDENTITY'),('e7c9471a-468b-46db-908c-d4785c84ff32','SE3061','SE3061','EXACT_EXISTING_IDENTITY'),('55f5f5a0-3998-410f-b0ea-ce5f9af0e0bb','SE3070','SE3070','EXACT_EXISTING_IDENTITY'),('c0451738-8e59-4201-9dcb-98969e928838','SE3080','SE3080','EXACT_EXISTING_IDENTITY'),('653bd2a4-b524-455d-a725-5952c2b67887','SE3082','SE3082','EXACT_EXISTING_IDENTITY'),('f3c87f4a-db38-475a-bcdd-404664b8dfe3','SE3092','SE3092','EXACT_EXISTING_IDENTITY'),('d7697b56-c7a5-47a0-884b-96c2e12a284e','SE3112','SE3112','EXACT_EXISTING_IDENTITY'),('11e17941-df72-426b-beb3-a0ca71f74702','SE4020','SE4020','EXACT_EXISTING_IDENTITY'),('dfed62b2-1cdc-4a74-95ce-91be1dd98711','SE4030','SE4030','EXACT_EXISTING_IDENTITY'),('b79a15dd-74cf-4e49-bb8c-c0072d71114e','SE4032','SE4032','EXACT_EXISTING_IDENTITY'),('f915f087-8852-4a03-9b6a-90c989bbc6bf','SE4041','SE4041','EXACT_EXISTING_IDENTITY'),('80a16722-0188-4241-b2b6-32eea7d0e9f9','SE4050','SE4050','EXACT_EXISTING_IDENTITY'),('6bea4408-01ba-4b04-b275-61c1a165b821','SE4052','SE4052','EXACT_EXISTING_IDENTITY'),('c7c0a22b-27f4-4b5a-84b1-f71685c7491a','SE4061','SE4061','EXACT_EXISTING_IDENTITY'),('98029c43-0c05-4f47-ae4b-2d815952e887','SE4072','SE4072','EXACT_EXISTING_IDENTITY')) v(id,code,exam_code,decision) ON t.id=v.id::uuid AND t.module_code=v.code WHERE t.institution_id='84651d6d-0c8a-470a-a798-5220666fd367'::uuid AND NULLIF(current_setting('schedence.institution_id',true),'')::uuid='84651d6d-0c8a-470a-a798-5220666fd367'::uuid",
+      "sources": {
+        "academic.modules": [
+          "id",
+          "institution_id",
+          "module_code"
+        ]
+      }
+    }
+  },
+  "module_crosswalk": [
+    {
+      "academic_id": "6030246f-e841-4b52-a480-fabe0bbab709",
+      "module_code": "IE1004",
+      "exam_code": "IE1004",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "5e850cdf-08d6-4fc4-95b7-f6f511a7cf1b",
+      "module_code": "IE1014",
+      "exam_code": "IE1014",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "36ae6979-ae93-42db-9ff3-46d1013af267",
+      "module_code": "IE1024",
+      "exam_code": "IE1024",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d9429cd7-8e93-4020-b34e-c70540eb14f3",
+      "module_code": "IE1044",
+      "exam_code": "IE1044",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "be693a27-f82b-4896-8574-290e626f496f",
+      "module_code": "IE2010",
+      "exam_code": "IE2010",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d2f257e5-c7be-462f-a8cd-836f26169dc6",
+      "module_code": "IE2020",
+      "exam_code": "IE2020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "44e758f3-fb6f-4791-bc90-76d1e6787041",
+      "module_code": "IE2022",
+      "exam_code": "IE2022",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "5255ca94-e5b3-41d4-9d0c-1de972639035",
+      "module_code": "IE2030",
+      "exam_code": "IE2030",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f032eebc-30e6-4c8b-b1dd-8ed80d260a95",
+      "module_code": "IE2032",
+      "exam_code": "IE2032",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "4726ea3a-953a-4e4c-b9d4-c903815d296c",
+      "module_code": "IE2041",
+      "exam_code": "IE2041",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f0c81c5d-c2bc-4ac1-aaa6-ebe0b00bbb3b",
+      "module_code": "IE2050",
+      "exam_code": "IE2050",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "a0e22083-5a3b-4a2f-affa-21b67f530371",
+      "module_code": "IE2060",
+      "exam_code": "IE2060",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "df518a23-5033-4553-9eba-0ae28a4e0d01",
+      "module_code": "IE2062",
+      "exam_code": "IE2062",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "738cc493-3926-4694-bc7f-7a69c7cf52d3",
+      "module_code": "IE2071",
+      "exam_code": "IE2071",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "45b2e714-aa78-473a-85bd-24c39a95a376",
+      "module_code": "IE2080",
+      "exam_code": "IE2080",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "9ca397d4-c7db-456b-b6b4-50d8a26c7dea",
+      "module_code": "IE2082",
+      "exam_code": "IE2082",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "7ef75d5d-5d74-4c7e-bc3b-ef6e7f211bd1",
+      "module_code": "IE3010",
+      "exam_code": "IE3010",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "2df4cb88-f4a6-4fb3-9ed2-89dd3643bd5c",
+      "module_code": "IE3014",
+      "exam_code": "IE3014",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "04c2cfaa-9f75-42b1-b130-95e826a6bee3",
+      "module_code": "IE3021",
+      "exam_code": "IE3021",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "358eb637-c63d-40fb-83a6-958565563c46",
+      "module_code": "IE3030",
+      "exam_code": "IE3030",
+      "decision": "VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE"
+    },
+    {
+      "academic_id": "2d8e603f-155b-4aa3-9bd4-ed875aef9d6b",
+      "module_code": "IE3032",
+      "exam_code": "IE3032",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "ef10424f-a841-4494-8ea8-1bc16e68f323",
+      "module_code": "IE3041",
+      "exam_code": "IE3041",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d88e16f8-028c-4405-bda4-de79b9a6ad82",
+      "module_code": "IE3050",
+      "exam_code": "IE3050",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "cf936457-3ae5-4119-84ed-6ccc0e132407",
+      "module_code": "IE3052",
+      "exam_code": "IE3052",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "a968ba02-91bf-425e-adbc-673d6eedce0e",
+      "module_code": "IE3061",
+      "exam_code": "IE3061",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f6b14ef7-07ec-4082-b697-0a3ac732aba5",
+      "module_code": "IE3071",
+      "exam_code": "IE3071",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "fcf1904f-a768-40a4-8ef2-1bbbf5224acb",
+      "module_code": "IE3080",
+      "exam_code": "IE3080",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "738fb48e-a00f-4a7c-b790-be4390249100",
+      "module_code": "IE3082",
+      "exam_code": "IE3082",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "fb5cddb6-0f4a-4d52-ae9c-bafe80c2c178",
+      "module_code": "IE3102",
+      "exam_code": "IE3102",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "6ae60200-2a59-44d4-b062-c6a905acce75",
+      "module_code": "IE4010",
+      "exam_code": "IE4010",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "e41553c8-3a5d-49f1-b925-21d0f90f8812",
+      "module_code": "IE4012",
+      "exam_code": "IE4012",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "a088b6e2-079b-441c-89b1-8ac485c07a4e",
+      "module_code": "IE4022",
+      "exam_code": "IE4022",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "66553ab4-af2a-40d5-884a-a3e9357280f0",
+      "module_code": "IE4032",
+      "exam_code": "IE4032",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "9bff5f40-a60c-4875-9dc1-d27d89815197",
+      "module_code": "IE4042",
+      "exam_code": "IE4042",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "32512a54-9b35-4eab-9970-8470949f00a5",
+      "module_code": "IE4052",
+      "exam_code": "IE4052",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d29c3f94-5c12-44a0-8409-743040b5d2d1",
+      "module_code": "IE4060",
+      "exam_code": "IE4060",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f9681f79-db81-4b50-889d-ecb6fc5698a9",
+      "module_code": "IE4070",
+      "exam_code": "IE4070",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "eb3d6103-7947-4203-bc66-a77124606b99",
+      "module_code": "IE4072",
+      "exam_code": "IE4072",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "304e58cf-c4c3-4d85-9f1b-cea44771d927",
+      "module_code": "IE4081",
+      "exam_code": "IE4081",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "1c7b3bb6-5b81-4622-9e4c-f4c0e9c1d403",
+      "module_code": "IE4094",
+      "exam_code": "IE4094",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "6b5a7bcd-126e-4776-8dd7-d9b2b0d33bfc",
+      "module_code": "IE4151",
+      "exam_code": "IE4151",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "0698b57e-a451-426e-9d5d-c91be83bb034",
+      "module_code": "IT1020",
+      "exam_code": "IT1020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "1e090f26-c8bd-4388-a869-1bb9efbc4d28",
+      "module_code": "IT1040",
+      "exam_code": "IT1040",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "af83b1fe-c057-43bf-9fd8-9877fc7430bf",
+      "module_code": "IT1060",
+      "exam_code": "IT1060",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "17045f1f-5932-4ad3-a436-0a3b55d2dbd5",
+      "module_code": "IT1090",
+      "exam_code": "IT1090",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "595f179f-7c7f-4be2-a6dd-f951233bce7c",
+      "module_code": "IT2020",
+      "exam_code": "IT2020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "4715ad57-c13b-4645-ac9f-bec1b8b9f7ea",
+      "module_code": "IT2040",
+      "exam_code": "IT2040",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "6fcdbf21-414a-4528-8431-1486e5f51b58",
+      "module_code": "IT2060",
+      "exam_code": "IT2060",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "1a2e5e7e-fde9-41bb-94b9-3ea4bf31bc66",
+      "module_code": "IT2090",
+      "exam_code": "IT2090",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "956bed92-6cc5-4b16-9e22-58c1a92b66ac",
+      "module_code": "IT2100",
+      "exam_code": "IT2100",
+      "decision": "VERIFIED_EXACT_IDENTITY_DESPITE_CODE_COLLISION"
+    },
+    {
+      "academic_id": "1f423ebc-341f-474a-8f23-d30158d1b50c",
+      "module_code": "IT2110",
+      "exam_code": "IT2110",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "3adc4e6a-40d2-455f-a102-8e812d092498",
+      "module_code": "IT3010",
+      "exam_code": "IT3010",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "e8a692df-c88e-4875-8103-9fb1944bf8ca",
+      "module_code": "IT3020",
+      "exam_code": "IT3020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "34183477-5f6f-4a28-b33a-743dac489ee9",
+      "module_code": "IT3030",
+      "exam_code": "IT3030",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "8d435bf0-a4e8-4e9b-9927-576282af74df",
+      "module_code": "IT3040",
+      "exam_code": "IT3040",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "9d1bf5bd-dd24-4e16-95f4-91988437f8f7",
+      "module_code": "IT3060",
+      "exam_code": null,
+      "decision": "VERIFIED_ACADEMIC_ONLY"
+    },
+    {
+      "academic_id": "ba735af7-648e-4951-94ac-fa68ed69008d",
+      "module_code": "IT3061",
+      "exam_code": "IT3061",
+      "decision": "VERIFIED_CAPITALIZATION_ONLY_EQUIVALENCE"
+    },
+    {
+      "academic_id": "e6fe3b8b-108b-45e3-ab4c-3591a3575afb",
+      "module_code": "IT3071",
+      "exam_code": "IT3071",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "4419bda7-36fc-42f5-b1bc-3fac73f5c882",
+      "module_code": "IT3090",
+      "exam_code": "IT3090",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "9ce46090-4be6-4d51-b9e8-c12113b9e52b",
+      "module_code": "IT4020",
+      "exam_code": "IT4020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "51554d2c-5881-43e5-a842-c028f46ed337",
+      "module_code": "IT4030",
+      "exam_code": "IT4030",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "b5f0ce8d-11b2-4973-9845-01b19ac35189",
+      "module_code": "IT4040",
+      "exam_code": "IT4040",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "92e3fc08-22fb-4fb1-9a0d-52d0b7f4dbad",
+      "module_code": "IT4050",
+      "exam_code": "IT4050",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "ebeb1bf3-b821-41ee-a5f7-95d389137acb",
+      "module_code": "IT4090",
+      "exam_code": "IT4090",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "0f7b534e-398c-4199-b63c-81acfad4acaa",
+      "module_code": "IT4110",
+      "exam_code": "IT4110",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "7d9cfef4-6ee2-45e8-a97b-6dd95cc0cf5c",
+      "module_code": "IT4130",
+      "exam_code": "IT4130",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "a1830f6e-f089-4591-bfd4-e158b43277eb",
+      "module_code": "SE1022",
+      "exam_code": "SE1022",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "4c8b5665-650b-4788-8ec1-74be7d6d9862",
+      "module_code": "SE1042",
+      "exam_code": "SE1042",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "390ceed2-9413-4ae0-bfea-47ec9feca29a",
+      "module_code": "SE2022",
+      "exam_code": "SE2022",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "60f3e9ef-281e-42bc-b843-b3034344499a",
+      "module_code": "SE2042",
+      "exam_code": "SE2042",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d7ea1870-e2ca-4a44-b490-b45e37b2b998",
+      "module_code": "SE2062",
+      "exam_code": "SE2062",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f4f9128d-6455-41e2-8150-d453a959594a",
+      "module_code": "SE2082",
+      "exam_code": "SE2082",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "cc4ed7aa-12a4-41c2-b8ae-d63279c3eb56",
+      "module_code": "SE3010",
+      "exam_code": "SE3010",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "3550aafa-e67a-495b-99a4-47cb8b5308a5",
+      "module_code": "SE3012",
+      "exam_code": "SE3012",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "08ea16bc-d451-4132-b0ea-e7402660997b",
+      "module_code": "SE3021",
+      "exam_code": "SE3021",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "8bc228d8-d87a-402b-afe2-fd8c143823be",
+      "module_code": "SE3031",
+      "exam_code": "SE3031",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "de225035-af55-4e85-a67e-a99bef4007ca",
+      "module_code": "SE3040",
+      "exam_code": "SE3040",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "95268ca9-2d5a-49f0-b849-9219e6b3e90b",
+      "module_code": "SE3050",
+      "exam_code": "SE3050",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "e7c9471a-468b-46db-908c-d4785c84ff32",
+      "module_code": "SE3061",
+      "exam_code": "SE3061",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "55f5f5a0-3998-410f-b0ea-ce5f9af0e0bb",
+      "module_code": "SE3070",
+      "exam_code": "SE3070",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "c0451738-8e59-4201-9dcb-98969e928838",
+      "module_code": "SE3080",
+      "exam_code": "SE3080",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "653bd2a4-b524-455d-a725-5952c2b67887",
+      "module_code": "SE3082",
+      "exam_code": "SE3082",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f3c87f4a-db38-475a-bcdd-404664b8dfe3",
+      "module_code": "SE3092",
+      "exam_code": "SE3092",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "d7697b56-c7a5-47a0-884b-96c2e12a284e",
+      "module_code": "SE3112",
+      "exam_code": "SE3112",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "11e17941-df72-426b-beb3-a0ca71f74702",
+      "module_code": "SE4020",
+      "exam_code": "SE4020",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "dfed62b2-1cdc-4a74-95ce-91be1dd98711",
+      "module_code": "SE4030",
+      "exam_code": "SE4030",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "b79a15dd-74cf-4e49-bb8c-c0072d71114e",
+      "module_code": "SE4032",
+      "exam_code": "SE4032",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "f915f087-8852-4a03-9b6a-90c989bbc6bf",
+      "module_code": "SE4041",
+      "exam_code": "SE4041",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "80a16722-0188-4241-b2b6-32eea7d0e9f9",
+      "module_code": "SE4050",
+      "exam_code": "SE4050",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "6bea4408-01ba-4b04-b275-61c1a165b821",
+      "module_code": "SE4052",
+      "exam_code": "SE4052",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "c7c0a22b-27f4-4b5a-84b1-f71685c7491a",
+      "module_code": "SE4061",
+      "exam_code": "SE4061",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    },
+    {
+      "academic_id": "98029c43-0c05-4f47-ae4b-2d815952e887",
+      "module_code": "SE4072",
+      "exam_code": "SE4072",
+      "decision": "EXACT_EXISTING_IDENTITY"
+    }
+  ],
+  "shared_reader_role": "schedence_teaching_shared_reader",
+  "shared_owner_role": "schedence_teaching_shared_owner",
+  "authorized_reader_member": "schedence_teaching_runtime",
+  "existing_master_records_reused": {
+    "local_teaching_modules": 91,
+    "separately_reviewed_IT2100_statistics": 1,
+    "staff": 110,
+    "departments": 9,
+    "venues": 62
+  },
+  "academic_master_inserts": 0,
+  "private_payload_artifacts": "Ignored scripts/neon-review/approved-additive-migration-20261021/ only",
+  "prior_review_SQL": "v001 and v002 remain unapplied superseded review drafts"
+}
