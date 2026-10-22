@@ -113,6 +113,32 @@ class RosterDetailOut(RosterOut):
     assignments: list[RosterAssignmentOut]
 
 
+class PublicationBlocker(_Out):
+    code: str
+    message: str
+
+
+class PublicationCheckOut(_Out):
+    roster_id: UUID
+    row_version: int
+    can_publish: bool
+    published_timetable_reference: str | None
+    blockers: list[PublicationBlocker]
+
+
+class ExportAssignmentOut(RosterAssignmentOut):
+    staff_name: str | None
+    module_name: str | None
+
+
+class RosterExportOut(_Out):
+    roster: RosterOut
+    period_name: str
+    warning: str | None
+    notes: list[str]
+    assignments: list[ExportAssignmentOut]
+
+
 class EventOut(_Out):
     event_id: int
     action: str

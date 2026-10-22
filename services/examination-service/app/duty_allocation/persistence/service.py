@@ -306,6 +306,50 @@ class DutyRosterService:
         return updated
 
     @guarded
+    async def publication_check(self, roster_id: uuid.UUID) -> dict[str, Any]:
+        """Read-only preflight for the UI. Never records an event or changes a roster."""
+        roster = await self._roster(roster_id)
+        blockers = []
+        def block(code, message):
+            blockers.append({"code": code, "message": message})
+        if roster.status is not RosterStatus.APPROVED:
+            block("INVALID_TRANSITION", f"Only an APPROVED roster can be published; this roster is {roster.status.value}.")
+        if roster.synthetic:
+            block("SYNTHETIC_ROSTER_CANNOT_BE_PUBLISHED", "This roster uses synthetic demo data and can never be published as an official roster.")
+        if roster.timetable_reference.startswith("DEMO-UNPUBLISHED:"):
+            block("DEMO_TIMETABLE_REFERENCE", "DEMO-UNPUBLISHED is a demo reference, not a real published Examination Timetable ID. It cannot be relinked to another timetable.")
+        if roster.validation.get("valid") is not True:
+            block("ROSTER_NOT_VALIDATED", "The saved roster has no successful validation.")
+        published = None
+        try:
+            published = await self.published.get_published(self.institution_id, roster.period_code)
+            if published is None or not published.reference.strip():
+                block("PUBLISHED_TIMETABLE_NOT_FOUND", "There is no PUBLISHED examination timetable for this institution and exam period. APPROVED is not PUBLISHED.")
+        except PublishedTimetableUnavailable as exc:
+            block("PUBLISHED_TIMETABLE_UNAVAILABLE", str(exc))
+        if published is not None and not roster.synthetic:
+            if published.fingerprint != roster.timetable_fingerprint:
+                block("TIMETABLE_INCOMPATIBLE", "The published timetable fingerprint differs from the timetable used to generate this roster.")
+            try:
+                context = await self.resolver.resolve(roster.period_code)
+                if context.synthetic:
+                    block("UNVERIFIED_DATA_SOURCE", "Current staff and allocation inputs are still synthetic; real input verification is required.")
+                if context.digest != roster.input_digest:
+                    block("ROSTER_INPUT_CHANGED", "The timetable, staff or constraints changed; this roster must be revised and validated again.")
+                if timetable_signature(published.draft) != timetable_signature(context.data.timetable):
+                    block("TIMETABLE_INCOMPATIBLE", "The published sessions, times or rooms differ from the roster's source timetable.")
+                for v in find_violations(context.on_timetable(published.draft), to_assignments(await self.repo.get_assignments(roster_id))):
+                    block(v.constraint, v.message)
+            except SchedulingValidationError as exc:
+                for v in exc.violations:
+                    block(v.constraint, v.message)
+            except DemoServiceError as exc:
+                block(exc.code, exc.message)
+        return {"roster_id": roster_id, "row_version": roster.row_version, "can_publish": not blockers,
+                "published_timetable_reference": published.reference if published is not None else None,
+                "blockers": blockers}
+
+    @guarded
     async def publish(self, actor: uuid.UUID, roster_id: uuid.UUID, expected_version: int | None) -> RosterRecord:
         roster = await self._roster(roster_id, lock=True)
         self._expect(roster, expected_version)
@@ -322,6 +366,9 @@ class DutyRosterService:
             await self._refuse(roster, "PUBLISH_REFUSED", actor, 409, "PUBLISHED_TIMETABLE_NOT_FOUND",
                                "There is no published timetable for this period to check the roster against.")
         context = await self._current_context(roster, actor, "PUBLISH_REFUSED")
+        if context.synthetic:
+            await self._refuse(roster, "PUBLISH_REFUSED", actor, 409, "UNVERIFIED_DATA_SOURCE",
+                               "Current allocation inputs are synthetic; a verified real data source is required for publication.")
         problems = []
         if published.fingerprint != roster.timetable_fingerprint:
             problems.append("The published timetable has a different fingerprint than the one the roster was built on.")

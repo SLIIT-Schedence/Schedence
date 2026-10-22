@@ -69,6 +69,26 @@ remain; an unsaved preview may be gone. Existing demo data remains **synthetic**
 as a real institutional roster. Database integration does not grant application permissions or replace
 the future real staff / published-timetable service contracts.
 
+## Saved roster downloads and publication
+
+On a saved roster's details page, **Download Excel** and **Download PDF** export every saved assignment.
+These authenticated, uncached reads use the roster tables, not an allocation preview. Downloads pin the
+displayed `row_version`; refresh the page if another action has changed the roster. Exports do not update
+the roster, require no migration, and remain available after restarting the service. Staff names come
+from saved fairness metadata; module names are read from the roster's own source, never a different timetable.
+Missing labels are explicit. Excel preserves Unicode; PDF reports unsupported font characters instead of
+silently changing names. PDF reuses the frontend's existing jsPDF and AutoTable libraries.
+
+The **Publication checks** card explains why publishing is blocked. In database mode, the component reads
+the existing `DatabaseTimetableStore` contract to verify an institution/period's **PUBLISHED** timetable,
+its publication metadata and content fingerprint. APPROVED is not PUBLISHED. This is read-only and never
+publishes or changes the timetable. The publish action still checks current inputs, authorization, fingerprint,
+session/room compatibility and hard constraints. Synthetic inputs are refused by the backend.
+
+An existing `DEMO-UNPUBLISHED` roster cannot be relinked to a real timetable or published. It can be
+downloaded for review with **SYNTHETIC DEMO – NOT AN OFFICIAL PUBLISHED ROSTER** clearly marked.
+Real publication needs a roster generated from verified real inputs and the matching owner-published timetable.
+
 ## Automated checks
 
 From `services/examination-service`:

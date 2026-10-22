@@ -262,6 +262,21 @@ export type Roster = {
 };
 export type RosterDetail = Roster & { assignments: RosterAssignment[] };
 
+export type PublicationCheck = {
+  roster_id: string;
+  row_version: number;
+  can_publish: boolean;
+  published_timetable_reference: string | null;
+  blockers: { code: string; message: string }[];
+};
+export type RosterExport = {
+  roster: Roster;
+  period_name: string;
+  warning: string | null;
+  notes: string[];
+  assignments: (RosterAssignment & { staff_name: string | null; module_name: string | null })[];
+};
+
 export type RosterEvent = {
   event_id: number;
   action: string;

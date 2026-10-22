@@ -13,6 +13,7 @@ import uuid
 import pytest
 
 from app.duty_allocation.persistence import service as roster_service
+from app.duty_allocation.persistence import context as roster_context
 from app.duty_allocation.persistence.domain import AssignmentRecord, RosterRecord, RosterStatus
 from app.duty_allocation.persistence.published_timetable import PublishedTimetable
 from app.duty_allocation.persistence.repository import MemoryDutyRosterRepository
@@ -60,7 +61,10 @@ def memory_state(env):
 def make_publishable(env, monkeypatch):
     """Pretend the data was NOT synthetic and a published timetable exists (only possible in a test)."""
     original = roster_service.assemble_context
-    monkeypatch.setattr(roster_service, "assemble_context", lambda ctx: dataclasses.replace(original(ctx), synthetic=False))
+    real_context = lambda ctx: dataclasses.replace(original(ctx), synthetic=False)
+    monkeypatch.setattr(roster_service, "assemble_context", real_context)
+    # Both generation and freshly resolved current inputs must represent the real source.
+    monkeypatch.setattr(roster_context, "assemble_context", real_context)
 
     class Provider:
         async def get_published(self, institution_id, period_code):
@@ -599,7 +603,9 @@ def test_openapi_documents_the_workflow_with_the_official_name(env):
     spec = env.client.get("/openapi.json").json()
     new = {(m.upper(), p) for p, v in spec["paths"].items() if p.startswith(API) for m in v
            if any("saved drafts and approval" in t for t in v[m]["tags"])}
-    assert len(new) == 23
+    assert len(new) == 26
+    assert {("GET", f"{API}/rosters/{{roster_id}}/{suffix}") for suffix in
+            ("publication", "export-data", "export.xlsx")} <= new
     tags = {t for p, v in spec["paths"].items() if p.startswith(API) for op in v.values() for t in op["tags"]}
     assert f"{COMPONENT} (saved drafts and approval)" in tags and f"{COMPONENT} (PREVIEW ONLY)" in tags
     assert all(spec["paths"][p][m.lower()].get("summary") for m, p in new)

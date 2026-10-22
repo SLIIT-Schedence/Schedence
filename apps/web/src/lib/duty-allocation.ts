@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { requireExaminationAdmin } from "@/lib/examination-access";
 import type {
   AllocationRun, ChangeRequest, DemoPage, DutyPeriod, DutySession, DutyStaff, DutyStaffDetail, DutyStatus, Meta,
-  Requirements, RoomSeats, Roster, RosterDetail, RosterHistory, RosterPage, RosterStatus, RunFairness, SeatingDraft,
+  Requirements, RoomSeats, Roster, RosterDetail, RosterHistory, RosterPage, RosterStatus, RunFairness, SeatingDraft, PublicationCheck, RosterExport,
   SeatingDraftRoom, SeatingRun, Violation, WorkloadPage,
 } from "@/lib/duty-allocation-types";
 
@@ -69,12 +69,13 @@ function readError(status: number, body: unknown): DutyApiError {
 /** One authenticated, uncached request to the duty-allocation API. `path` is relative to /api/v1/duty-allocation. */
 export async function dutyRequest<T>(
   path: string,
-  { method = "GET", query, body: requestBody, timeoutMs = DEFAULT_TIMEOUT_MS, sessionExpiredPath = SESSION_EXPIRED }: {
+  { method = "GET", query, body: requestBody, timeoutMs = DEFAULT_TIMEOUT_MS, sessionExpiredPath = SESSION_EXPIRED, responseType = "json" }: {
     method?: "GET" | "POST";
     query?: Record<string, string | number | boolean | undefined>;
     body?: unknown;
     timeoutMs?: number;
     sessionExpiredPath?: string;
+    responseType?: "json" | "binary";
   } = {},
 ): Promise<DutyResult<T>> {
   await requireExaminationAdmin();
@@ -103,7 +104,7 @@ export async function dutyRequest<T>(
       method,
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
-        Accept: "application/json",
+        Accept: responseType === "binary" ? "application/octet-stream" : "application/json",
         ...(requestBody === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
@@ -111,11 +112,11 @@ export async function dutyRequest<T>(
       redirect: "error",
       signal,
     });
-    const content = await response.text();
-    try {
-      body = content ? JSON.parse(content) : undefined;
-    } catch {
-      body = undefined;
+    if (response.ok && responseType === "binary") body = await response.arrayBuffer();
+    else {
+      const content = await response.text();
+      try { body = content ? JSON.parse(content) : undefined; }
+      catch { body = undefined; }
     }
   } catch {
     const message = signal.aborted
@@ -133,6 +134,11 @@ export async function dutyRequest<T>(
 }
 
 // --------------------------------------------------------------------------------------------- reads
+
+export const getRosterPublication = cache((id: string) =>
+  dutyRequest<PublicationCheck>(`/rosters/${id}/publication`, { timeoutMs: 60_000 }));
+export const getRosterExport = cache((id: string, rowVersion: number) =>
+  dutyRequest<RosterExport>(`/rosters/${id}/export-data`, { query: { expected_version: rowVersion }, timeoutMs: 90_000 }));
 
 // React cache deduplicates these within one render only, never between users or requests.
 export const getDutyStatus = cache(() => dutyRequest<DutyStatus>("/status"));

@@ -20,11 +20,12 @@ published-timetable contract is unavailable.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Request, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
 from app.api import duty_roster_schemas as s
 from app.api.deps import DEFAULT_PAGE_SIZE, PERIOD_CODE, Limit, Offset
@@ -41,6 +42,9 @@ from app.duty_allocation.persistence.domain import (
 from app.duty_allocation.persistence.repository import MemoryDutyRosterRepository
 from app.duty_allocation.persistence.service import ChangeSpec, DutyRosterService, metrics_json, to_records
 from app.duty_allocation.persistence.sql_repository import SqlDutyRosterRepository
+from app.duty_allocation.persistence.published_timetable import SavedPublishedTimetableProvider
+from app.duty_allocation.roster_exports import build_xlsx, export_filename, export_warning, XLSX_TYPE
+from app.saved_timetables.store import DatabaseTimetableStore
 from app.duty_allocation.types import DutyAssignment
 from schedence_db import session_scope
 
@@ -75,6 +79,13 @@ class RosterEnv:
                     "MEMORY mode: working drafts are kept in this process only and are lost on restart."))
 
 
+@asynccontextmanager
+async def _read_saved_timetables(request: Request):
+    # Existing read-only application session; the timetable owner is never modified.
+    async with session_scope(request.app.state.session_factory, commit=False) as session:
+        yield DatabaseTimetableStore(session)
+
+
 async def get_env(request: Request) -> AsyncIterator[RosterEnv]:
     demo: Member3DemoService = request.app.state.m3_demo_service
     settings = demo.settings
@@ -85,7 +96,9 @@ async def get_env(request: Request) -> AsyncIterator[RosterEnv]:
     if problem is not None:
         code = "M3_PERSISTENCE_DISABLED" if settings.persistence is PersistenceMode.DISABLED else "M3_PERSISTENCE_NOT_CONFIGURED"
         raise DemoServiceError(503, code, problem)
-    provider = getattr(request.app.state, "m3_published_timetable_provider", None)  # None: fail-closed default
+    provider = getattr(request.app.state, "m3_published_timetable_provider", None)
+    if provider is None and settings.persistence is PersistenceMode.DATABASE:
+        provider = SavedPublishedTimetableProvider(lambda: _read_saved_timetables(request))
     resolver = DemoRosterContextResolver(demo)
     if settings.persistence is PersistenceMode.MEMORY:
         repo = MemoryDutyRosterRepository(request.app.state.m3_memory_state)
@@ -209,6 +222,61 @@ async def get_roster(env: Env, roster_id: RosterId) -> s.RosterDetailOut:
     """A saved roster with its assignments, fairness metrics, last validation and the actions possible now."""
     roster, records = await env.service.get(roster_id)
     return roster_out(env, roster, records)
+
+
+@router.get("/rosters/{roster_id}/publication", response_model=s.PublicationCheckOut,
+            dependencies=[Depends(require_exam_data_access)], responses={**GATE, **NOT_FOUND})
+async def publication_check(env: Env, roster_id: RosterId, response: Response) -> s.PublicationCheckOut:
+    """Read-only publication blockers; publishing itself still requires examinations:approve."""
+    response.headers["Cache-Control"] = "private, no-store"
+    return s.PublicationCheckOut(**await env.service.publication_check(roster_id))
+
+
+async def _export_data(env: RosterEnv, request: Request, roster_id: UUID, expected_version: int | None) -> s.RosterExportOut:
+    roster, records = await env.service.get(roster_id)
+    if expected_version is not None and expected_version != roster.row_version:
+        raise DemoServiceError(409, "STALE_ROSTER", "The roster changed after this page loaded. Refresh it before downloading.")
+    names = {p["staff_id"]: p.get("staff_name") for p in roster.fairness_metrics.get("per_staff", []) if p.get("staff_id")}
+    modules, period_name, notes = {}, roster.period_code, []
+    if roster.synthetic and roster.timetable_reference == f"DEMO-UNPUBLISHED:m3_demo/{roster.period_code}":
+        snapshot = await env.demo.snapshot()
+        modules = {m["module_code"]: m["module_name"] for m in snapshot.records.rows("modules")}
+        period_name = next((p["period_name"] for p in snapshot.records.rows("exam_periods") if p["period_code"] == roster.period_code), roster.period_code)
+        notes.append("Module names are current read-only source labels. Assignments and recorded staff names come from the saved roster.")
+    elif roster.timetable_reference.startswith("EXAM-TIMETABLE:") and env.mode is PersistenceMode.DATABASE:
+        raw_id = roster.timetable_reference.removeprefix("EXAM-TIMETABLE:")
+        if raw_id.isdecimal() and 0 < int(raw_id) < 2**63:
+            async with _read_saved_timetables(request) as store:
+                timetable = await store.get(env.institution_id, int(raw_id))
+                if timetable is not None and timetable.header["period_code"] == roster.period_code:
+                    modules = {m["module_code"]: m["module_name"] for m in timetable.sessions}
+                    period_name = timetable.header["period_name"]
+    if any(not names.get(a.staff_id) or not modules.get(a.module_code) for a in records):
+        notes.append("Not recorded means the saved staff name or source module label is unavailable; no assignment has been omitted.")
+    ordered = sorted(records, key=lambda a: (a.starts_at, a.ends_at, a.module_code or "", a.venue_id, a.role, a.staff_id))
+    return s.RosterExportOut(roster=roster_out(env, roster, count=len(records)), period_name=period_name,
+        warning=export_warning(roster), notes=notes,
+        assignments=[s.ExportAssignmentOut(**_assignment(a).model_dump(), staff_name=names.get(a.staff_id),
+                                            module_name=modules.get(a.module_code)) for a in ordered])
+
+
+@router.get("/rosters/{roster_id}/export-data", response_model=s.RosterExportOut,
+            dependencies=[Depends(require_exam_data_access)], responses={**GATE, **CONFLICT, **NOT_FOUND})
+async def roster_export_data(request: Request, env: Env, roster_id: RosterId, response: Response,
+                             expected_version: Annotated[int | None, Query(ge=1)] = None) -> s.RosterExportOut:
+    """Complete saved assignments for printable exports, independent of temporary allocation runs."""
+    response.headers["Cache-Control"] = "private, no-store"
+    return await _export_data(env, request, roster_id, expected_version)
+
+
+@router.get("/rosters/{roster_id}/export.xlsx", dependencies=[Depends(require_exam_data_access)],
+            responses={200: {"content": {XLSX_TYPE: {}}}, **GATE, **CONFLICT, **NOT_FOUND})
+async def roster_excel(request: Request, env: Env, roster_id: RosterId,
+                       expected_version: Annotated[int | None, Query(ge=1)] = None) -> Response:
+    data = await _export_data(env, request, roster_id, expected_version)
+    return Response(content=build_xlsx(data), media_type=XLSX_TYPE,
+                    headers={"Content-Disposition": f'attachment; filename="{export_filename(data.roster, "xlsx")}"',
+                             "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/rosters/{roster_id}/history", response_model=s.HistoryOut, dependencies=[Depends(require_exam_data_access)],
